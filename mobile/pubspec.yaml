@@ -1,5 +1,5 @@
 name: delivery_mobile
-description: Aplicação Mobile Flutter da Plataforma de Delivery (Cliente / Estafeta).
+description: Aplicação Mobile Flutter da Plataforma de Delivery Ango_Ifood (Cliente / Entregador / Parceiro).
 publish_to: "none"
 version: 1.0.0+1
 
@@ -20,4 +20,11 @@ dev_dependencies:
   flutter_lints: ^3.0.0
 
 flutter:
+  # Garante a inclusão dos glifos oficiais do Material Design Icons
+  # e impede a substituição acidental de ícones por caracteres estrangeiros/CJK
   uses-material-design: true
+
+  # Diretórios de assets locais dedicados a ícones vetoriais e imagens
+  assets:
+    - assets/icons/
+    - assets/images/

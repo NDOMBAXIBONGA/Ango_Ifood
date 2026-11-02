@@ -80,7 +80,9 @@ jobs:
         working-directory: mobile
         run: |
           echo "A iniciar compilação da APK Release..."
-          flutter build apk --release
+          # A flag --no-tree-shake-icons impede que o compilador elimine glifos de ícones
+          # referenciados dinamicamente, evitando a renderização de caracteres em mandarim/CJK
+          flutter build apk --release --no-tree-shake-icons
 
       # ==============================================================================
       # Passo 7: Upload do artefacto final compilado (app-release.apk)

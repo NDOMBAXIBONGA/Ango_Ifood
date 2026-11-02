@@ -8,6 +8,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'core/localization/app_localizations_pt_ao.dart';
 import 'core/network/app_environment_config.dart';
+import 'core/theme/theme.dart';
 import 'features/auth/auth_bloc.dart';
 import 'features/auth/auth_repository.dart';
 import 'features/auth/screens/role_selection_onboarding_screen.dart';
@@ -112,12 +113,7 @@ class DeliveryApp extends StatelessWidget {
         localizationsDelegates: const [
           AppLocalizationsPtAoDelegate(),
         ],
-        theme: ThemeData(
-          useMaterial3: true,
-          colorSchemeSeed: const Color(0xFFEA1D2C),
-          scaffoldBackgroundColor: const Color(0xFFF8FAFC),
-          fontFamily: 'Roboto',
-        ),
+        theme: AppThemeData.lightTheme,
         home: const SplashScreen(),
       ),
     );

@@ -234,7 +234,11 @@ class _RoleSelectionOnboardingScreenState
                     borderRadius: BorderRadius.circular(16.0),
                   ),
                   child: Icon(
-                    role.icon,
+                    role == PlatformRole.cliente
+                        ? Icons.shopping_bag_outlined
+                        : role == PlatformRole.parceiro
+                            ? Icons.storefront_outlined
+                            : Icons.delivery_dining_outlined,
                     size: 30.0,
                     color: isSelected ? Colors.white : roleColor,
                   ),
