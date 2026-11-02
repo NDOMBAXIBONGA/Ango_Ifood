@@ -84,3 +84,23 @@ class RetryAuthRequested extends AuthEvent {
 /// Alias para suporte à nomenclatura em português
 typedef TentarReconexaoEvent = RetryAuthRequested;
 
+/// Disparado quando o utilizador introduz o e-mail para receber código OTP de 6 dígitos.
+class SendEmailOtpEvent extends AuthEvent {
+  final String email;
+
+  const SendEmailOtpEvent({required this.email});
+
+  @override
+  List<Object?> get props => [email];
+}
+
+/// Disparado quando o utilizador autentica via Google Sign-In com o token de identificação.
+class GoogleLoginSubmitted extends AuthEvent {
+  final String? token;
+
+  const GoogleLoginSubmitted({this.token});
+
+  @override
+  List<Object?> get props => [token];
+}
+

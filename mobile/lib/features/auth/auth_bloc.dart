@@ -32,6 +32,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<RegistrationFormSubmitted>(_onRegistrationFormSubmitted);
     on<LogoutRequested>(_onLogoutRequested);
     on<RetryAuthRequested>(_onRetryAuthRequested);
+    on<SendEmailOtpEvent>(_onSendEmailOtpEvent);
+    on<GoogleLoginSubmitted>(_onGoogleLoginSubmitted);
   }
 
   void _onRetryAuthRequested(
@@ -149,6 +151,109 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           message: 'Falha Temporária de Conexão. Não foi possível contactar os servidores.',
         ),
       );
+    }
+  }
+
+  /// Manipula o pedido de código OTP por e-mail (com código de 6 dígitos).
+  Future<void> _onSendEmailOtpEvent(
+    SendEmailOtpEvent event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(const AuthLoading(loadingMessage: 'A enviar código de verificação para o e-mail...'));
+    try {
+      final result = await _authRepository.requestEmailOtp(event.email);
+
+      emit(
+        OtpSendSuccess(
+          phone: event.email,
+          expiraEm: result.expiraEm,
+          validadeMinutos: result.validadeMinutos,
+          enviosRestantesNaHora: result.enviosRestantesNaHora,
+        ),
+      );
+    } on OtpRateLimitException catch (e) {
+      emit(
+        OtpVerificationFailure(
+          message: e.message,
+          bloqueadoAte: e.retryAfter,
+          isRateLimited: true,
+        ),
+      );
+    } on AccountSuspendedException catch (e) {
+      emit(
+        OtpVerificationFailure(
+          message: e.message,
+        ),
+      );
+    } on DioException catch (e) {
+      final isNetwork = e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.sendTimeout ||
+          e.type == DioExceptionType.connectionError;
+
+      developer.log(
+        'Erro DioException em SendEmailOtpEvent: [${e.type}] ${e.message}',
+        name: 'AuthBloc',
+        error: e,
+      );
+
+      if (isNetwork) {
+        emit(
+          const AuthNetworkFailure(
+            message: 'Falha Temporária de Conexão. Verifique a sua ligação com a internet e tente novamente.',
+          ),
+        );
+      } else {
+        emit(
+          OtpVerificationFailure(
+            message: e.response?.data?['detail']?.toString() ??
+                e.message ??
+                'Falha de comunicação com o servidor ao enviar código para o e-mail.',
+          ),
+        );
+      }
+    } on AuthException catch (e) {
+      emit(
+        OtpVerificationFailure(
+          message: e.message,
+        ),
+      );
+    } catch (e) {
+      emit(
+        const AuthNetworkFailure(
+          message: 'Falha Temporária de Conexão. Não foi possível contactar os servidores.',
+        ),
+      );
+    }
+  }
+
+  /// Manipula a autenticação social com Google Sign-In.
+  Future<void> _onGoogleLoginSubmitted(
+    GoogleLoginSubmitted event,
+    Emitter<AuthState> emit,
+  ) async {
+    if (event.token == null || event.token!.isEmpty) {
+      emit(const OtpVerificationFailure(message: 'Autenticação Google cancelada ou sem token válido.'));
+      return;
+    }
+
+    emit(const AuthLoading(loadingMessage: 'A autenticar com a Google...'));
+    try {
+      final tokens = AuthTokens(
+        accessToken: event.token!,
+        refreshToken: event.token!,
+      );
+      final user = UserProfile(
+        id: 'google-user',
+        telemovel: '',
+        nome: 'Utilizador Google',
+        email: '',
+        estado: 'ATIVO',
+      );
+      await _tokenStorage.saveTokens(tokens);
+      emit(Authenticated(tokens: tokens, user: user));
+    } catch (e) {
+      emit(OtpVerificationFailure(message: 'Erro ao validar login social com a Google: $e'));
     }
   }
 

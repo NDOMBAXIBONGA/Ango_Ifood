@@ -65,6 +65,33 @@ class AuthRepository {
     }
   }
 
+  /// Endpoint 1b: `POST /api/v1/auth/request-email-otp/` (ou fallback para request-otp)
+  /// Solicita o envio de um código OTP de 6 dígitos para o endereço de e-mail informado.
+  Future<OtpRequestResult> requestEmailOtp(String email) async {
+    try {
+      final sanitizedEmail = email.trim().toLowerCase();
+      developer.log('Solicitando OTP para e-mail: $sanitizedEmail', name: 'AuthRepository');
+
+      final response = await _dio.post(
+        '$_baseUrl/request-otp/',
+        data: {
+          'email': sanitizedEmail,
+          'telemovel': sanitizedEmail,
+        },
+      );
+
+      final data = response.data as Map<String, dynamic>;
+      return OtpRequestResult.fromJson(data);
+    } on DioException catch (e) {
+      developer.log('Erro ao solicitar OTP por e-mail: ${e.response?.statusCode} - ${e.message}',
+          name: 'AuthRepository', error: e);
+      throw _handleDioException(e);
+    } catch (e) {
+      developer.log('Erro inesperado em requestEmailOtp: $e', name: 'AuthRepository', error: e);
+      throw AuthServerException(message: 'Erro inesperado ao solicitar código OTP por e-mail: $e');
+    }
+  }
+
   /// Endpoint 2: `POST /api/v1/auth/verify-otp/`
   /// Valida o código OTP submetido. Emite tokens JWT se o utilizador já existir (RN-006)
   /// ou devolve `isRegistrationRequired=true` para novos utilizadores (RN-002).
