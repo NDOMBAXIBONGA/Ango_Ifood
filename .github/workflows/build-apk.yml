@@ -50,6 +50,13 @@ jobs:
       - name: Instalar Dependências do Flutter (pub get)
         working-directory: mobile
         run: |
+          # Configura keystore permanente para manter a assinatura SHA-1 estável no Google Cloud OAuth
+          mkdir -p ~/.android
+          if [ -f "keystore/debug.keystore" ]; then
+            echo "A configurar keystore permanente para manter o SHA-1 fixo..."
+            cp keystore/debug.keystore ~/.android/debug.keystore
+          fi
+
           # Garante que a infraestrutura nativa Android existe e utiliza a API v2 Embedding do Flutter
           if [ ! -f "android/build.gradle" ] && [ ! -f "android/build.gradle.kts" ]; then
             echo "Aviso: Camada nativa Android incompleta. A inicializar suporte Android v2 Embedding..."
