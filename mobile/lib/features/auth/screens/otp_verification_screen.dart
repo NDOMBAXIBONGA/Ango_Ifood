@@ -98,19 +98,13 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
           _submitOtp();
         }
       }
-    }
-    setState(() {});
-  }
-
-  void _onRawKeyEvent(RawKeyEvent event, int index) {
-    if (event is RawKeyDownEvent && event.logicalKey == LogicalKeyboardKey.backspace) {
-      if (_controllers[index].text.isEmpty && index > 0) {
-        // Retrocede o foco ao apagar
+    } else {
+      // Retrocede o foco ao apagar se o campo estiver vazio
+      if (index > 0) {
         _focusNodes[index - 1].requestFocus();
-        _controllers[index - 1].clear();
-        setState(() {});
       }
     }
+    setState(() {});
   }
 
   void _submitOtp() {
@@ -405,52 +399,48 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     final hasValue = _controllers[index].text.isNotEmpty;
     final isFocused = _focusNodes[index].hasFocus;
 
-    return RawKeyboardListener(
-      focusNode: FocusNode(),
-      onKey: (event) => _onRawKeyEvent(event, index),
-      child: Container(
-        width: 48.0,
-        height: 58.0,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14.0),
-          border: Border.all(
-            color: isFocused
-                ? activeColor
-                : (hasValue ? const Color(0xFF0F172A) : const Color(0xFFCBD5E1)),
-            width: isFocused ? 2.2 : 1.2,
-          ),
-          boxShadow: [
-            if (isFocused)
-              BoxShadow(
-                color: activeColor.withOpacity(0.2),
-                blurRadius: 10.0,
-                offset: const Offset(0, 2),
-              ),
-          ],
+    return Container(
+      width: 48.0,
+      height: 58.0,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14.0),
+        border: Border.all(
+          color: isFocused
+              ? activeColor
+              : (hasValue ? const Color(0xFF0F172A) : const Color(0xFFCBD5E1)),
+          width: isFocused ? 2.2 : 1.2,
         ),
-        alignment: Alignment.center,
-        child: TextFormField(
-          controller: _controllers[index],
-          focusNode: _focusNodes[index],
-          keyboardType: TextInputType.number,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontSize: 22.0,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF0F172A),
-          ),
-          inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
-            LengthLimitingTextInputFormatter(1),
-          ],
-          decoration: const InputDecoration(
-            border: InputBorder.none,
-            isDense: true,
-            contentPadding: EdgeInsets.zero,
-          ),
-          onChanged: (val) => _onDigitChanged(index, val),
+        boxShadow: [
+          if (isFocused)
+            BoxShadow(
+              color: activeColor.withOpacity(0.2),
+              blurRadius: 10.0,
+              offset: const Offset(0, 2),
+            ),
+        ],
+      ),
+      alignment: Alignment.center,
+      child: TextFormField(
+        controller: _controllers[index],
+        focusNode: _focusNodes[index],
+        keyboardType: TextInputType.number,
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          fontSize: 22.0,
+          fontWeight: FontWeight.w800,
+          color: Color(0xFF0F172A),
         ),
+        inputFormatters: [
+          FilteringTextInputFormatter.digitsOnly,
+          LengthLimitingTextInputFormatter(1),
+        ],
+        decoration: const InputDecoration(
+          border: InputBorder.none,
+          isDense: true,
+          contentPadding: EdgeInsets.zero,
+        ),
+        onChanged: (val) => _onDigitChanged(index, val),
       ),
     );
   }

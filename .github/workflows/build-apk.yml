@@ -60,11 +60,11 @@ jobs:
 
           # Aplica o nome oficial 'Delivery Pro', permissões e usesCleartextTraffic no AndroidManifest.xml
           if [ -f "android/app/src/main/AndroidManifest.xml" ]; then
-            echo "A configurar AndroidManifest.xml (Delivery Pro, INTERNET, usesCleartextTraffic)..."
+            echo "A configurar AndroidManifest.xml (Delivery Pro, INTERNET, ACCESS_NETWORK_STATE, usesCleartextTraffic)..."
             sed -i 's/android:label="[^"]*"/android:label="Delivery Pro"/g' android/app/src/main/AndroidManifest.xml
             sed -i 's/<application/<application android:usesCleartextTraffic="true"/g' android/app/src/main/AndroidManifest.xml
             if ! grep -q "android.permission.INTERNET" android/app/src/main/AndroidManifest.xml; then
-              sed -i '/<manifest[^>]*>/a \    <uses-permission android:name="android.permission.INTERNET"\/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"\/>' android/app/src/main/AndroidManifest.xml
+              sed -i '/<manifest[^>]*>/a \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>' android/app/src/main/AndroidManifest.xml
             fi
           fi
 
@@ -78,7 +78,7 @@ jobs:
         working-directory: mobile
         run: |
           echo "A executar análise estática de código Dart..."
-          flutter analyze --no-fatal-infos || echo "Avisos identificados na análise estática."
+          flutter analyze --no-fatal-infos
 
       # ==============================================================================
       # Passo 6: Compilação nativa da aplicação Android (Release APK)
@@ -89,7 +89,7 @@ jobs:
           echo "A iniciar compilação da APK Release..."
           # A flag --no-tree-shake-icons impede que o compilador elimine glifos de ícones
           # referenciados dinamicamente, evitando a renderização de caracteres em mandarim/CJK
-          flutter build apk --release --no-tree-shake-icons -v
+          flutter build apk --release --no-tree-shake-icons
 
       # ==============================================================================
       # Passo 7: Upload do artefacto final compilado (app-release.apk)
