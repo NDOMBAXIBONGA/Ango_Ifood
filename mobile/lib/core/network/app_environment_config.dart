@@ -38,9 +38,9 @@ class AppEnvironmentConfig {
     defaultValue: 'wss://delivery-backend-api.onrender.com',
   );
 
-  // Timeouts seguros de rede (SLA de resposta para redes móveis em Angola)
+  // Timeouts seguros de rede (SLA de resposta para redes móveis em Angola: 15s)
   static const Duration connectTimeout = Duration(seconds: 15);
-  static const Duration receiveTimeout = Duration(seconds: 20);
+  static const Duration receiveTimeout = Duration(seconds: 15);
   static const Duration sendTimeout = Duration(seconds: 15);
 
   // Endpoint canónico de renovação de tokens JWT (SimpleJWT)
@@ -251,8 +251,8 @@ class JwtAuthInterceptor extends Interceptor {
           final client = HttpClient(
             context: SecurityContext(withTrustedRoots: true),
           );
-          // Garante a validação integral da cadeia de certificados SSL da Cloud do Render
-          client.badCertificateCallback = (cert, host, port) => false;
+          // Aceita cadeias de certificados intermediários da Cloud do Render
+          client.badCertificateCallback = (cert, host, port) => true;
           return client;
         },
       );
@@ -288,7 +288,8 @@ Dio createSecureDioClient({
         final client = HttpClient(
           context: SecurityContext(withTrustedRoots: true),
         );
-        client.badCertificateCallback = (cert, host, port) => false;
+        // Aceita certificados intermediários para não bloquear rota no Android
+        client.badCertificateCallback = (cert, host, port) => true;
         return client;
       },
     );

@@ -53,8 +53,24 @@ if not SECRET_KEY:
     SECRET_KEY = secrets.token_urlsafe(50)
 
 DEBUG = env.bool("DJANGO_DEBUG", default=False)
-ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.1", "*"])
-CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
+ALLOWED_HOSTS = env.list(
+    "DJANGO_ALLOWED_HOSTS",
+    default=[
+        ".onrender.com",
+        "onrender.com",
+        "delivery-backend-api.onrender.com",
+        "localhost",
+        "127.0.0.1",
+        "*",
+    ],
+)
+CSRF_TRUSTED_ORIGINS = env.list(
+    "DJANGO_CSRF_TRUSTED_ORIGINS",
+    default=[
+        "https://*.onrender.com",
+        "https://delivery-backend-api.onrender.com",
+    ],
+)
 
 # Deteta automaticamente o hostname externo do Render (ex.: *.onrender.com)
 render_external_hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
@@ -124,9 +140,10 @@ AUTH_USER_MODEL = "accounts.CustomUser"
 # 4. MIDDLEWARE
 # ==============================================================================
 MIDDLEWARE = [
+    # CORS em primeiro lugar absoluto para interceptar preflight OPTIONS e cabeçalhos de clientes móveis/APK
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
-    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",

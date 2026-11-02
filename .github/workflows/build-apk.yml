@@ -58,12 +58,13 @@ jobs:
             rm -f test/widget_test.dart
           fi
 
-          # Aplica o nome oficial 'Delivery Pro' e permissões no AndroidManifest.xml
+          # Aplica o nome oficial 'Delivery Pro', permissões e usesCleartextTraffic no AndroidManifest.xml
           if [ -f "android/app/src/main/AndroidManifest.xml" ]; then
-            echo "A configurar 'Delivery Pro' no AndroidManifest.xml..."
+            echo "A configurar AndroidManifest.xml (Delivery Pro, INTERNET, usesCleartextTraffic)..."
             sed -i 's/android:label="[^"]*"/android:label="Delivery Pro"/g' android/app/src/main/AndroidManifest.xml
+            sed -i 's/<application/<application android:usesCleartextTraffic="true"/g' android/app/src/main/AndroidManifest.xml
             if ! grep -q "android.permission.INTERNET" android/app/src/main/AndroidManifest.xml; then
-              sed -i '/<\/application>/a \    <uses-permission android:name="android.permission.INTERNET"\/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"\/>' android/app/src/main/AndroidManifest.xml
+              sed -i '/<manifest[^>]*>/a \    <uses-permission android:name="android.permission.INTERNET"\/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"\/>' android/app/src/main/AndroidManifest.xml
             fi
           fi
 

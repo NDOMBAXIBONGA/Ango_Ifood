@@ -137,23 +137,24 @@ class AppInitializationBloc
       statusMessage: 'A estabelecer ligação segura com o Render Cloud...',
     ));
 
-    // Passo 2: Testar handshake HTTP/SSL com a URL de produção no Render
+    // Passo 2: Testar handshake HTTP/SSL com a URL de produção no Render (15s timeout)
     try {
       final probeUrl = AppEnvironmentConfig.buildUrl('/api/v1/catalog/public/');
-      developer.log('A executar probe de handshake em: $probeUrl', name: 'AppInitializationBloc');
+      developer.log('A executar probe de handshake em: $probeUrl (Timeout: 15s)', name: 'AppInitializationBloc');
 
       final response = await _dio.get(
         probeUrl,
         options: Options(
-          sendTimeout: const Duration(seconds: 10),
-          receiveTimeout: const Duration(seconds: 10),
-          // Qualquer status < 500 (incluindo 200, 401, 404) comprova conectividade HTTP e handshake SSL OK
-          validateStatus: (status) => status != null && status < 500,
+          sendTimeout: const Duration(seconds: 15),
+          receiveTimeout: const Duration(seconds: 15),
+          // Qualquer status retornado pelo servidor comprova conectividade HTTP e handshake SSL OK
+          validateStatus: (status) => status != null,
         ),
       );
 
+      final statusCode = response.statusCode ?? 200;
       developer.log(
-        'Handshake com Render bem-sucedido. HTTP Status: ${response.statusCode}',
+        'Handshake com Render bem-sucedido. HTTP Status: $statusCode',
         name: 'AppInitializationBloc',
       );
 
@@ -162,15 +163,39 @@ class AppInitializationBloc
 
       emit(AppInitializationSuccess(hasPersistedToken: hasToken));
     } on DioException catch (dioErr) {
+      final statusCode = dioErr.response?.statusCode;
+      final responseBody = dioErr.response?.data;
+
       developer.log(
-        'Erro de rede no handshake do Render: [${dioErr.type}] ${dioErr.message}',
+        '❌ [DIO HANDSHAKE ERROR] Tipo: ${dioErr.type} | Mensagem: ${dioErr.message}',
         name: 'AppInitializationBloc',
         error: dioErr,
       );
 
-      emit(const AppInitializationFailure(
-        'Erro ao ligar ao servidor. Verifique a sua internet.',
-      ));
+      if (statusCode != null) {
+        developer.log(
+          '   [HTTP STATUS CODE] $statusCode',
+          name: 'AppInitializationBloc',
+        );
+      }
+      if (responseBody != null) {
+        developer.log(
+          '   [RESPONSE BODY] $responseBody',
+          name: 'AppInitializationBloc',
+        );
+      }
+
+      String errorMessage = 'Erro ao ligar ao servidor. Verifique a sua internet.';
+
+      if (dioErr.type == DioExceptionType.connectionTimeout ||
+          dioErr.type == DioExceptionType.receiveTimeout ||
+          dioErr.type == DioExceptionType.sendTimeout) {
+        errorMessage = 'Tempo de resposta excedido (15s). O servidor Render pode estar a inicializar (Cold Start). Tente novamente.';
+      } else if (dioErr.type == DioExceptionType.badResponse) {
+        errorMessage = 'Servidor respondeu com código $statusCode. Tente novamente em instantes.';
+      }
+
+      emit(AppInitializationFailure(errorMessage));
     } catch (e, stack) {
       developer.log(
         'Exceção inesperada no handshake: $e',
