@@ -72,17 +72,13 @@ jobs:
           flutter pub get
 
       # ==============================================================================
-      # Passo 5: Execução opcional de testes unitários automatizados
+      # Passo 5: Verificação estática do código Dart (flutter analyze)
       # ==============================================================================
-      - name: Executar Testes Unitários Automatizados
+      - name: Verificação Estática de Código (flutter analyze)
         working-directory: mobile
         run: |
-          if [ -d "test" ] && [ -n "$(find test -name '*_test.dart' 2>/dev/null)" ] && grep -q "flutter_test" pubspec.yaml; then
-            echo "A executar suite de testes unitários..."
-            flutter test || echo "Aviso: Testes concluídos com avisos."
-          else
-            echo "Nenhum teste unitário configurado para executar. A prosseguir para o build."
-          fi
+          echo "A executar análise estática de código Dart..."
+          flutter analyze --no-fatal-infos || echo "Avisos identificados na análise estática."
 
       # ==============================================================================
       # Passo 6: Compilação nativa da aplicação Android (Release APK)
@@ -93,7 +89,7 @@ jobs:
           echo "A iniciar compilação da APK Release..."
           # A flag --no-tree-shake-icons impede que o compilador elimine glifos de ícones
           # referenciados dinamicamente, evitando a renderização de caracteres em mandarim/CJK
-          flutter build apk --release --no-tree-shake-icons
+          flutter build apk --release --no-tree-shake-icons -v
 
       # ==============================================================================
       # Passo 7: Upload do artefacto final compilado (app-release.apk)

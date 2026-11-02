@@ -91,7 +91,7 @@ class _SplashScreenState extends State<SplashScreen>
                       decoration: BoxDecoration(
                         color: isFailure
                             ? const Color(0xFFFEE2E2)
-                            : primaryColor.withValues(alpha: 0.1),
+                            : primaryColor.withOpacity(0.1),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(

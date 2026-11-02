@@ -104,6 +104,11 @@ class _EmailOtpVerificationScreenState extends State<EmailOtpVerificationScreen>
           _focusNodes[index].unfocus();
         }
       }
+    } else {
+      // Backspace: move o foco para o campo anterior
+      if (index > 0) {
+        _focusNodes[index - 1].requestFocus();
+      }
     }
 
     _checkAndSubmitOtp();
@@ -398,12 +403,12 @@ class _EmailOtpVerificationScreenState extends State<EmailOtpVerificationScreen>
                               ),
                             ),
                             child: _isVerifying
-                                ? const SizedBox(
+                                ? SizedBox(
                                     width: 22,
                                     height: 22,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2.5,
-                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
                                     ),
                                   )
                                 : const Text(
@@ -430,7 +435,7 @@ class _EmailOtpVerificationScreenState extends State<EmailOtpVerificationScreen>
   }
 
   // ============================================================================
-  // COMPONENTE: Caixa Individual de Dígito com Foco e Backspace Inteligente
+  // COMPONENTE: Caixa Individual de Dígito com Foco Inteligente
   // ============================================================================
   Widget _buildPinDigitField({
     required int index,
@@ -439,52 +444,41 @@ class _EmailOtpVerificationScreenState extends State<EmailOtpVerificationScreen>
     return SizedBox(
       width: 48,
       height: 56,
-      child: RawKeyboardListener(
-        focusNode: FocusNode(),
-        onKey: (event) {
-          if (event is RawKeyDownEvent && event.logicalKey == LogicalKeyboardKey.backspace) {
-            if (_controllers[index].text.isEmpty && index > 0) {
-              _focusNodes[index - 1].requestFocus();
-              _controllers[index - 1].clear();
-            }
-          }
-        },
-        child: TextFormField(
-          controller: _controllers[index],
-          focusNode: _focusNodes[index],
-          keyboardType: TextInputType.number,
-          textAlign: TextAlign.center,
-          maxLength: 1,
-          style: const TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF0F172A),
-          ),
-          inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
-          ],
-          decoration: InputDecoration(
-            counterText: '',
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(vertical: 12),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: _controllers[index].text.isNotEmpty ? activeColor.withOpacity(0.5) : const Color(0xFFE2E8F0),
-                width: 1.5,
-              ),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: activeColor,
-                width: 2.0,
-              ),
-            ),
-          ),
-          onChanged: (value) => _onDigitChanged(index, value),
+      child: TextFormField(
+        controller: _controllers[index],
+        focusNode: _focusNodes[index],
+        keyboardType: TextInputType.number,
+        textAlign: TextAlign.center,
+        maxLength: 1,
+        style: const TextStyle(
+          fontSize: 22,
+          fontWeight: FontWeight.w800,
+          color: Color(0xFF0F172A),
         ),
+        inputFormatters: [
+          FilteringTextInputFormatter.digitsOnly,
+        ],
+        decoration: InputDecoration(
+          counterText: '',
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(
+              color: _controllers[index].text.isNotEmpty ? activeColor.withOpacity(0.5) : const Color(0xFFE2E8F0),
+              width: 1.5,
+            ),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(
+              color: activeColor,
+              width: 2.0,
+            ),
+          ),
+        ),
+        onChanged: (value) => _onDigitChanged(index, value),
       ),
     );
   }

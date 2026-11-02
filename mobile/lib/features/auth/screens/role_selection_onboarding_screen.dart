@@ -83,7 +83,7 @@ class _RoleSelectionOnboardingScreenState
                     Container(
                       padding: const EdgeInsets.all(10.0),
                       decoration: BoxDecoration(
-                        color: activeColor.withValues(alpha: 0.12),
+                        color: activeColor.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(16.0),
                       ),
                       child: Icon(
@@ -162,7 +162,7 @@ class _RoleSelectionOnboardingScreenState
                       borderRadius: BorderRadius.circular(16.0),
                     ),
                     elevation: 2,
-                    shadowColor: activeColor.withValues(alpha: 0.4),
+                    shadowColor: activeColor.withOpacity(0.4),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -200,7 +200,7 @@ class _RoleSelectionOnboardingScreenState
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeInOut,
       decoration: BoxDecoration(
-        color: isSelected ? roleColor.withValues(alpha: 0.06) : Colors.white,
+        color: isSelected ? roleColor.withOpacity(0.06) : Colors.white,
         borderRadius: BorderRadius.circular(20.0),
         border: Border.all(
           color: isSelected ? roleColor : const Color(0xFFE2E8F0),
@@ -209,8 +209,8 @@ class _RoleSelectionOnboardingScreenState
         boxShadow: [
           BoxShadow(
             color: isSelected
-                ? roleColor.withValues(alpha: 0.14)
-                : const Color(0xFF0F172A).withValues(alpha: 0.04),
+                ? roleColor.withOpacity(0.14)
+                : const Color(0xFF0F172A).withOpacity(0.04),
             blurRadius: isSelected ? 16.0 : 8.0,
             offset: const Offset(0, 4),
           ),
@@ -230,7 +230,7 @@ class _RoleSelectionOnboardingScreenState
                   width: 58.0,
                   height: 58.0,
                   decoration: BoxDecoration(
-                    color: isSelected ? roleColor : roleColor.withValues(alpha: 0.12),
+                    color: isSelected ? roleColor : roleColor.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(16.0),
                   ),
                   child: Icon(
@@ -268,7 +268,7 @@ class _RoleSelectionOnboardingScreenState
                                 vertical: 2.0,
                               ),
                               decoration: BoxDecoration(
-                                color: roleColor.withValues(alpha: 0.15),
+                                color: roleColor.withOpacity(0.15),
                                 borderRadius: BorderRadius.circular(20.0),
                               ),
                               child: Text(

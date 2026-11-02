@@ -435,7 +435,7 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                           borderRadius: BorderRadius.circular(16.0),
                         ),
                         elevation: canSubmit ? 3 : 0,
-                        shadowColor: activeColor.withValues(alpha: 0.4),
+                        shadowColor: activeColor.withOpacity(0.4),
                       ),
                       child: isLoading
                           ? const SizedBox(

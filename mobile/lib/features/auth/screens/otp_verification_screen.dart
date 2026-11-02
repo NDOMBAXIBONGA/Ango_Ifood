@@ -235,7 +235,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                       width: 80.0,
                       height: 80.0,
                       decoration: BoxDecoration(
-                        color: activeColor.withValues(alpha: 0.12),
+                        color: activeColor.withOpacity(0.12),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
@@ -301,12 +301,12 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                         decoration: BoxDecoration(
                           color: isExpired
                               ? const Color(0xFFFEF2F2)
-                              : activeColor.withValues(alpha: 0.08),
+                              : activeColor.withOpacity(0.08),
                           borderRadius: BorderRadius.circular(14.0),
                           border: Border.all(
                             color: isExpired
                                 ? const Color(0xFFFCA5A5)
-                                : activeColor.withValues(alpha: 0.2),
+                                : activeColor.withOpacity(0.2),
                           ),
                         ),
                         child: Row(
@@ -347,7 +347,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                         borderRadius: BorderRadius.circular(16.0),
                       ),
                       elevation: isPinComplete ? 3 : 0,
-                      shadowColor: activeColor.withValues(alpha: 0.4),
+                      shadowColor: activeColor.withOpacity(0.4),
                     ),
                     child: isLoading
                         ? const SizedBox(
@@ -423,7 +423,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
           boxShadow: [
             if (isFocused)
               BoxShadow(
-                color: activeColor.withValues(alpha: 0.2),
+                color: activeColor.withOpacity(0.2),
                 blurRadius: 10.0,
                 offset: const Offset(0, 2),
               ),

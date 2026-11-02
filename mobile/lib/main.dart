@@ -150,8 +150,8 @@ class GlobalCrashFallbackScreen extends StatelessWidget {
                   Container(
                     width: 88.0,
                     height: 88.0,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEF4444).withValues(alpha: 0.12),
+                    decoration: const BoxDecoration(
+                      color: Color(0x1FEF4444),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
