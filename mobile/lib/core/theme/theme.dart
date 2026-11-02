@@ -302,12 +302,12 @@ class AppThemeData {
       ),
 
       // Cards
-      cardTheme: CardTheme(
+      cardTheme: const CardThemeData(
         color: surfaceWhite,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18.0),
-          side: const BorderSide(color: borderSubtle, width: 1.0),
+          borderRadius: BorderRadius.all(Radius.circular(18.0)),
+          side: BorderSide(color: borderSubtle, width: 1.0),
         ),
       ),
     );
