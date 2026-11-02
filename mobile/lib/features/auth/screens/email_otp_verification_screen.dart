@@ -489,3 +489,4 @@ class _EmailOtpVerificationScreenState extends State<EmailOtpVerificationScreen>
     );
   }
 }
+
