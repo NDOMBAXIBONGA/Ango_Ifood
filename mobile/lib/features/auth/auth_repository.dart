@@ -1,0 +1,245 @@
+/// Repositório de Dados de Autenticação (`AuthRepository`).
+/// Comunica diretamente com a API REST Django utilizando o cliente HTTP `Dio`.
+///
+/// Implementa as regras de negócio:
+/// - RN-001: Formato internacional do telemóvel E.164.
+/// - RN-002: Verificação OTP, rate-limit de 3 envios por hora (HTTP 429), bloqueio de 15 min e expiração de 5 min (HTTP 400).
+/// - RN-003: Validação estrita de maioridade (>= 18 anos civis) e unicidade de e-mail.
+/// - RN-004: Aceitação de consentimentos mandatórios.
+/// - RN-006: Receção e mapeamento dos tokens JWT de Acesso e Refresh (SimpleJWT).
+/// - RN-008: Tratamento de contas suspensas (HTTP 403 Forbidden).
+
+import 'dart:developer' as developer;
+import 'package:dio/dio.dart';
+
+import 'exceptions/auth_exceptions.dart';
+import 'models/auth_models.dart';
+
+export 'exceptions/auth_exceptions.dart';
+export 'models/auth_models.dart';
+
+class AuthRepository {
+  final Dio _dio;
+  final String _baseUrl;
+
+  static const String _defaultBaseUrl = 'http://10.0.2.2:8000/api/v1/auth';
+
+  AuthRepository({
+    Dio? dio,
+    String? baseUrl,
+  })  : _baseUrl = baseUrl ?? _defaultBaseUrl,
+        _dio = dio ??
+            Dio(
+              BaseOptions(
+                connectTimeout: const Duration(seconds: 15),
+                receiveTimeout: const Duration(seconds: 15),
+                sendTimeout: const Duration(seconds: 15),
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json',
+                },
+              ),
+            );
+
+  /// Endpoint 1: `POST /api/v1/auth/request-otp/`
+  /// Solicita o envio de um código OTP de 6 dígitos para o número de telemóvel informado (RN-001, RN-002).
+  Future<OtpRequestResult> requestOtp(String phone) async {
+    try {
+      final sanitizedPhone = phone.trim().replaceAll(' ', '');
+      developer.log('Solicitando OTP para: $sanitizedPhone', name: 'AuthRepository');
+
+      final response = await _dio.post(
+        '$_baseUrl/request-otp/',
+        data: {'telemovel': sanitizedPhone},
+      );
+
+      final data = response.data as Map<String, dynamic>;
+      return OtpRequestResult.fromJson(data);
+    } on DioException catch (e) {
+      developer.log('Erro ao solicitar OTP: ${e.response?.statusCode} - ${e.message}',
+          name: 'AuthRepository', error: e);
+      throw _handleDioException(e);
+    } catch (e) {
+      developer.log('Erro inesperado em requestOtp: $e', name: 'AuthRepository', error: e);
+      throw AuthServerException(message: 'Erro inesperado ao solicitar código OTP: $e');
+    }
+  }
+
+  /// Endpoint 2: `POST /api/v1/auth/verify-otp/`
+  /// Valida o código OTP submetido. Emite tokens JWT se o utilizador já existir (RN-006)
+  /// ou devolve `isRegistrationRequired=true` para novos utilizadores (RN-002).
+  Future<AuthResult> verifyOtp(String phone, String code) async {
+    try {
+      final sanitizedPhone = phone.trim().replaceAll(' ', '');
+      final sanitizedCode = code.trim();
+
+      developer.log('Verificando OTP para: $sanitizedPhone', name: 'AuthRepository');
+
+      final response = await _dio.post(
+        '$_baseUrl/verify-otp/',
+        data: {
+          'telemovel': sanitizedPhone,
+          'codigo_otp': sanitizedCode,
+        },
+      );
+
+      final data = response.data as Map<String, dynamic>;
+      return AuthResult.fromVerifyOtpJson(data, sanitizedPhone);
+    } on DioException catch (e) {
+      developer.log('Erro ao verificar OTP: ${e.response?.statusCode} - ${e.message}',
+          name: 'AuthRepository', error: e);
+      throw _handleDioException(e);
+    } catch (e) {
+      developer.log('Erro inesperado em verifyOtp: $e', name: 'AuthRepository', error: e);
+      throw AuthServerException(message: 'Erro inesperado ao validar código OTP: $e');
+    }
+  }
+
+  /// Endpoint 3: `POST /api/v1/auth/complete-registration/`
+  /// Finaliza o registo de utilizadores com telemóvel validado (RN-003, RN-004).
+  /// Valida maioridade estrita de 18 anos civis no backend e recebe os tokens JWT finais.
+  Future<AuthResult> completeRegistration({
+    required String phone,
+    required String name,
+    required String email,
+    required DateTime birthDate,
+    bool termsAccepted = true,
+    bool privacyAccepted = true,
+    bool marketingAccepted = false,
+  }) async {
+    try {
+      final sanitizedPhone = phone.trim().replaceAll(' ', '');
+      final sanitizedEmail = email.trim().toLowerCase();
+      final formattedBirthDate =
+          '${birthDate.year.toString().padLeft(4, '0')}-${birthDate.month.toString().padLeft(2, '0')}-${birthDate.day.toString().padLeft(2, '0')}';
+
+      developer.log(
+        'Completando registo: $sanitizedPhone | $name | $formattedBirthDate',
+        name: 'AuthRepository',
+      );
+
+      final response = await _dio.post(
+        '$_baseUrl/complete-registration/',
+        data: {
+          'telemovel': sanitizedPhone,
+          'nome': name.trim(),
+          'email': sanitizedEmail,
+          'data_nascimento': formattedBirthDate,
+          'termos_utilizacao': termsAccepted,
+          'politica_privacidade': privacyAccepted,
+          'marketing': marketingAccepted,
+        },
+      );
+
+      final data = response.data as Map<String, dynamic>;
+      return AuthResult.fromCompleteRegistrationJson(data);
+    } on DioException catch (e) {
+      developer.log('Erro ao completar registo: ${e.response?.statusCode} - ${e.message}',
+          name: 'AuthRepository', error: e);
+      throw _handleDioException(e);
+    } catch (e) {
+      developer.log('Erro inesperado em completeRegistration: $e', name: 'AuthRepository', error: e);
+      throw AuthServerException(message: 'Erro inesperado ao finalizar registo: $e');
+    }
+  }
+
+  /// Mapeador centralizado de exceções HTTP do Dio para exceções de domínio tipificadas.
+  AuthException _handleDioException(DioException e) {
+    final response = e.response;
+    final statusCode = response?.statusCode;
+    final responseData = response?.data;
+
+    if (e.type == DioExceptionType.connectionTimeout ||
+        e.type == DioExceptionType.sendTimeout ||
+        e.type == DioExceptionType.receiveTimeout ||
+        e.type == DioExceptionType.connectionError) {
+      return const AuthNetworkException(
+        message: 'Falha de comunicação com o servidor. Verifique a sua ligação à Internet.',
+      );
+    }
+
+    if (responseData is Map<String, dynamic>) {
+      final String? erroCode = responseData['erro'] as String?;
+      final String? detalhe = responseData['detalhe'] as String?;
+
+      // 1. Trata HTTP 429: Limite de envios ou bloqueio ativo (RN-002)
+      if (statusCode == 429 || erroCode == 'limite_envios_excedido' || erroCode == 'telemovel_bloqueado') {
+        final bloqueadoAteStr = responseData['bloqueado_ate'] as String?;
+        final retrySeconds = responseData['retry_after_seconds'] as int?;
+        return OtpRateLimitException(
+          message: detalhe ?? 'Limite de tentativas ou envios de OTP atingido. Tente mais tarde.',
+          retryAfter: bloqueadoAteStr != null ? DateTime.tryParse(bloqueadoAteStr) : null,
+          retryAfterSeconds: retrySeconds,
+        );
+      }
+
+      // 2. Trata HTTP 403: Conta Suspensa (RN-008)
+      if (statusCode == 403 || erroCode == 'conta_suspensa') {
+        return AccountSuspendedException(
+          message: detalhe ?? 'Esta conta encontra-se suspensa. Contacte o suporte.',
+        );
+      }
+
+      // 3. Trata HTTP 400: OTP Expirado (RN-002)
+      if (erroCode == 'otp_expirado') {
+        return OtpExpiredException(
+          message: detalhe ?? 'O código OTP expirou após 5 minutos. Solicite um novo código.',
+        );
+      }
+
+      // 4. Trata HTTP 400: Código Incorreto ou Tentativas Esgotadas (RN-002)
+      if (erroCode == 'codigo_incorreto' || erroCode == 'tentativas_esgotadas') {
+        final tentativasRestantes = responseData['tentativas_restantes'] as int?;
+        final bloqueadoAteStr = responseData['bloqueado_ate'] as String?;
+        return InvalidOtpException(
+          message: detalhe ?? 'Código OTP incorreto.',
+          tentativasRestantes: tentativasRestantes,
+          bloqueadoAte: bloqueadoAteStr != null ? DateTime.tryParse(bloqueadoAteStr) : null,
+        );
+      }
+
+      // 5. Trata HTTP 400: Validação de Maioridade (< 18 anos per RN-003)
+      final dataNascErrors = responseData['data_nascimento'];
+      if (dataNascErrors != null) {
+        final msg = dataNascErrors is List ? dataNascErrors.first.toString() : dataNascErrors.toString();
+        if (msg.contains('18 anos') || msg.contains('menor')) {
+          return UnderageException(message: msg);
+        }
+        return RegistrationValidationException(
+          message: msg,
+          fieldErrors: responseData,
+        );
+      }
+
+      // 6. Trata outros erros de validação de formulário (e-mail duplicado, telemóvel existente, etc.)
+      if (statusCode == 400) {
+        final emailError = responseData['email'];
+        if (emailError != null) {
+          final msg = emailError is List ? emailError.first.toString() : emailError.toString();
+          return RegistrationValidationException(
+            message: msg,
+            fieldErrors: responseData,
+          );
+        }
+
+        return RegistrationValidationException(
+          message: detalhe ?? 'Dados de formulário inválidos. Verifique os campos submetidos.',
+          fieldErrors: responseData,
+        );
+      }
+    }
+
+    if (statusCode != null && statusCode >= 500) {
+      return AuthServerException(
+        message: 'O servidor de autenticação encontrou uma instabilidade ($statusCode). Tente novamente.',
+        statusCode: statusCode,
+      );
+    }
+
+    return AuthServerException(
+      message: 'Não foi possível concluir a autenticação. Código de status: $statusCode.',
+      statusCode: statusCode,
+    );
+  }
+}
+

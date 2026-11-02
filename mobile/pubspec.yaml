@@ -1,0 +1,15 @@
+name: delivery_mobile
+description: Aplicação Mobile Flutter da Plataforma de Delivery (Cliente / Estafeta).
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_bloc: ^8.1.6
+  equatable: ^2.0.5
+  dio: ^5.7.0
+  flutter_secure_storage: ^9.2.2

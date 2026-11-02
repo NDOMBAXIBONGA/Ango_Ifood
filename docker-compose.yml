@@ -1,0 +1,180 @@
+# ==============================================================================
+# ORQUESTRAÇÃO DE SERVIÇOS EM DOCKER COMPOSE (PRODUÇÃO & AMBIENTES DE SUPORTE)
+# ==============================================================================
+# Orquestra os quatro serviços centrais em rede privada:
+# 1. db: Base de dados relacional PostgreSQL com extensão geoespacial PostGIS
+# 2. redis: Broker de mensagens, Cache Layer e Backend de canais WebSockets
+# 3. web: Servidor de aplicação Django / Gunicorn (ASGI Uvicorn Workers)
+# 4. celery_worker: Processador assíncrono de tarefas em segundo plano (OMS/Logística)
+# (Opcional) flower: Dashboard de monitorização e gestão de filas do Celery
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. BASE DE DADOS GEOESPACIAL: POSTGRESQL + POSTGIS
+  # ----------------------------------------------------------------------------
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: delivery_postgis_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-delivery_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/pgdata
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-delivery_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - delivery_network
+
+  # ----------------------------------------------------------------------------
+  # 2. BROKER & CACHE LAYER: REDIS
+  # ----------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: delivery_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "512mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - delivery_network
+
+  # ----------------------------------------------------------------------------
+  # 3. SERVIDOR DE APLICAÇÃO DJANGO: WEB (GUNICORN / UVICORN ASGI)
+  # ----------------------------------------------------------------------------
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: delivery_django_web
+    restart: unless-stopped
+    command: >
+      gunicorn config.asgi:application
+      -k uvicorn.workers.UvicornWorker
+      --bind 0.0.0.0:8000
+      --workers 4
+      --worker-connections 1000
+      --max-requests 2000
+      --max-requests-jitter 200
+      --timeout 60
+      --access-logfile -
+      --error-logfile -
+    ports:
+      - "${WEB_PORT:-8000}:8000"
+    environment:
+      - DJANGO_DEBUG=${DJANGO_DEBUG:-False}
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-insecure-prod-secret-key-replace-in-real-production-env}
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,web}
+      - DATABASE_URL=postgis://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-delivery_db}
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_CACHE_URL=redis://redis:6379/3
+      - CHANNEL_LAYERS_REDIS_URL=redis://redis:6379/2
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    volumes:
+      - static_data:/app/staticfiles
+      - media_data:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - delivery_network
+
+  # ----------------------------------------------------------------------------
+  # 4. PROCESSADOR ASSÍNCRONO DE TAREFAS: CELERY WORKER
+  # ----------------------------------------------------------------------------
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: delivery_celery_worker
+    restart: unless-stopped
+    command: >
+      celery -A config worker
+      --loglevel=INFO
+      --concurrency=4
+      --events
+      --without-gossip
+      --without-mingle
+    environment:
+      - DJANGO_DEBUG=${DJANGO_DEBUG:-False}
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-insecure-prod-secret-key-replace-in-real-production-env}
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,web}
+      - DATABASE_URL=postgis://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-delivery_db}
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_CACHE_URL=redis://redis:6379/3
+      - CHANNEL_LAYERS_REDIS_URL=redis://redis:6379/2
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    volumes:
+      - media_data:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - delivery_network
+
+  # ----------------------------------------------------------------------------
+  # 5. (OPCIONAL) MONITORIZAÇÃO DE FILAS: CELERY FLOWER
+  # ----------------------------------------------------------------------------
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: delivery_celery_flower
+    restart: unless-stopped
+    command: >
+      celery -A config flower
+      --port=5555
+      --broker=redis://redis:6379/0
+    ports:
+      - "${FLOWER_PORT:-5555}:5555"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - delivery_network
+
+# ==============================================================================
+# VOLUMES PERSISTENTES
+# ==============================================================================
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  static_data:
+    driver: local
+  media_data:
+    driver: local
+
+# ==============================================================================
+# REDE PRIVADA ISOLADA
+# ==============================================================================
+networks:
+  delivery_network:
+    driver: bridge

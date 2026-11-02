@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gestão de Risco & Intervenção Operacional (Web ERP) | Backoffice Delivery</title>
+
+  <!-- Tailwind CSS 3 CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#fff1f2',
+              500: '#f43f5e',
+              600: '#e11d48',
+              700: '#be123c',
+              800: '#9f1239',
+              900: '#881337',
+              950: '#4c0519',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- React 18 e Babel CDN para execução imediata no navegador -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 antialiased min-h-screen">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState } = React;
+
+    const INITIAL_ALERTS = [
+      {
+        id: 'alt-frd-8901',
+        pedidoId: 'ped-uuid-1049',
+        utilizadorId: 'usr-cli-3301',
+        utilizadorNome: 'Manuel dos Santos',
+        utilizadorTelemovel: '+244 923 111 222',
+        utilizadorTipo: 'CLIENTE',
+        tipoFraude: 'DISPOSITIVO_CARTAO_MULTICONTAS',
+        severidade: 'CRITICA',
+        scoreRisco: 94,
+        descricao: 'RN-131: O mesmo Hardware UUID (device_id) está associado a 5 contas distintas criadas em 48h.',
+        evidencias: {
+          deviceId: 'hw_uuid_a891f7b02c8941da928',
+          cardFingerprint: 'sha256_e3b0c44298fc1c149afbf4c8996fb...',
+          contasVinculadas: ['manuel.santos@gmail.com', 'm.santos2@sapo.ao', 'santos.fast@live.com', 'test.card@gmail.com'],
+          ipOrigem: '197.234.219.45 (Unitel Luanda)'
+        },
+        estadoConta: 'ATIVO',
+        dataAlerta: '2026-10-29 21:48:12',
+        resolvido: false
+      },
+      {
+        id: 'alt-frd-8902',
+        pedidoId: 'ped-uuid-1052',
+        utilizadorId: 'usr-est-4402',
+        utilizadorNome: 'Carlos Silva (Estafeta #108)',
+        utilizadorTelemovel: '+244 912 333 444',
+        utilizadorTipo: 'ESTAFETA',
+        tipoFraude: 'GPS_FALSO_VELOCIDADE_IMPOSSIVEL',
+        severidade: 'CRITICA',
+        scoreRisco: 89,
+        descricao: 'RN-133: Aplicação de Mock Location detetada no Android. Salto teletransportado de 14.8 km em 12 segundos.',
+        evidencias: {
+          mockGpsDetected: true,
+          velocidadeCalculadaKmh: 442.8,
+          distanciaSaltoKm: 14.8,
+          ipOrigem: '105.172.90.12 (Africell Luanda)'
+        },
+        estadoConta: 'ATIVO',
+        dataAlerta: '2026-10-29 21:52:04',
+        resolvido: false
+      },
+      {
+        id: 'alt-frd-8903',
+        pedidoId: 'ped-uuid-1055',
+        utilizadorId: 'usr-cli-5503',
+        utilizadorNome: 'Ana Paula Lourenço',
+        utilizadorTelemovel: '+244 931 777 888',
+        utilizadorTipo: 'CLIENTE',
+        tipoFraude: 'ABUSO_PROMOCOES_MORADA',
+        severidade: 'ALTA',
+        scoreRisco: 76,
+        descricao: 'RN-132: 6 contas beneficiaram do cupão de primeiro pedido (BEMVINDO) na mesma coordenada geográfica.',
+        evidencias: {
+          moradaRepetida: 'Condomínio Belas Business Park, Torre Císter, Apt 402',
+          distanciaSaltoKm: 0.005,
+          contasVinculadas: ['anapaula@outlook.com', 'ana.l@sapo.ao', 'lourenco.promo@gmail.com']
+        },
+        estadoConta: 'ATIVO',
+        dataAlerta: '2026-10-29 22:04:30',
+        resolvido: false
+      }
+    ];
+
+    const INITIAL_BLACKLIST = [
+      {
+        id: 'blk-001',
+        tipoIdentificador: 'DEVICE_ID',
+        valorIdentificador: 'hw_uuid_f87e2b100918cba47e',
+        motivo: 'Fraude massiva de cartões clonados e criação reiterada de multicontas (RN-131/RN-135).',
+        scoreRisco: 100,
+        evidenciaFicheiroNome: 'relatorio_chargebacks_outubro2026.pdf',
+        bloqueadoPor: 'admin_seguranca@delivery.ao',
+        dataBloqueio: '2026-10-24 14:15:00',
+        isAtivo: true
+      },
+      {
+        id: 'blk-002',
+        tipoIdentificador: 'ESTAFETA_ID',
+        valorIdentificador: 'usr-est-9901',
+        motivo: 'Simulação contínua de rotas com Mock GPS e apropriação indevida de mercadorias (RN-133).',
+        scoreRisco: 98,
+        evidenciaFicheiroNome: 'telemetria_gps_anomala_est9901.csv',
+        bloqueadoPor: 'supervisor_operacoes@delivery.ao',
+        dataBloqueio: '2026-10-26 18:30:22',
+        isAtivo: true
+      }
+    ];
+
+    const INITIAL_ORDERS = [
+      {
+        id: 'ped-uuid-1049',
+        codigoDisplay: '#LUA-9049',
+        lojaNome: 'Pizzaria & Trattoria Napoli (Talatona)',
+        clienteNome: 'Mariana de Albuquerque',
+        clienteMorada: 'Rua das Acácias, n.º 45, Miramar, Luanda',
+        tempoDecorridoMinutos: 48,
+        etaEstimadaMinutos: 30,
+        status: 'ATRIBUINDO_ESTAFETA',
+        alarmeCritico: true,
+        motivoAlarme: 'RN-088: 4 estafetas rejeitaram consecutivamente ou sem atribuição há 14 minutos.'
+      },
+      {
+        id: 'ped-uuid-1052',
+        codigoDisplay: '#LUA-9052',
+        lojaNome: 'Hamburgueria Artesanal Baixa',
+        clienteNome: 'Dr. Sebastião Viana',
+        clienteMorada: 'Edifício Presidente, 7.º Andar, Baixa de Luanda',
+        tempoDecorridoMinutos: 38,
+        etaEstimadaMinutos: 25,
+        status: 'EM_PREPARACAO',
+        alarmeCritico: true,
+        motivoAlarme: 'Atraso crítico na cozinha da loja (> 25 min além da janela estimada).'
+      }
+    ];
+
+    const AVAILABLE_COURIERS = [
+      { id: 'est-001', nome: 'Mateus Gaspar (Estafeta #42)', telemovel: '+244 923 888 101', veiculo: 'MOTO', distanciaKm: 1.2, bateriaNivelPct: 92, classificacaoEstrelas: 4.9 },
+      { id: 'est-002', nome: 'Domingos Baptista (Estafeta #78)', telemovel: '+244 912 444 202', veiculo: 'MOTO', distanciaKm: 2.1, bateriaNivelPct: 78, classificacaoEstrelas: 4.8 },
+      { id: 'est-003', nome: 'João Pedro Kuanza (Estafeta #95)', telemovel: '+244 934 555 303', veiculo: 'MOTO', distanciaKm: 3.4, bateriaNivelPct: 65, classificacaoEstrelas: 4.7 }
+    ];
+
+    function App() {
+      const [activeTab, setActiveTab] = useState('HIGH_RISK_ACCOUNTS'); // 'HIGH_RISK_ACCOUNTS' | 'BLACKLIST' | 'MANUAL_DISPATCH'
+      const [alerts, setAlerts] = useState(INITIAL_ALERTS);
+      const [blacklist, setBlacklist] = useState(INITIAL_BLACKLIST);
+      const [criticalOrders, setCriticalOrders] = useState(INITIAL_ORDERS);
+      const [feedback, setFeedback] = useState(null);
+
+      // Modais
+      const [suspendingAlert, setSuspendingAlert] = useState(null);
+      const [suspensionReason, setSuspensionReason] = useState('');
+      const [addBlacklist, setAddBlacklist] = useState(true);
+
+      const [showAddBlacklistModal, setShowAddBlacklistModal] = useState(false);
+      const [newBlType, setNewBlType] = useState('DEVICE_ID');
+      const [newBlValue, setNewBlValue] = useState('');
+      const [newBlReason, setNewBlReason] = useState('');
+
+      const [reassigningOrder, setReassigningOrder] = useState(null);
+      const [selectedCourierId, setSelectedCourierId] = useState('est-001');
+      const [auditReason, setAuditReason] = useState('');
+
+      // Suspensão de Conta (RN-008 / RN-135)
+      const handleSuspendAccount = () => {
+        if (!suspensionReason.trim() || suspensionReason.length < 10) {
+          alert('Por favor, introduza uma justificação com pelo menos 10 caracteres para auditoria.');
+          return;
+        }
+
+        setAlerts(prev => prev.map(a => a.id === suspendingAlert.id ? { ...a, estadoConta: 'SUSPENSO', resolvido: true } : a));
+
+        if (addBlacklist) {
+          setBlacklist(prev => [
+            {
+              id: `blk-${Date.now()}`,
+              tipoIdentificador: suspendingAlert.tipoFraude === 'GPS_FALSO_VELOCIDADE_IMPOSSIVEL' ? 'ESTAFETA_ID' : 'DEVICE_ID',
+              valorIdentificador: suspendingAlert.evidencias.deviceId || suspendingAlert.utilizadorId,
+              motivo: suspensionReason,
+              scoreRisco: suspendingAlert.scoreRisco,
+              bloqueadoPor: 'admin_helpdesk@delivery.ao',
+              dataBloqueio: new Date().toISOString().replace('T', ' ').substring(0, 19),
+              isAtivo: true
+            },
+            ...prev
+          ]);
+        }
+
+        setFeedback({ type: 'success', message: `Conta ${suspendingAlert.utilizadorNome} suspensa e averbada com sucesso (RN-008 / RN-135)!` });
+        setSuspendingAlert(null);
+        setSuspensionReason('');
+      };
+
+      // Inserção na Blacklist
+      const handleAddBlacklist = () => {
+        if (!newBlValue.trim() || !newBlReason.trim()) {
+          alert('Preencha todos os campos obrigatórios.');
+          return;
+        }
+
+        setBlacklist(prev => [
+          {
+            id: `blk-${Date.now()}`,
+            tipoIdentificador: newBlType,
+            valorIdentificador: newBlValue,
+            motivo: newBlReason,
+            scoreRisco: 100,
+            evidenciaFicheiroNome: 'evidencia_manual.pdf',
+            bloqueadoPor: 'operador_fraude@delivery.ao',
+            dataBloqueio: new Date().toISOString().replace('T', ' ').substring(0, 19),
+            isAtivo: true
+          },
+          ...prev
+        ]);
+
+        setFeedback({ type: 'success', message: 'Entrada gravada na Lista de Bloqueio Imutável (RN-135)!' });
+        setShowAddBlacklistModal(false);
+        setNewBlValue('');
+        setNewBlReason('');
+      };
+
+      // Reatribuição Manual Forçada (Secção 5.2 / RN-088)
+      const handleReassign = () => {
+        if (!auditReason.trim() || auditReason.length < 10) {
+          alert('Secção 5.2: O registo do motivo da intervenção no log imutável de auditoria é obrigatório (mínimo 10 caracteres).');
+          return;
+        }
+
+        const courier = AVAILABLE_COURIERS.find(c => c.id === selectedCourierId);
+
+        setCriticalOrders(prev => prev.map(o => o.id === reassigningOrder.id ? {
+          ...o,
+          status: 'ESTAFETA_A_CAMINHO_RECOLHA',
+          alarmeCritico: false
+        } : o));
+
+        setFeedback({
+          type: 'success',
+          message: `Pedido ${reassigningOrder.codigoDisplay} reatribuído com sucesso a ${courier.nome}. Justificação gravada em EventoPedido (Secção 5.2).`
+        });
+        setReassigningOrder(null);
+      };
+
+      return (
+        <div className="min-h-screen flex flex-col">
+          {/* Header */}
+          <header className="bg-slate-950 border-b border-slate-800 px-6 py-4 flex flex-wrap items-center justify-between gap-4 sticky top-0 z-40">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-600 to-amber-600 flex items-center justify-center text-white font-black text-xl shadow-lg">
+                🛡
+              </div>
+              <div>
+                <div className="flex items-center space-x-2">
+                  <h1 className="text-base font-black tracking-tight text-white uppercase">Gestão de Risco & Intervenção</h1>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                    Backoffice ERP
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400">Antifraude (6.14), Disputas (6.15) e Tráfego Logístico (5.2, RN-088)</p>
+              </div>
+            </div>
+
+            {/* Menu Superior */}
+            <div className="flex items-center space-x-2 bg-slate-900 p-1.5 rounded-xl border border-slate-800 text-xs">
+              <button
+                onClick={() => setActiveTab('HIGH_RISK_ACCOUNTS')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition ${activeTab === 'HIGH_RISK_ACCOUNTS' ? 'bg-rose-600 text-white' : 'text-slate-400 hover:text-white'}`}
+              >
+                ⚠️ Contas de Alto Risco ({alerts.filter(a => !a.resolvido).length})
+              </button>
+              <button
+                onClick={() => setActiveTab('BLACKLIST')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition ${activeTab === 'BLACKLIST' ? 'bg-rose-600 text-white' : 'text-slate-400 hover:text-white'}`}
+              >
+                🚫 Lista de Bloqueio ({blacklist.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('MANUAL_DISPATCH')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition ${activeTab === 'MANUAL_DISPATCH' ? 'bg-amber-600 text-white' : 'text-slate-400 hover:text-white'}`}
+              >
+                🚨 Intervenção Manual de Pedidos ({criticalOrders.filter(o => o.alarmeCritico).length})
+              </button>
+            </div>
+          </header>
+
+          {/* Feedback */}
+          {feedback && (
+            <div className="px-6 py-2">
+              <div className="p-3 rounded-xl bg-emerald-950 border border-emerald-700 text-emerald-200 text-xs font-bold flex justify-between items-center">
+                <span>✓ {feedback.message}</span>
+                <button onClick={() => setFeedback(null)} className="underline">Fechar</button>
+              </div>
+            </div>
+          )}
+
+          {/* Conteúdo */}
+          <main className="p-6 flex-1 space-y-6">
+            {/* MÓDULO 1: CONTAS DE ALTO RISCO */}
+            {activeTab === 'HIGH_RISK_ACCOUNTS' && (
+              <div className="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
+                <div className="px-6 py-4 border-b border-slate-800 flex justify-between items-center">
+                  <div>
+                    <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+                      Painel de Contas de Alto Risco (RN-130 a RN-134)
+                    </h2>
+                    <p className="text-xs text-slate-400">Deteção probabilística contínua de multicontas no mesmo hardware e estafetas com telemetria anómala.</p>
+                  </div>
+                  <span className="text-xs font-mono font-bold bg-slate-900 px-3 py-1 rounded border border-slate-700 text-slate-300">
+                    Alertas Ativos: {alerts.length}
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-900/80 text-slate-400 uppercase tracking-wider border-b border-slate-800 font-bold">
+                        <th className="py-3 px-4">Severidade</th>
+                        <th className="py-3 px-4">Utilizador / Infrator</th>
+                        <th className="py-3 px-4">Tipo de Fraude</th>
+                        <th className="py-3 px-4">Evidências Forenses (PCI DSS / Telemetria)</th>
+                        <th className="py-3 px-4">Data/Hora</th>
+                        <th className="py-3 px-4 text-right">Ação de Risco (RN-008)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {alerts.map(a => (
+                        <tr key={a.id} className={`hover:bg-slate-900/50 ${a.severidade === 'CRITICA' && a.estadoConta !== 'SUSPENSO' ? 'bg-rose-950/20' : ''}`}>
+                          <td className="py-4 px-4 whitespace-nowrap">
+                            <span className="px-2 py-0.5 rounded font-black text-[10px] bg-rose-600 text-white">
+                              {a.severidade} ({a.scoreRisco}/100)
+                            </span>
+                          </td>
+                          <td className="py-4 px-4 whitespace-nowrap">
+                            <div className="font-bold text-white">{a.utilizadorNome}</div>
+                            <span className="font-mono text-slate-400 text-[11px]">{a.utilizadorTelemovel}</span>
+                            {a.estadoConta === 'SUSPENSO' && (
+                              <span className="block text-[10px] text-rose-400 font-bold">CONTA SUSPENSA</span>
+                            )}
+                          </td>
+                          <td className="py-4 px-4">
+                            <span className="font-bold text-rose-300 block">{a.tipoFraude}</span>
+                            <span className="text-slate-400 text-[11px]">{a.descricao}</span>
+                          </td>
+                          <td className="py-4 px-4 font-mono text-[11px] text-slate-300">
+                            {a.evidencias.deviceId && <div>Device: <span className="text-amber-400">{a.evidencias.deviceId}</span></div>}
+                            {a.evidencias.mockGpsDetected && <div className="text-rose-400 font-bold">🚨 Mock Location Detetado</div>}
+                            {a.evidencias.velocidadeCalculadaKmh && <div>Velocidade: <span className="text-rose-400">{a.evidencias.velocidadeCalculadaKmh} km/h</span></div>}
+                          </td>
+                          <td className="py-4 px-4 whitespace-nowrap font-mono text-slate-400">{a.dataAlerta}</td>
+                          <td className="py-4 px-4 text-right whitespace-nowrap">
+                            {a.estadoConta === 'SUSPENSO' ? (
+                              <span className="text-slate-500 font-bold">Já Bloqueado</span>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  setSuspendingAlert(a);
+                                  setSuspensionReason(`Suspensão por deteção de fraude: ${a.descricao}`);
+                                }}
+                                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-xs shadow"
+                              >
+                                Suspender Conta
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* MÓDULO 2: BLACKLIST */}
+            {activeTab === 'BLACKLIST' && (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center bg-slate-950 p-4 rounded-2xl border border-slate-800">
+                  <div>
+                    <h2 className="text-sm font-bold text-white uppercase tracking-wider">Lista de Bloqueio Imutável (Blacklist - RN-135)</h2>
+                    <p className="text-xs text-slate-400">Identificadores banidos permanentemente da plataforma.</p>
+                  </div>
+                  <button
+                    onClick={() => setShowAddBlacklistModal(true)}
+                    className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow"
+                  >
+                    + Inserir Identificador
+                  </button>
+                </div>
+
+                <div className="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-900/80 text-slate-400 uppercase tracking-wider border-b border-slate-800 font-bold">
+                        <th className="py-3 px-4">Tipo</th>
+                        <th className="py-3 px-4">Identificador Bloqueado</th>
+                        <th className="py-3 px-4">Motivo Circunstanciado</th>
+                        <th className="py-3 px-4">Evidência</th>
+                        <th className="py-3 px-4">Data Imutável</th>
+                        <th className="py-3 px-4 text-center">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60 font-mono">
+                      {blacklist.map(b => (
+                        <tr key={b.id}>
+                          <td className="py-3 px-4 text-amber-300 font-bold">{b.tipoIdentificador}</td>
+                          <td className="py-3 px-4 text-white font-bold">{b.valorIdentificador}</td>
+                          <td className="py-3 px-4 text-slate-300 font-sans">{b.motivo}</td>
+                          <td className="py-3 px-4 text-emerald-400 font-sans">{b.evidenciaFicheiroNome || 'Relatório de Logs'}</td>
+                          <td className="py-3 px-4 text-slate-400">{b.dataBloqueio}</td>
+                          <td className="py-3 px-4 text-center text-rose-400 font-bold">BLOQUEADO</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* MÓDULO 3: INTERVENÇÃO MANUAL DE PEDIDOS */}
+            {activeTab === 'MANUAL_DISPATCH' && (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <div className="lg:col-span-5 space-y-3">
+                  <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
+                    <h2 className="text-sm font-bold text-white uppercase tracking-wider">Fila de Atrasos Críticos (RN-088)</h2>
+                    <p className="text-xs text-slate-400">Pedidos sem atribuição ou com atraso grave na preparação.</p>
+                  </div>
+
+                  {criticalOrders.map(o => (
+                    <div key={o.id} className="p-4 rounded-2xl border border-rose-500/60 bg-slate-950 space-y-2">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className="font-mono font-bold text-white text-sm">{o.codigoDisplay}</span>
+                          <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-600 text-white">{o.status}</span>
+                          <p className="text-xs font-bold text-slate-300 mt-1">{o.lojaNome}</p>
+                          <p className="text-xs text-slate-400">Cliente: {o.clienteNome}</p>
+                        </div>
+                        <span className="text-xs font-mono font-bold text-rose-400">{o.tempoDecorridoMinutos} min</span>
+                      </div>
+
+                      <div className="p-2 bg-rose-950/40 border border-rose-800 rounded-lg text-xs text-rose-300">
+                        {o.motivoAlarme}
+                      </div>
+
+                      {o.alarmeCritico && (
+                        <div className="pt-2 flex justify-end">
+                          <button
+                            onClick={() => {
+                              setReassigningOrder(o);
+                              setAuditReason(`Intervenção manual forçada pelo operador devido a: ${o.motivoAlarme}`);
+                            }}
+                            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs shadow"
+                          >
+                            ⚡ Reatribuição Manual Forçada
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="lg:col-span-7 bg-slate-950 rounded-2xl border border-slate-800 p-5 flex flex-col justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wider">Visão Espacial da Frota (Luanda)</h3>
+                    <p className="text-xs text-slate-400 mb-4">Radar em tempo real com raio de proximidade de estafetas conectados.</p>
+
+                    <div className="h-96 w-full rounded-xl bg-slate-900 border border-slate-800 relative flex items-center justify-center overflow-hidden">
+                      <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:32px_32px] opacity-40" />
+                      
+                      <div className="absolute top-28 left-40 text-center animate-bounce">
+                        <div className="w-8 h-8 rounded-full bg-rose-600 text-white flex items-center justify-center font-bold text-xs ring-4 ring-rose-950 shadow">
+                          🍕
+                        </div>
+                        <span className="text-[10px] font-bold text-rose-400">Napoli (#9049)</span>
+                      </div>
+
+                      <div className="absolute top-44 left-64 text-center">
+                        <div className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs ring-2 ring-emerald-400 shadow">
+                          🏍️
+                        </div>
+                        <span className="text-[9px] text-emerald-400">Mateus (1.2 km)</span>
+                      </div>
+
+                      <div className="absolute top-56 left-96 text-center">
+                        <div className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs ring-2 ring-emerald-400 shadow">
+                          🏍️
+                        </div>
+                        <span className="text-[9px] text-emerald-400">Domingos (2.1 km)</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3 text-center text-xs mt-4">
+                    <div className="bg-slate-900 p-2 rounded-xl border border-slate-800">
+                      <span className="text-slate-400 text-[10px] uppercase font-bold block">Conectados</span>
+                      <span className="text-sm font-bold text-emerald-400 font-mono">48 Estafetas</span>
+                    </div>
+                    <div className="bg-slate-900 p-2 rounded-xl border border-slate-800">
+                      <span className="text-slate-400 text-[10px] uppercase font-bold block">Em Rota</span>
+                      <span className="text-sm font-bold text-amber-400 font-mono">35 Entregas</span>
+                    </div>
+                    <div className="bg-slate-900 p-2 rounded-xl border border-slate-800">
+                      <span className="text-slate-400 text-[10px] uppercase font-bold block">Livres</span>
+                      <span className="text-sm font-bold text-blue-400 font-mono">13 Livres</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </main>
+
+          {/* Modal Suspensão */}
+          {suspendingAlert && (
+            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+                <h3 className="text-base font-bold text-white">Suspender Conta de Utilizador (RN-008)</h3>
+                <p className="text-xs text-slate-400">Utilizador: {suspendingAlert.utilizadorNome} ({suspendingAlert.utilizadorTelemovel})</p>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Justificação Obrigatória *</label>
+                  <textarea
+                    rows={3}
+                    value={suspensionReason}
+                    onChange={e => setSuspensionReason(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100"
+                  />
+                </div>
+
+                <label className="flex items-center space-x-2 text-xs text-slate-300">
+                  <input type="checkbox" checked={addBlacklist} onChange={e => setAddBlacklist(e.target.checked)} />
+                  <span>Adicionar hardware/ID à Blacklist Imutável (RN-135)</span>
+                </label>
+
+                <div className="flex justify-end space-x-2 pt-2">
+                  <button onClick={() => setSuspendingAlert(null)} className="px-4 py-2 border rounded-xl text-xs font-bold">Cancelar</button>
+                  <button onClick={handleSuspendAccount} className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold">
+                    Confirmar Suspensão
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal Blacklist */}
+          {showAddBlacklistModal && (
+            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+                <h3 className="text-base font-bold text-white">Inserir Entrada na Blacklist (RN-135)</h3>
+
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <label className="block font-bold uppercase mb-1">Tipo de Identificador</label>
+                    <select
+                      value={newBlType}
+                      onChange={e => setNewBlType(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2"
+                    >
+                      <option value="DEVICE_ID">Hardware UUID (Device ID)</option>
+                      <option value="CARD_FINGERPRINT">Fingerprint SHA-256 do Cartão</option>
+                      <option value="TELEMOVEL">Telemóvel E.164</option>
+                      <option value="ESTAFETA_ID">ID de Estafeta</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold uppercase mb-1">Valor do Identificador *</label>
+                    <input
+                      type="text"
+                      value={newBlValue}
+                      onChange={e => setNewBlValue(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold uppercase mb-1">Justificação *</label>
+                    <textarea
+                      rows={2}
+                      value={newBlReason}
+                      onChange={e => setNewBlReason(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-2 pt-2">
+                  <button onClick={() => setShowAddBlacklistModal(false)} className="px-4 py-2 border rounded-xl text-xs font-bold">Cancelar</button>
+                  <button onClick={handleAddBlacklist} className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold">
+                    Gravar na Blacklist
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal Reatribuição */}
+          {reassigningOrder && (
+            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+                <h3 className="text-base font-bold text-white">Reatribuição Manual Forçada (Secção 5.2 / RN-088)</h3>
+                <p className="text-xs text-slate-400">Pedido: {reassigningOrder.codigoDisplay} ({reassigningOrder.lojaNome})</p>
+
+                <div className="space-y-2 text-xs">
+                  <label className="block font-bold uppercase">Selecione Estafeta Online:</label>
+                  {AVAILABLE_COURIERS.map(c => (
+                    <div
+                      key={c.id}
+                      onClick={() => setSelectedCourierId(c.id)}
+                      className={`p-2.5 rounded-xl border cursor-pointer flex justify-between items-center ${
+                        selectedCourierId === c.id ? 'bg-amber-950/40 border-amber-500' : 'bg-slate-900 border-slate-800'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-bold text-white">{c.nome}</div>
+                        <span className="text-[11px] text-slate-400">{c.distanciaKm} km de distância • {c.bateriaNivelPct}% Bat</span>
+                      </div>
+                      <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded">LIVRE</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
+                    Motivo para Log de Auditoria (Secção 5.2 - EventoPedido) *
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={auditReason}
+                    onChange={e => setAuditReason(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100"
+                  />
+                </div>
+
+                <div className="flex justify-end space-x-2 pt-2">
+                  <button onClick={() => setReassigningOrder(null)} className="px-4 py-2 border rounded-xl text-xs font-bold">Cancelar</button>
+                  <button onClick={handleReassign} className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold">
+                    Confirmar Despacho Forçado
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>

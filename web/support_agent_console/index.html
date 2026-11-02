@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Consola de Atendimento de Suporte (SupportAgentConsole) | CRM & Mediação de Disputas</title>
+
+  <!-- Tailwind CSS 3 CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#fff1f2',
+              500: '#f43f5e',
+              600: '#e11d48',
+              700: '#be123c',
+              800: '#9f1239',
+              900: '#881337',
+              950: '#4c0519',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- React 18 e Babel CDN para execução imediata no navegador -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 antialiased h-screen overflow-hidden">
+  <div id="root" class="h-full"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const MOCK_TICKETS = [
+      {
+        id: 'tkt-urg-1001',
+        pedidoId: 'ped-uuid-napoli-01',
+        codigoDisplay: '#LUA-9049',
+        clienteNome: 'Mariana de Albuquerque',
+        clienteTelemovelMascarado: '+244 923 *** 222',
+        lojaNome: 'Pizzaria & Trattoria Napoli (Talatona)',
+        lojaNif: '5401928374',
+        itensResumo: '1x Pizza Quattro Formaggi, 1x Tiramisù Clássico',
+        subtotalKz: 8500,
+        totalKz: 10125,
+        tipoIncidente: 'REACAO_ALERGICA',
+        prioridade: 'CRITICA',
+        estado: 'ABERTO',
+        motivoAbertura: 'ALERTA EMERGENCIAL (RN-140): Cliente relatou crise alérgica grave imediata após ingestão de sobremesa com nozes não declaradas nas notas.',
+        tempoRestanteSlaSegundos: 165, // 2m 45s no SLA de 5 min
+        slaCriticoMinutos: 5,
+        timelinePedido: [
+          { estado: 'CRIADO', timestamp: '21:30' },
+          { estado: 'ACEITE', timestamp: '21:30' },
+          { estado: 'EM_PREPARACAO', timestamp: '21:32' },
+          { estado: 'DESPACHADO', timestamp: '21:55' },
+          { estado: 'ENTREGUE', timestamp: '22:15' }
+        ],
+        mensagensChat: [
+          { id: '1', remetenteTipo: 'CLIENTE', remetenteNome: 'Mariana (Cliente)', conteudo: 'SOCORRO! Deixei explícito que sou hiperalérgica a nozes e o tiramisù veio cheio de frutos secos! Tive de chamar assistência médica de urgência!', timestamp: '22:24' },
+          { id: '2', remetenteTipo: 'LOJA', remetenteNome: 'Restaurante Napoli (Cozinha)', conteudo: 'Boa noite. O nosso tiramisù leva essência e amêndoa na calda. O cozinheiro não reparou na nota na hora de ponta.', timestamp: '22:25' },
+          { id: '3', remetenteTipo: 'SISTEMA', remetenteNome: 'Sistema Antifraude & Risco', conteudo: 'RN-139 / RN-140: Ticket escalado automaticamente para a equipa médica com SLA < 5 minutos.', timestamp: '22:25' }
+        ],
+        evidenciasFotos: [
+          { id: 'f1', url: 'https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?w=600&auto=format&fit=crop', legenda: 'Foto da sobremesa e receita de emergência' }
+        ]
+      },
+      {
+        id: 'tkt-dan-1002',
+        pedidoId: 'ped-uuid-burger-02',
+        codigoDisplay: '#LUA-9052',
+        clienteNome: 'Dr. Sebastião Viana',
+        clienteTelemovelMascarado: '+244 912 *** 444',
+        lojaNome: 'Hamburgueria Artesanal Baixa',
+        lojaNif: '5419283011',
+        itensResumo: '2x Double Bacon Burger, 1x Batata Especial, 2x Sumo',
+        subtotalKz: 9200,
+        totalKz: 11000,
+        tipoIncidente: 'DERRAME_DANOS',
+        prioridade: 'MEDIA',
+        estado: 'EM_ANALISE',
+        motivoAbertura: 'RN-101: Estafeta reportou travagem brusca de emergência com derrame total de sumos e dano nas embalagens.',
+        tempoRestanteSlaSegundos: 840,
+        slaCriticoMinutos: 30,
+        timelinePedido: [
+          { estado: 'CRIADO', timestamp: '21:15' },
+          { estado: 'ACEITE', timestamp: '21:16' },
+          { estado: 'DESPACHADO', timestamp: '21:40' },
+          { estado: 'INCIDENTE', timestamp: '22:10' }
+        ],
+        mensagensChat: [
+          { id: '10', remetenteTipo: 'ESTAFETA', remetenteNome: 'Mateus (Estafeta #42)', conteudo: 'Um táxi cortou a minha frente e deitei a mota. Os copos de sumo abriram e molharam os hambúrgueres todos. Envio a foto do dano térmico.', timestamp: '22:10' },
+          { id: '11', remetenteTipo: 'CLIENTE', remetenteNome: 'Dr. Sebastião (Cliente)', conteudo: 'Compreendo a situação. Por favor creditem o valor na minha carteira para poder jantar.', timestamp: '22:12' }
+        ],
+        evidenciasFotos: [
+          { id: 'f2', url: 'https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=600&auto=format&fit=crop', legenda: 'RN-101: Foto submetida pelo estafeta demonstrando embalagem destruída' }
+        ]
+      },
+      {
+        id: 'tkt-fal-1003',
+        pedidoId: 'ped-uuid-sushi-03',
+        codigoDisplay: '#LUA-9058',
+        clienteNome: 'Eng. Fernando Costa',
+        clienteTelemovelMascarado: '+244 934 *** 303',
+        lojaNome: 'Sushi & Wok Luanda Sul',
+        lojaNif: '5492817263',
+        itensResumo: '1x Combo Salmão 32 Peças, 1x Gunkan Especial (3.500 Kz)',
+        subtotalKz: 14500,
+        totalKz: 16200,
+        tipoIncidente: 'ITEM_FALTOU',
+        prioridade: 'BAIXA',
+        estado: 'ABERTO',
+        motivoAbertura: 'Cliente recebeu o saco lacrado mas sem o item Gunkan Especial de 3.500 Kz.',
+        tempoRestanteSlaSegundos: 1750,
+        slaCriticoMinutos: 45,
+        timelinePedido: [
+          { estado: 'CRIADO', timestamp: '21:00' },
+          { estado: 'ENTREGUE', timestamp: '21:50' }
+        ],
+        mensagensChat: [
+          { id: '20', remetenteTipo: 'CLIENTE', remetenteNome: 'Fernando (Cliente)', conteudo: 'Faltou o gunkan de 3.500 Kz no saco lacrado.', timestamp: '21:55' }
+        ],
+        evidenciasFotos: []
+      }
+    ];
+
+    function App() {
+      const [tickets, setTickets] = useState(MOCK_TICKETS);
+      const [selectedId, setSelectedId] = useState('tkt-urg-1001');
+      const [role, setRole] = useState('AGENTE_BASE'); // 'AGENTE_BASE' | 'SUPERVISOR'
+      const [feedback, setFeedback] = useState(null);
+
+      // Resolução
+      const [decisao, setDecisao] = useState('Procedente_Cliente');
+      const [justificacao, setJustificacao] = useState('');
+      const [compensacaoKz, setCompensacaoKz] = useState(5000);
+      const [pinSupervisor, setPinSupervisor] = useState('');
+      const [isPinOk, setIsPinOk] = useState(false);
+
+      // Chat
+      const [chatInput, setChatInput] = useState('');
+
+      const selected = tickets.find(t => t.id === selectedId) || tickets[0];
+
+      // Timer regressivo do SLA (RN-139)
+      useEffect(() => {
+        const interval = setInterval(() => {
+          setTickets(prev => prev.map(t => {
+            if (t.estado !== 'RESOLVIDO' && t.tempoRestanteSlaSegundos > 0) {
+              return { ...t, tempoRestanteSlaSegundos: t.tempoRestanteSlaSegundos - 1 };
+            }
+            return t;
+          }));
+        }, 1000);
+        return () => clearInterval(interval);
+      }, []);
+
+      const formatTimer = (sec) => {
+        if (sec <= 0) return '00:00 (SLA Expirado)';
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      };
+
+      // Verificação lógica de alçada (RN-106: limite de 3.000 Kz para Agente Base)
+      const LIMITE_AGENTE = 3000;
+      const PIN_CORRETO = '9988';
+      const isExcedido = compensacaoKz > LIMITE_AGENTE;
+      const isBloqueado = role === 'AGENTE_BASE' && isExcedido && !isPinOk;
+
+      const handleCheckPin = (val) => {
+        setPinSupervisor(val);
+        if (val === PIN_CORRETO) {
+          setIsPinOk(true);
+        } else {
+          setIsPinOk(false);
+        }
+      };
+
+      const handleSendChat = () => {
+        if (!chatInput.trim()) return;
+        const msg = {
+          id: String(Date.now()),
+          remetenteTipo: 'SUPORTE',
+          remetenteNome: 'Agente Helpdesk (Suporte Oficial)',
+          conteudo: chatInput,
+          timestamp: new Date().toTimeString().substring(0, 5)
+        };
+        setTickets(prev => prev.map(t => t.id === selected.id ? { ...t, mensagensChat: [...t.mensagensChat, msg] } : t));
+        setChatInput('');
+      };
+
+      const handleResolveDispute = () => {
+        if (!justificacao.trim() || justificacao.length < 10) {
+          alert('RN-142: Fundamentação obrigatória para auditoria imutável (mínimo 10 caracteres).');
+          return;
+        }
+        if (isBloqueado) {
+          alert('RN-106: Valor excede 3.000 Kz. Introduza o PIN de autorização de um Supervisor.');
+          return;
+        }
+
+        setTickets(prev => prev.map(t => t.id === selected.id ? {
+          ...t,
+          estado: 'RESOLVIDO',
+          decisaoResolucao: {
+            decisao,
+            motivoJustificacao: justificacao,
+            compensacaoValorKz: compensacaoKz,
+            autorEmail: role === 'SUPERVISOR' ? 'supervisor@delivery.ao' : 'agente_base@delivery.ao',
+            resolvidoEm: new Date().toISOString().replace('T', ' ').substring(0, 19)
+          }
+        } : t));
+
+        setFeedback(`Disputa resolvida com sucesso! Compensação de ${compensacaoKz.toLocaleString()} Kz creditada na carteira (RN-071/RN-105). Decisão imutável congelada (RN-142).`);
+      };
+
+      return (
+        <div className="h-full flex flex-col">
+          {/* Header */}
+          <header className="bg-slate-950 border-b border-slate-800 px-6 py-3 flex items-center justify-between shrink-0">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-rose-600 to-amber-600 flex items-center justify-center font-black text-sm shadow">
+                🎧
+              </div>
+              <div>
+                <div className="flex items-center space-x-2">
+                  <h1 className="text-sm font-black uppercase text-white">SupportAgentConsole</h1>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    CRM & Disputas (6.15)
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400">Mediação e Alçadas de Compensação (RN-106 / RN-141)</p>
+              </div>
+            </div>
+
+            {/* Alternância de Perfil (RN-106) */}
+            <div className="flex items-center space-x-2 text-xs bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800">
+              <span className="text-slate-400 font-semibold">Perfil:</span>
+              <button
+                onClick={() => { setRole('AGENTE_BASE'); setIsPinOk(false); }}
+                className={`px-2 py-1 rounded font-bold transition ${role === 'AGENTE_BASE' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}
+              >
+                Agente Base (Alçada 3.000 Kz)
+              </button>
+              <button
+                onClick={() => { setRole('SUPERVISOR'); setIsPinOk(true); }}
+                className={`px-2 py-1 rounded font-bold transition ${role === 'SUPERVISOR' ? 'bg-amber-600 text-white' : 'text-slate-400'}`}
+              >
+                Supervisor (Sem Limite)
+              </button>
+            </div>
+          </header>
+
+          {/* Feedback */}
+          {feedback && (
+            <div className="px-6 py-1.5 bg-emerald-950 border-b border-emerald-800 text-emerald-200 text-xs font-bold flex justify-between items-center shrink-0">
+              <span>✓ {feedback}</span>
+              <button onClick={() => setFeedback(null)} className="underline">Fechar</button>
+            </div>
+          )}
+
+          {/* 3 COLUNAS */}
+          <div className="flex-1 grid grid-cols-12 overflow-hidden">
+            {/* 1. PAINEL ESQUERDO: FILA PRIORITÁRIA DE TICKETS (RN-139) */}
+            <aside className="col-span-3 border-r border-slate-800 bg-slate-950 flex flex-col overflow-hidden">
+              <div className="p-3 border-b border-slate-800 flex justify-between items-center shrink-0">
+                <span className="text-xs font-bold uppercase text-slate-300">Fila Ativa ({tickets.length})</span>
+                <span className="text-[10px] font-mono bg-rose-950 text-rose-300 px-2 py-0.5 rounded font-bold border border-rose-800">
+                  SLA &lt; 5 min
+                </span>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                {tickets.map(t => {
+                  const isSel = t.id === selected.id;
+                  const isCrit = t.tipoIncidente === 'REACAO_ALERGICA';
+                  const isRes = t.estado === 'RESOLVIDO';
+
+                  return (
+                    <div
+                      key={t.id}
+                      onClick={() => setSelectedId(t.id)}
+                      className={`p-3 rounded-xl border cursor-pointer transition ${
+                        isSel ? 'bg-slate-900 border-rose-500 shadow-md ring-1 ring-rose-500' : 'bg-slate-950 border-slate-800 hover:bg-slate-900/60'
+                      }`}
+                    >
+                      <div className="flex justify-between items-center">
+                        <span className="font-mono text-xs font-bold text-white">{t.codigoDisplay}</span>
+                        {isRes ? (
+                          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950 px-1.5 rounded">RESOLVIDO</span>
+                        ) : isCrit ? (
+                          <span className="text-[10px] font-bold text-white bg-rose-600 px-1.5 rounded animate-pulse">🚨 CRÍTICA (RN-140)</span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-slate-400 bg-slate-800 px-1.5 rounded">{t.prioridade}</span>
+                        )}
+                      </div>
+
+                      <p className="text-xs font-bold text-slate-200 mt-1 truncate">{t.lojaNome}</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-2">{t.motivoAbertura}</p>
+
+                      <div className="mt-2 pt-2 border-t border-slate-800 flex justify-between text-[10px] font-mono">
+                        <span className="text-slate-500">{t.clienteNome.split(' ')[0]}</span>
+                        {!isRes && (
+                          <span className={`font-bold ${t.tempoRestanteSlaSegundos < 180 ? 'text-rose-400 animate-pulse' : 'text-amber-400'}`}>
+                            ⏱ {formatTimer(t.tempoRestanteSlaSegundos)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </aside>
+
+            {/* 2. PAINEL CENTRAL: FOCO DO PEDIDO, FOTOS E CHAT MASCARADO (RN-138, RN-101) */}
+            <section className="col-span-5 border-r border-slate-800 bg-slate-900 flex flex-col overflow-hidden">
+              {/* Header do Pedido */}
+              <div className="p-3.5 bg-slate-950 border-b border-slate-800 shrink-0 space-y-2">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <span className="font-mono font-bold text-white text-base">{selected.codigoDisplay}</span>
+                    <span className="text-xs text-slate-400 ml-2">({selected.tipoIncidente})</span>
+                    <p className="text-xs font-bold text-slate-300 mt-0.5">{selected.lojaNome}</p>
+                    <p className="text-[11px] text-slate-400">Cliente: <strong className="text-slate-200">{selected.clienteNome}</strong> ({selected.clienteTelemovelMascarado})</p>
+                  </div>
+                  <span className="font-mono text-sm font-bold text-emerald-400">{selected.totalKz.toLocaleString()} Kz</span>
+                </div>
+
+                {/* Timeline Máquina de Estados */}
+                <div className="pt-2 border-t border-slate-800 flex items-center space-x-1.5 text-[10px] font-mono overflow-x-auto pb-1">
+                  {selected.timelinePedido.map((s, i) => (
+                    <span key={i} className="flex items-center space-x-1 shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      <span className="text-slate-300">{s.estado}</span>
+                      {i < selected.timelinePedido.length - 1 && <span className="text-slate-600">→</span>}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Evidências Fotográficas (RN-101) */}
+              {selected.evidenciasFotos.length > 0 && (
+                <div className="p-2.5 bg-slate-950/60 border-b border-slate-800 shrink-0 flex items-center space-x-2">
+                  <span className="text-[10px] font-bold uppercase text-amber-400">Evidências RN-101:</span>
+                  {selected.evidenciasFotos.map(f => (
+                    <img key={f.id} src={f.url} title={f.legenda} className="w-16 h-12 object-cover rounded-lg border border-slate-700" />
+                  ))}
+                </div>
+              )}
+
+              {/* Chat com Mascaramento */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {selected.mensagensChat.map(m => {
+                  const isSup = m.remetenteTipo === 'SUPORTE';
+                  const isSys = m.remetenteTipo === 'SISTEMA';
+
+                  return (
+                    <div key={m.id} className={`flex flex-col ${isSup ? 'items-end' : isSys ? 'items-center' : 'items-start'}`}>
+                      <span className="text-[10px] text-slate-400 mb-0.5">{m.remetenteNome} • {m.timestamp}</span>
+                      <div className={`p-2.5 rounded-2xl max-w-sm text-xs ${
+                        isSup ? 'bg-rose-600 text-white rounded-tr-none' :
+                        isSys ? 'bg-slate-950 border border-slate-800 text-amber-300 text-center font-mono' :
+                        'bg-slate-800 text-slate-200 rounded-tl-none border border-slate-700'
+                      }`}>
+                        {m.conteudo}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Input Chat */}
+              <div className="p-2.5 bg-slate-950 border-t border-slate-800 shrink-0 flex space-x-2">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleSendChat(); }}
+                  placeholder="Escrever resposta oficial mascarada..."
+                  className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 flex-1 text-xs text-white focus:outline-none focus:border-rose-500"
+                />
+                <button onClick={handleSendChat} className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow">
+                  Enviar
+                </button>
+              </div>
+            </section>
+
+            {/* 3. PAINEL DIREITO: RESOLUÇÃO E VALIDAÇÃO DE ALÇADA (RN-106 / RN-141) */}
+            <aside className="col-span-4 bg-slate-950 p-4 space-y-4 overflow-y-auto">
+              <div className="border-b border-slate-800 pb-2">
+                <h2 className="text-xs font-bold uppercase text-white tracking-wider">Resolução & Alçadas (RN-106 / RN-141)</h2>
+                <p className="text-[11px] text-slate-400">Decisão auditada no Livro Razão.</p>
+              </div>
+
+              {selected.estado === 'RESOLVIDO' ? (
+                <div className="p-3 bg-slate-900 rounded-xl border border-emerald-700 space-y-2 text-xs">
+                  <span className="text-emerald-400 font-bold block">✓ RESOLVIDO DE FORMA IMUTÁVEL (RN-142)</span>
+                  <p><strong>Decisão:</strong> {selected.decisaoResolucao.decisao}</p>
+                  <p><strong>Compensação:</strong> {selected.decisaoResolucao.compensacaoValorKz.toLocaleString()} Kz</p>
+                  <p className="p-2 bg-slate-950 rounded text-slate-300">{selected.decisaoResolucao.motivoJustificacao}</p>
+                </div>
+              ) : (
+                <div className="space-y-3.5 text-xs">
+                  {/* Decisão */}
+                  <div>
+                    <label className="block font-bold text-slate-300 uppercase mb-1">Decisão Formal (RN-141) *</label>
+                    <div className="space-y-1.5">
+                      {[
+                        { id: 'Procedente_Cliente', label: 'Procedente Cliente (Reembolso/Crédito)' },
+                        { id: 'Procedente_Parceiro', label: 'Procedente Parceiro (Loja Isenta)' },
+                        { id: 'Improcedente', label: 'Improcedente (Disputa Rejeitada)' }
+                      ].map(d => (
+                        <label key={d.id} className={`p-2 rounded-xl border flex items-center space-x-2 cursor-pointer ${decisao === d.id ? 'bg-rose-950/40 border-rose-500' : 'bg-slate-900 border-slate-800'}`}>
+                          <input type="radio" name="decisao" checked={decisao === d.id} onChange={() => setDecisao(d.id)} />
+                          <span className="font-bold text-white">{d.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Compensação */}
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="font-bold text-slate-300 uppercase">Crédito na Carteira (Kz)</label>
+                      <span className="text-[10px] text-slate-400">Teto Agente: <strong>3.000 Kz</strong></span>
+                    </div>
+                    <input
+                      type="number"
+                      value={compensacaoKz}
+                      onChange={e => setCompensacaoKz(Number(e.target.value))}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 font-mono font-bold text-emerald-400 text-sm focus:outline-none"
+                    />
+                  </div>
+
+                  {/* BLOQUEIO DE ALÇADA (RN-106) */}
+                  {isExcedido && role === 'AGENTE_BASE' && (
+                    <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/80 space-y-2">
+                      <span className="font-bold text-amber-300 block">
+                        ⚠️ RN-106: Valor ({compensacaoKz.toLocaleString()} Kz) excede o limite do Agente Base (3.000 Kz).
+                      </span>
+                      <p className="text-[11px] text-slate-300">
+                        Introduza o PIN de autorização de um Supervisor (PIN Demo: <strong>9988</strong>):
+                      </p>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="password"
+                          maxLength={6}
+                          value={pinSupervisor}
+                          onChange={e => handleCheckPin(e.target.value)}
+                          placeholder="PIN do Supervisor"
+                          className="bg-slate-900 border border-amber-500 rounded-lg px-2.5 py-1 text-xs font-mono text-center w-36"
+                        />
+                        {isPinOk ? (
+                          <span className="text-emerald-400 font-bold">✓ Autorizado</span>
+                        ) : (
+                          <span className="text-amber-400 text-[10px]">Aguardando PIN...</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Justificação */}
+                  <div>
+                    <label className="block font-bold text-slate-300 uppercase mb-1">Fundamentação Imutável (RN-142) *</label>
+                    <textarea
+                      rows={3}
+                      value={justificacao}
+                      onChange={e => setJustificacao(e.target.value)}
+                      placeholder="Descreva os motivos circunstanciados com base nos logs e evidências..."
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-rose-500"
+                    />
+                  </div>
+
+                  {/* Botão de Envio */}
+                  <button
+                    onClick={handleResolveDispute}
+                    disabled={isBloqueado}
+                    className={`w-full py-2.5 rounded-xl font-bold text-xs shadow transition ${
+                      isBloqueado
+                        ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                        : 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-950'
+                    }`}
+                  >
+                    Submeter Resolução da Disputa (RN-141) ✓
+                  </button>
+                  {isBloqueado && (
+                    <p className="text-[10px] text-amber-400 text-center font-semibold">
+                      Botão desativado: requer PIN de autorização de um Supervisor (RN-106).
+                    </p>
+                  )}
+                </div>
+              )}
+            </aside>
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
+

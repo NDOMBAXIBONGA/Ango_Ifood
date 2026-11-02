@@ -1,0 +1,373 @@
+"""
+Configuração Completa de Produção para Django + GeoDjango (PostGIS) + DRF + SimpleJWT + Channels + Celery.
+"""
+import os
+from datetime import timedelta
+from pathlib import Path
+
+import environ
+
+# ==============================================================================
+# 1. DIRETÓRIOS BASE E INICIALIZAÇÃO DO DJANGO-ENVIRON
+# ==============================================================================
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+env = environ.Env(
+    DJANGO_DEBUG=(bool, False),
+    DJANGO_ALLOWED_HOSTS=(list, ["localhost", "127.0.0.1"]),
+    DJANGO_CSRF_TRUSTED_ORIGINS=(list, []),
+    DJANGO_CORS_ALLOWED_ORIGINS=(list, []),
+    DJANGO_TIME_ZONE=(str, "UTC"),
+    DJANGO_LANGUAGE_CODE=(str, "pt-pt"),
+    DJANGO_LOG_LEVEL=(str, "INFO"),
+    DB_CONN_MAX_AGE=(int, 60),
+    DB_SSL_REQUIRE=(bool, False),
+    JWT_ACCESS_TOKEN_LIFETIME_MINUTES=(int, 15),
+    JWT_REFRESH_TOKEN_LIFETIME_DAYS=(int, 7),
+    JWT_ROTATE_REFRESH_TOKENS=(bool, True),
+    JWT_BLACKLIST_AFTER_ROTATION=(bool, True),
+    DJANGO_SECURE_SSL_REDIRECT=(bool, False),
+    DJANGO_SESSION_COOKIE_SECURE=(bool, True),
+    DJANGO_CSRF_COOKIE_SECURE=(bool, True),
+    DJANGO_SECURE_HSTS_SECONDS=(int, 0),
+)
+
+# Lê o ficheiro .env na raiz do projeto, caso exista
+ENV_FILE = BASE_DIR / ".env"
+if ENV_FILE.exists():
+    environ.Env.read_env(str(ENV_FILE))
+
+# ==============================================================================
+# 2. SEGURANÇA E CORE
+# ==============================================================================
+SECRET_KEY = env("DJANGO_SECRET_KEY")
+DEBUG = env("DJANGO_DEBUG")
+ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS")
+CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS")
+
+# Headers de Proxy Reverso (Nginx / Traefik / AWS ALB)
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
+USE_X_FORWARDED_PORT = True
+
+if not DEBUG:
+    SECURE_SSL_REDIRECT = env.bool("DJANGO_SECURE_SSL_REDIRECT")
+    SESSION_COOKIE_SECURE = env.bool("DJANGO_SESSION_COOKIE_SECURE")
+    CSRF_COOKIE_SECURE = env.bool("DJANGO_CSRF_COOKIE_SECURE")
+    SECURE_HSTS_SECONDS = env.int("DJANGO_SECURE_HSTS_SECONDS")
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = "DENY"
+
+# ==============================================================================
+# 3. APLICAÇÕES INSTALADAS (INSTALLED_APPS)
+# ==============================================================================
+# Daphne tem de estar no topo de INSTALLED_APPS para assumir o comando runserver em ASGI
+DJANGO_APPS = [
+    "daphne",
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "django.contrib.gis",  # Suporte nativo GeoDjango / PostGIS
+]
+
+THIRD_PARTY_APPS = [
+    "rest_framework",
+    "rest_framework_gis",
+    "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
+    "corsheaders",
+    "channels",
+]
+
+LOCAL_APPS = [
+    "apps.accounts",
+    "apps.catalog",
+    "apps.cart",
+    "apps.orders",
+    "apps.logistics",
+    "apps.promotions",
+    "apps.support",
+    "apps.finance",
+]
+
+INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
+
+# Modelo de utilizador personalizado onde o 'telemovel' é o USERNAME_FIELD (RN-001)
+AUTH_USER_MODEL = "accounts.CustomUser"
+
+# ==============================================================================
+# 4. MIDDLEWARE
+# ==============================================================================
+MIDDLEWARE = [
+    "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # Middleware de Auditoria e Proteção Antifraude (Secção 6.14, RN-130 a RN-135)
+    "apps.orders.fraud_engine.FraudRiskAssessmentEngine",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+]
+
+ROOT_URLCONF = "config.urls"
+
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "templates"],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+            ],
+        },
+    },
+]
+
+# Servidores WSGI e ASGI (Channels)
+WSGI_APPLICATION = "config.wsgi.application"
+ASGI_APPLICATION = "config.asgi.application"
+
+# ==============================================================================
+# 5. BASE DE DADOS (POSTGRESQL + POSTGIS) & GEODJANGO
+# ==============================================================================
+# Lê DATABASE_URL (ex: postgis://user:pass@host:5432/dbname) e força explicitamente
+# o motor 'django.contrib.gis.db.backends.postgis' para garantir suporte espacial.
+DATABASES = {
+    "default": env.db(
+        "DATABASE_URL",
+        default="postgis://postgres:postgres@127.0.0.1:5432/delivery_db",
+        engine="django.contrib.gis.db.backends.postgis",
+    )
+}
+DATABASES["default"]["ENGINE"] = "django.contrib.gis.db.backends.postgis"
+DATABASES["default"]["CONN_MAX_AGE"] = env.int("DB_CONN_MAX_AGE")
+DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
+
+if env.bool("DB_SSL_REQUIRE"):
+    DATABASES["default"].setdefault("OPTIONS", {})["sslmode"] = "require"
+
+# Suporte a caminhos explícitos para bibliotecas nativas C (GDAL / GEOS), útil em Windows/Docker customizado
+GDAL_LIBRARY_PATH = env("GDAL_LIBRARY_PATH", default=None)
+GEOS_LIBRARY_PATH = env("GEOS_LIBRARY_PATH", default=None)
+
+if os.name == "nt":
+    import glob
+
+    if not GDAL_LIBRARY_PATH:
+        possible_gdal = [
+            r"C:\Program Files\MySQL\MySQL Workbench 8.0\gdal.dll",
+            *glob.glob(r"C:\OSGeo4W*\bin\gdal*.dll"),
+            *glob.glob(r"C:\Program Files\PostgreSQL\*\bin\gdal*.dll"),
+            *glob.glob(str(BASE_DIR / "venv" / "Lib" / "site-packages" / "**" / "gdal*.dll"), recursive=True),
+        ]
+        for p in possible_gdal:
+            if os.path.exists(p):
+                GDAL_LIBRARY_PATH = p
+                break
+
+    if not GEOS_LIBRARY_PATH:
+        possible_geos = glob.glob(str(BASE_DIR / "venv" / "Lib" / "site-packages" / "shapely.libs" / "geos_c*.dll"))
+        if possible_geos and os.path.exists(possible_geos[0]):
+            GEOS_LIBRARY_PATH = possible_geos[0]
+
+# ==============================================================================
+# 6. CACHE & REDIS CONFIGURATION (REDIS_URL)
+# ==============================================================================
+REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379")
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": env("REDIS_CACHE_URL", default=f"{REDIS_URL}/3"),
+    }
+}
+
+# ==============================================================================
+# 7. DJANGO CHANNELS (REDIS CHANNEL LAYER)
+# ==============================================================================
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [env("CHANNEL_LAYERS_REDIS_URL", default=f"{REDIS_URL}/2")],
+            "capacity": 1500,  # Máximo de mensagens em fila por canal antes de descartar
+            "expiry": 60,      # Tempo de expiração de mensagens em segundos
+        },
+    },
+}
+
+
+# ==============================================================================
+# 8. CELERY (REDIS BROKER & RESULT BACKEND)
+# ==============================================================================
+CELERY_BROKER_URL = env("CELERY_BROKER_URL", default=f"{REDIS_URL}/0")
+CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default=f"{REDIS_URL}/1")
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = env("DJANGO_TIME_ZONE")
+CELERY_ENABLE_UTC = True
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60       # Hard limit: 30 minutos
+CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60  # Soft limit: 25 minutos
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1  # Distribuição justa para tarefas de duração variável
+CELERY_TASK_ACKS_LATE = True           # Confirma apenas após execução concluída
+
+# ==============================================================================
+# 9. DJANGO REST FRAMEWORK (DRF) & SIMPLE JWT
+# ==============================================================================
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+    "DEFAULT_PERMISSION_CLASSES": (
+        "rest_framework.permissions.IsAuthenticated",
+    ),
+    "DEFAULT_RENDERER_CLASSES": (
+        ["rest_framework.renderers.JSONRenderer"]
+        if not DEBUG
+        else [
+            "rest_framework.renderers.JSONRenderer",
+            "rest_framework.renderers.BrowsableAPIRenderer",
+        ]
+    ),
+    "DEFAULT_PARSER_CLASSES": (
+        "rest_framework.parsers.JSONParser",
+        "rest_framework.parsers.MultiPartParser",
+        "rest_framework.parsers.FormParser",
+    ),
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 20,
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "100/minute",
+        "user": "1000/minute",
+    },
+}
+
+# ==============================================================================
+# 11. SISTEMA ANTIFRAUDE E SEGURANÇA OPERACIONAL (Secção 6.14, RN-130 a RN-135)
+# ==============================================================================
+FRAUD_SCORE_THRESHOLD = env.int("FRAUD_SCORE_THRESHOLD", default=80)
+FRAUD_MAX_ACCOUNTS_PER_DEVICE = env.int("FRAUD_MAX_ACCOUNTS_PER_DEVICE", default=3)
+FRAUD_MAX_ACCOUNTS_PER_CARD = env.int("FRAUD_MAX_ACCOUNTS_PER_CARD", default=3)
+
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=env.int("JWT_ACCESS_TOKEN_LIFETIME_MINUTES")),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=env.int("JWT_REFRESH_TOKEN_LIFETIME_DAYS")),
+    "ROTATE_REFRESH_TOKENS": env.bool("JWT_ROTATE_REFRESH_TOKENS"),
+    "BLACKLIST_AFTER_ROTATION": env.bool("JWT_BLACKLIST_AFTER_ROTATION"),
+    "UPDATE_LAST_LOGIN": True,
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "AUTH_HEADER_NAME": "HTTP_AUTHORIZATION",
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+}
+
+# ==============================================================================
+# 10. CORS (CROSS-ORIGIN RESOURCE SHARING)
+# ==============================================================================
+CORS_ALLOW_ALL_ORIGINS = DEBUG
+CORS_ALLOWED_ORIGINS = env.list("DJANGO_CORS_ALLOWED_ORIGINS")
+CORS_ALLOW_CREDENTIALS = True
+
+# ==============================================================================
+# 11. VALIDAÇÃO DE PASSWORDS, INTERNACIONALIZAÇÃO E FICHEIROS ESTÁTICOS
+# ==============================================================================
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 10}},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
+
+LANGUAGE_CODE = env("DJANGO_LANGUAGE_CODE")
+TIME_ZONE = env("DJANGO_TIME_ZONE")
+USE_I18N = True
+USE_TZ = True
+
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_DIRS = [BASE_DIR / "static"] if (BASE_DIR / "static").exists() else []
+
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# ==============================================================================
+# 12. LOGGING ESTRUTURADO PARA PRODUÇÃO (CONSOLA / CONTENTORES)
+# ==============================================================================
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "[{asctime}] {levelname} [{name}:{lineno}] [PID:{process}]: {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": env("DJANGO_LOG_LEVEL"),
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": env("DJANGO_LOG_LEVEL"),
+            "propagate": False,
+        },
+        "django.db.backends": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "celery": {
+            "handlers": ["console"],
+            "level": env("DJANGO_LOG_LEVEL"),
+            "propagate": False,
+        },
+    },
+}
+
+# ==============================================================================
+# 11. SISTEMA ANTIFRAUDE E SEGURANÇA OPERACIONAL (Secção 6.14, RN-130 a RN-135)
+# ==============================================================================
+FRAUD_SCORE_THRESHOLD = env.int("FRAUD_SCORE_THRESHOLD", default=80)
+FRAUD_MAX_ACCOUNTS_PER_DEVICE = env.int("FRAUD_MAX_ACCOUNTS_PER_DEVICE", default=3)
+FRAUD_MAX_ACCOUNTS_PER_CARD = env.int("FRAUD_MAX_ACCOUNTS_PER_CARD", default=3)
+

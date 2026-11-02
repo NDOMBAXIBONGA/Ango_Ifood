@@ -1,0 +1,44 @@
+[tool.poetry]
+name = "delivery-platform"
+version = "0.1.0"
+description = "Plataforma de Delivery Geoespacial e OMS Modular em Tempo Real (Django + PostGIS + DRF + Channels + Celery)"
+authors = ["Equipa de Arquitetura & DevOps <devops@delivery.platform>"]
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = ">=3.12,<3.14"
+django = ">=5.1.2,<5.2"
+djangorestframework = ">=3.15.2,<4.0"
+djangorestframework-simplejwt = ">=5.3.1,<6.0"
+djangorestframework-gis = ">=1.1.0,<2.0"
+psycopg2-binary = ">=2.9.10,<3.0"
+django-environ = ">=0.11.2,<1.0"
+channels = { extras = ["daphne"], version = ">=4.2.0,<5.0" }
+channels-redis = ">=4.2.1,<5.0"
+celery = ">=5.4.0,<6.0"
+redis = ">=5.2.0,<6.0"
+flower = ">=2.0.1,<3.0"
+gunicorn = ">=23.0.0,<24.0"
+uvicorn = { extras = ["standard"], version = ">=0.32.0,<1.0" }
+django-cors-headers = ">=4.6.0,<5.0"
+whitenoise = ">=6.8.2,<7.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8.3.3,<9.0"
+pytest-django = ">=4.9.0,<5.0"
+pytest-asyncio = ">=0.24.0,<1.0"
+ruff = ">=0.7.0,<1.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+addopts = "--reuse-db -p no:warnings"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
