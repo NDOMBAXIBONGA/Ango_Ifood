@@ -1022,7 +1022,7 @@ class _CheckoutSummaryScreenState extends State<CheckoutSummaryScreen> {
                 decoration: BoxDecoration(
                   color: Colors.green.shade50,
                   borderRadius: BorderRadius.circular(8),
-                  border: BorderSide(color: Colors.green.shade200),
+                  border: Border.all(color: Colors.green.shade200),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1271,7 +1271,7 @@ class _CheckoutSummaryScreenState extends State<CheckoutSummaryScreen> {
                 margin: const EdgeInsets.symmetric(vertical: 4),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(10),
-                  border: BorderSide(
+                  border: Border.all(
                     color: isSelected ? colorScheme.primary : colorScheme.outlineVariant,
                     width: isSelected ? 1.5 : 1,
                   ),

@@ -9,6 +9,7 @@
 /// - Desbloqueio seguro do encerramento por ausência do cliente (RN-097) apenas após os 7 minutos decorridos.
 
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

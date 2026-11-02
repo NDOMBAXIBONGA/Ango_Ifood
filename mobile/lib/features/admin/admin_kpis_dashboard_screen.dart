@@ -1217,7 +1217,7 @@ class _AdminKPIsDashboardViewState extends State<_AdminKPIsDashboardView>
       decoration: BoxDecoration(
         color: isFiltered ? colorScheme.primaryContainer.withOpacity(0.5) : colorScheme.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(12),
-        border: BorderSide(
+        border: Border.all(
           color: isFiltered ? colorScheme.primary : colorScheme.outlineVariant.withOpacity(0.6),
           width: isFiltered ? 1.5 : 1.0,
         ),
@@ -1749,7 +1749,7 @@ class _AdminKPIsDashboardViewState extends State<_AdminKPIsDashboardView>
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
-        border: BorderSide(
+        border: Border.all(
           color: alerta.zonaPausada ? Colors.orange.shade400 : const Color(0xFFFFCDD2),
           width: 1.2,
         ),
