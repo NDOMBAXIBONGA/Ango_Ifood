@@ -81,3 +81,6 @@ class RetryAuthRequested extends AuthEvent {
   const RetryAuthRequested();
 }
 
+/// Alias para suporte à nomenclatura em português
+typedef TentarReconexaoEvent = RetryAuthRequested;
+
