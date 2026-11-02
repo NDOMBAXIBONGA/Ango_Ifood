@@ -520,9 +520,6 @@ class _CourierWalletView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
     return Scaffold(
       backgroundColor: const Color(0xFF0F1115),
       appBar: AppBar(
@@ -540,7 +537,7 @@ class _CourierWalletView extends StatelessWidget {
           const SizedBox(width: 8),
         ],
       ),
-      body: BlocConsumer<CourierWalletBloc, CourierState>(
+      body: BlocConsumer<CourierWalletBloc, CourierWalletState>(
         listener: (context, state) {
           if (state is CourierWalletLoaded && state.feedbackMessage != null) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -574,7 +571,7 @@ class _CourierWalletView extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.error_outline_rounded, size: 54, color: Colors.roseAccent),
+                    const Icon(Icons.error_outline_rounded, size: 54, color: Color(0xFFF43F5E)),
                     const SizedBox(height: 16),
                     Text(state.mensagem, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
                     const SizedBox(height: 20),
@@ -901,7 +898,7 @@ class _CourierWalletView extends StatelessWidget {
         Text(
           value,
           style: TextStyle(
-            color: isTax ? Colors.roseAccent : Colors.white,
+            color: isTax ? const Color(0xFFF43F5E) : Colors.white,
             fontWeight: isTax ? FontWeight.w600 : FontWeight.bold,
             fontSize: 12,
           ),

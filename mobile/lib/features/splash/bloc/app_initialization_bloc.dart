@@ -164,7 +164,7 @@ class AppInitializationBloc
       final responseBody = dioErr.response?.data;
 
       developer.log(
-        '❌ [DIO HANDSHAKE ERROR] Tipo: ${dioErr.type} | Mensagem: ${dioErr.message}',
+        '❌ [DIO HANDSHAKE ERROR] Tipo: ${dioErr.type} | Status: $statusCode | Body: $responseBody | Mensagem: ${dioErr.message}',
         name: 'AppInitializationBloc',
         error: dioErr,
       );

@@ -1160,7 +1160,7 @@ class _CourierHomepageScreenState extends State<CourierHomepageScreen> with Sing
                         color: isOnline ? const Color(0xFF00C853) : const Color(0xFF2C323B),
                         boxShadow: [
                           BoxShadow(
-                            color: isOnline ? primaryAccent.withOpacity(0.5) : Colors.black4s,
+                            color: isOnline ? primaryAccent.withOpacity(0.5) : Colors.black45,
                             blurRadius: isOnline ? 35 : 12,
                             spreadRadius: isOnline ? 6 : 2,
                           ),
