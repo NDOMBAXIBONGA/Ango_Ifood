@@ -306,7 +306,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         email: '',
         estado: 'ATIVO',
       );
-      await _tokenStorage.saveTokens(tokens);
+      await _tokenStorage.saveTokens(
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+      );
       emit(Authenticated(tokens: tokens, user: user));
     } catch (e) {
       emit(OtpVerificationFailure(message: 'Erro ao validar login social com a Google: $e'));

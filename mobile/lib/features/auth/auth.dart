@@ -7,6 +7,8 @@ export 'auth_repository.dart';
 export 'auth_state.dart';
 export 'exceptions/auth_exceptions.dart';
 export 'models/auth_models.dart';
+export 'screens/auth_screen.dart';
+export 'screens/email_otp_verification_screen.dart';
 export 'screens/otp_verification_screen.dart';
 export 'screens/phone_input_screen.dart';
 export 'screens/registration_form_screen.dart';

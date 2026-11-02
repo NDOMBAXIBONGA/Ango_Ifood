@@ -7,7 +7,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/role_theme.dart';
-import 'phone_input_screen.dart';
+import 'auth_screen.dart';
 
 class RoleSelectionOnboardingScreen extends StatefulWidget {
   const RoleSelectionOnboardingScreen({super.key});
@@ -55,7 +55,7 @@ class _RoleSelectionOnboardingScreenState
   void _proceedToPhoneInput() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => PhoneInputScreen(selectedRole: _selectedRole),
+        builder: (_) => AuthScreen(selectedRole: _selectedRole),
       ),
     );
   }

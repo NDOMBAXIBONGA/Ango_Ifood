@@ -2,5 +2,5 @@
 library checkout;
 
 export 'checkout_screen.dart';
-export 'checkout_summary_screen.dart';
+export 'checkout_summary_screen.dart' hide CurrencyFormatter;
 

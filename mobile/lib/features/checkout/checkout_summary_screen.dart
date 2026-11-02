@@ -732,7 +732,7 @@ class _CheckoutSummaryScreenState extends State<CheckoutSummaryScreen> {
               centerTitle: true,
               elevation: 0,
             ),
-            body: isCarregando && state is! CheckoutPriceUpdated
+            body: state is CheckoutLoading
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -740,7 +740,7 @@ class _CheckoutSummaryScreenState extends State<CheckoutSummaryScreen> {
                         const CircularProgressIndicator(),
                         const SizedBox(height: 16),
                         Text(
-                          (state as CheckoutLoading).mensagem ?? 'A carregar...',
+                          state.mensagem ?? 'A carregar...',
                           style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.outline),
                         ),
                       ],
@@ -910,7 +910,7 @@ class _CheckoutSummaryScreenState extends State<CheckoutSummaryScreen> {
             const Divider(height: 1),
             ListView.separated(
               shrinkWrap: true,
-              physics: const NeverScrollableScrollException(),
+              physics: const NeverScrollableScrollPhysics(),
               itemCount: state.itens.length,
               separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, endIndent: 16),
               itemBuilder: (ctx, index) {

@@ -359,6 +359,7 @@ class AuthRepository {
         );
       case DioExceptionType.badResponse:
       case DioExceptionType.unknown:
+      default:
         final statusCode = error.response?.statusCode;
         final responseData = error.response?.data;
 

@@ -11,6 +11,17 @@ enum PlatformRole {
 }
 
 extension PlatformRoleExtension on PlatformRole {
+  String get displayName {
+    switch (this) {
+      case PlatformRole.cliente:
+        return 'Cliente';
+      case PlatformRole.parceiro:
+        return 'Parceiro';
+      case PlatformRole.estafeta:
+        return 'Estafeta';
+    }
+  }
+
   String get title {
     switch (this) {
       case PlatformRole.cliente:

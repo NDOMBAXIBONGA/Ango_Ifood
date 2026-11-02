@@ -170,10 +170,10 @@ class _AuthScreenState extends State<AuthScreen> {
       builder: (context, state) {
         // CASO 1: Erro de Rede ou Conectividade com a Cloud
         // Retorna exclusivamente a tela de erro, sem montar o formulário no DOM
-        if (state is AuthNetworkError || state is ConnectionFailure) {
+        if (state is AuthNetworkError) {
           return _buildNetworkErrorScreen(
             context: context,
-            message: state is AuthNetworkFailure ? state.message : 'Falha de comunicação com o servidor.',
+            message: state.message,
             onRetry: () {
               context.read<AuthBloc>().add(const TentarReconexaoEvent());
             },
@@ -672,9 +672,9 @@ class _AuthScreenState extends State<AuthScreen> {
 // 2. LOGÓTIPO OFICIAL DO GOOGLE (Vetor Nativo Multi-Cores)
 // ==============================================================================
 class _GoogleLogo extends StatelessWidget {
-  final double size;
+  static const double size = 22.0;
 
-  const _GoogleLogo({this.size = 22.0});
+  const _GoogleLogo();
 
   @override
   Widget build(BuildContext context) {
