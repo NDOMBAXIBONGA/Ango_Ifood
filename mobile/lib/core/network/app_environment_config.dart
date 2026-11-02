@@ -38,10 +38,10 @@ class AppEnvironmentConfig {
     defaultValue: 'wss://delivery-backend-api.onrender.com',
   );
 
-  // Timeouts seguros de rede (SLA de resposta para redes móveis em Angola: 15s)
-  static const Duration connectTimeout = Duration(seconds: 15);
-  static const Duration receiveTimeout = Duration(seconds: 15);
-  static const Duration sendTimeout = Duration(seconds: 15);
+  // Timeouts resilientes de rede (SLA de resposta para redes móveis em Angola e Cold Start Render: 20s)
+  static const Duration connectTimeout = Duration(seconds: 20);
+  static const Duration receiveTimeout = Duration(seconds: 20);
+  static const Duration sendTimeout = Duration(seconds: 20);
 
   // Endpoint canónico de renovação de tokens JWT (SimpleJWT)
   static const String tokenRefreshEndpoint = '/api/v1/auth/token/refresh/';

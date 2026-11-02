@@ -137,18 +137,17 @@ class AppInitializationBloc
       statusMessage: 'A estabelecer ligação segura com o Render Cloud...',
     ));
 
-    // Passo 2: Testar handshake HTTP/SSL com a URL de produção no Render (15s timeout)
+    // Passo 2: Testar handshake HTTP/SSL com endpoint leve de saúde no Render (/api/v1/health/)
     try {
-      final probeUrl = AppEnvironmentConfig.buildUrl('/api/v1/catalog/public/');
-      developer.log('A executar probe de handshake em: $probeUrl (Timeout: 15s)', name: 'AppInitializationBloc');
+      final probeUrl = AppEnvironmentConfig.buildUrl('/api/v1/health/');
+      developer.log('A executar probe de handshake em: $probeUrl (Timeout: 20s)', name: 'AppInitializationBloc');
 
       final response = await _dio.get(
         probeUrl,
         options: Options(
-          sendTimeout: const Duration(seconds: 15),
-          receiveTimeout: const Duration(seconds: 15),
-          // Qualquer status retornado pelo servidor comprova conectividade HTTP e handshake SSL OK
-          validateStatus: (status) => status != null,
+          sendTimeout: const Duration(seconds: 20),
+          receiveTimeout: const Duration(seconds: 20),
+          validateStatus: (status) => status != null && status < 500,
         ),
       );
 
@@ -158,9 +157,7 @@ class AppInitializationBloc
         name: 'AppInitializationBloc',
       );
 
-      // Aguarda um instante para animação fluida da tela de splash
-      await Future.delayed(const Duration(milliseconds: 400));
-
+      await Future.delayed(const Duration(milliseconds: 300));
       emit(AppInitializationSuccess(hasPersistedToken: hasToken));
     } on DioException catch (dioErr) {
       final statusCode = dioErr.response?.statusCode;
@@ -172,25 +169,29 @@ class AppInitializationBloc
         error: dioErr,
       );
 
-      if (statusCode != null) {
-        developer.log(
-          '   [HTTP STATUS CODE] $statusCode',
-          name: 'AppInitializationBloc',
-        );
-      }
-      if (responseBody != null) {
-        developer.log(
-          '   [RESPONSE BODY] $responseBody',
-          name: 'AppInitializationBloc',
-        );
+      // Tratamento específico de Cold Start / Sleep do Render: Tenta o loop de despertar
+      final isTimeout = dioErr.type == DioExceptionType.connectionTimeout ||
+          dioErr.type == DioExceptionType.receiveTimeout ||
+          dioErr.type == DioExceptionType.sendTimeout ||
+          dioErr.type == DioExceptionType.connectionError;
+
+      if (isTimeout) {
+        emit(const AppInitializationInProgress(
+          statusMessage: 'A acordar o servidor cloud no Render...',
+        ));
+
+        // Corrotina de pings intermitentes para acordar o servidor adormecido
+        final awake = await _wakeUpRenderLoop(emit);
+        if (awake) {
+          emit(AppInitializationSuccess(hasPersistedToken: hasToken));
+          return;
+        }
       }
 
       String errorMessage = 'Erro ao ligar ao servidor. Verifique a sua internet.';
 
-      if (dioErr.type == DioExceptionType.connectionTimeout ||
-          dioErr.type == DioExceptionType.receiveTimeout ||
-          dioErr.type == DioExceptionType.sendTimeout) {
-        errorMessage = 'Tempo de resposta excedido (15s). O servidor Render pode estar a inicializar (Cold Start). Tente novamente.';
+      if (isTimeout) {
+        errorMessage = 'O servidor Render está a acordar (Cold Start). Toque em "Tentar Novamente" para sincronizar.';
       } else if (dioErr.type == DioExceptionType.badResponse) {
         errorMessage = 'Servidor respondeu com código $statusCode. Tente novamente em instantes.';
       }
@@ -208,6 +209,49 @@ class AppInitializationBloc
         'Erro ao ligar ao servidor. Verifique a sua internet.',
       ));
     }
+  }
+
+  /// Corrotina assíncrona de pings repetidos a /api/v1/health/ para acordar contentores adormecidos
+  Future<bool> _wakeUpRenderLoop(Emitter<AppInitializationState> emit) async {
+    final healthUrl = AppEnvironmentConfig.buildUrl('/api/v1/health/');
+    final stopwatch = Stopwatch()..start();
+    int attempt = 0;
+
+    developer.log('🚀 A iniciar loop de despertar do Render...', name: 'AppInitializationBloc');
+
+    while (stopwatch.elapsedMilliseconds < 50000) {
+      attempt++;
+      final elapsedSec = (stopwatch.elapsedMilliseconds / 1000).toStringAsFixed(0);
+
+      emit(AppInitializationInProgress(
+        statusMessage: 'A acordar servidor no Render (${elapsedSec}s decorridos)...',
+      ));
+
+      try {
+        final pingResponse = await _dio.get(
+          healthUrl,
+          options: Options(
+            sendTimeout: const Duration(seconds: 6),
+            receiveTimeout: const Duration(seconds: 6),
+            validateStatus: (status) => status != null && status < 500,
+          ),
+        );
+
+        if (pingResponse.statusCode != null && pingResponse.statusCode! < 500) {
+          developer.log(
+            '✅ Servidor Render acordou após ${elapsedSec}s e $attempt tentativas!',
+            name: 'AppInitializationBloc',
+          );
+          return true;
+        }
+      } catch (_) {
+        // Contentor ainda a inicializar
+      }
+
+      await Future.delayed(const Duration(seconds: 2));
+    }
+
+    return false;
   }
 }
 

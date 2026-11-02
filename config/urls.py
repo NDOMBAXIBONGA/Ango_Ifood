@@ -2,7 +2,9 @@
 Rotas principais (URLconf) do projeto, incluindo endpoints JWT.
 """
 from django.contrib import admin
+from django.http import JsonResponse
 from django.urls import include, path
+from django.utils import timezone
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
@@ -11,7 +13,23 @@ from rest_framework_simplejwt.views import (
 
 from apps.catalog.urls import partner_router as partner_catalog_router
 
+
+def health_check(request):
+    """Endpoint leve de verificação de integridade (Health Check) para acordar o Render."""
+    return JsonResponse(
+        {
+            "status": "healthy",
+            "service": "delivery-backend-api",
+            "timestamp": timezone.now().isoformat(),
+        },
+        status=200,
+    )
+
+
 urlpatterns = [
+    # Endpoints de Saúde e Despertar do Contentor Render (Cold Start Wake-up)
+    path("api/v1/health/", health_check, name="health-check"),
+    path("healthz/", health_check, name="healthz"),
     path("admin/", admin.site.urls),
     # Endpoints de Autenticação Passwordless OTP e Gestão de Conta (RN-001, RN-002, RN-003, RN-006)
     path("api/v1/auth/", include("apps.accounts.urls", namespace="accounts")),
