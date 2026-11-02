@@ -326,3 +326,4 @@ class TelefoneAngolanoValidator:
 
     def __call__(self, value: Any) -> None:
         validar_telefone_angolano(value)
+

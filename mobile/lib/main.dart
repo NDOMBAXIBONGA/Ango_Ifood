@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'core/localization/app_localizations_pt_ao.dart';
 import 'features/auth/screens/role_selection_onboarding_screen.dart';
 
 void main() {
@@ -14,6 +15,13 @@ class DeliveryApp extends StatelessWidget {
     return MaterialApp(
       title: 'Delivery Ango_Ifood',
       debugShowCheckedModeBanner: false,
+      locale: AppLocalizationsPtAo.locale,
+      supportedLocales: const [
+        AppLocalizationsPtAo.locale,
+      ],
+      localizationsDelegates: const [
+        AppLocalizationsPtAoDelegate(),
+      ],
       theme: ThemeData(
         useMaterial3: true,
         colorSchemeSeed: const Color(0xFFEA1D2C),
