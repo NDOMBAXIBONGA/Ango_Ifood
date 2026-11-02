@@ -236,19 +236,12 @@ class _EmailOtpVerificationScreenState extends State<EmailOtpVerificationScreen>
         },
         builder: (context, state) {
           return SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-                  physics: const ClampingScrollPhysics(),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: constraints.maxHeight - 32,
-                    ),
-                    child: IntrinsicHeight(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
                           const SizedBox(height: 12),
 
                           // Ícone ilustrativo com fundo suave
@@ -383,8 +376,7 @@ class _EmailOtpVerificationScreenState extends State<EmailOtpVerificationScreen>
                             ),
                           ),
 
-                          const Spacer(),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 32),
 
                           // Botão Validar Código Manual
                           ElevatedButton(
@@ -424,12 +416,8 @@ class _EmailOtpVerificationScreenState extends State<EmailOtpVerificationScreen>
                         ],
                       ),
                     ),
-                  ),
-                );
-              },
-            ),
-          );
-        },
+                  );
+                },
       ),
     );
   }

@@ -31,9 +31,18 @@ void main() {
     );
   };
 
-  // Requisito 3: Substituição do ecrã cinzento nativo (Blank/Grey Screen Crash)
+  // Requisito 3: Tratamento seguro de exceções de renderização sem sobreposição de ecrãs
   ErrorWidget.builder = (FlutterErrorDetails errorDetails) {
-    return GlobalCrashFallbackScreen(errorDetails: errorDetails);
+    developer.log(
+      'Erro de renderização capturado: ${errorDetails.exceptionAsString()}',
+      name: 'ErrorWidget.builder',
+      error: errorDetails.exception,
+      stackTrace: errorDetails.stack,
+    );
+    if (kDebugMode) {
+      return ErrorWidget(errorDetails.exception);
+    }
+    return const SizedBox.shrink();
   };
 
   // Requisito 2: Encapsulamento em runZonedGuarded para proteger o arranque do APK

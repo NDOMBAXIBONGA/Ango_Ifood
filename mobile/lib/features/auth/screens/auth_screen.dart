@@ -238,21 +238,14 @@ class _AuthScreenState extends State<AuthScreen> {
         ],
       ),
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-              physics: const ClampingScrollPhysics(),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: constraints.maxHeight - 32,
-                ),
-                child: IntrinsicHeight(
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+          physics: const BouncingScrollPhysics(),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
                         const SizedBox(height: 12),
 
                         // Ícone de cabeçalho do perfil/papel
@@ -468,8 +461,7 @@ class _AuthScreenState extends State<AuthScreen> {
                           ),
                         ),
 
-                        const Spacer(),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 32),
 
                         // Rodapé de Termos e Privacidade
                         Center(
@@ -483,18 +475,14 @@ class _AuthScreenState extends State<AuthScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 16),
                       ],
                     ),
                   ),
                 ),
               ),
             );
-          },
-        ),
-      ),
-    );
-  }
+          }
 
   // ============================================================================
   // WIDGET ISOLADO: Tela de Falha de Conexão / Erro de Rede
