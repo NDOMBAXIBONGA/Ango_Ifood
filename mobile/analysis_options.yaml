@@ -1,0 +1,19 @@
+# Configuração oficial do analisador estático Dart/Flutter
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+    - "build/**"
+  errors:
+    deprecated_member_use: ignore
+    unnecessary_import: ignore
+    unused_import: ignore
+    todo: ignore
+
+linter:
+  rules:
+    avoid_print: true
+    prefer_const_constructors: false
+    prefer_const_declarations: false

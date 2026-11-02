@@ -10,9 +10,6 @@ import 'core/localization/app_localizations_pt_ao.dart';
 import 'core/network/app_environment_config.dart';
 import 'core/theme/theme.dart';
 import 'features/auth/auth_bloc.dart';
-import 'features/auth/auth_repository.dart';
-import 'features/auth/screens/role_selection_onboarding_screen.dart';
-import 'features/auth/storage/secure_token_storage.dart';
 import 'features/splash/bloc/app_initialization_bloc.dart';
 import 'features/splash/screens/splash_screen.dart';
 
