@@ -14,6 +14,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 import '../auth_bloc.dart';
 import '../theme/role_theme.dart';
+import 'email_otp_verification_screen.dart';
 import 'otp_verification_screen.dart';
 
 // ==============================================================================
@@ -129,14 +130,20 @@ class _AuthScreenState extends State<AuthScreen> {
       // ========================================================================
       listener: (context, state) {
         if (state is OtpSendSuccess) {
+          final isEmail = state.phone.contains('@');
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
-              builder: (_) => OtpVerificationScreen(
-                phone: state.phone,
-                expiraEm: state.expiraEm,
-                validadeMinutos: state.validadeMinutos,
-                selectedRole: widget.selectedRole,
-              ),
+              builder: (_) => isEmail
+                  ? EmailOtpVerificationScreen(
+                      email: state.phone,
+                      selectedRole: widget.selectedRole,
+                    )
+                  : OtpVerificationScreen(
+                      phone: state.phone,
+                      expiraEm: state.expiraEm,
+                      validadeMinutos: state.validadeMinutos,
+                      selectedRole: widget.selectedRole,
+                    ),
             ),
           );
         } else if (state is OtpVerificationFailure) {

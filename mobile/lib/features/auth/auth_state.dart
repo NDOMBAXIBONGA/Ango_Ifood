@@ -146,6 +146,20 @@ class AuthNetworkFailure extends AuthState {
   List<Object?> get props => [message, errorDetails];
 }
 
+/// Estado emitido quando o código OTP de e-mail é validado com sucesso (is_verificado=True).
+class OtpVerifiedSuccess extends AuthState {
+  final String email;
+  final String message;
+
+  const OtpVerifiedSuccess({
+    required this.email,
+    this.message = 'E-mail verificado com sucesso.',
+  });
+
+  @override
+  List<Object?> get props => [email, message];
+}
+
 /// Alias para suporte semântico em interfaces
 typedef ConnectionFailure = AuthNetworkFailure;
 typedef AuthNetworkError = AuthNetworkFailure;

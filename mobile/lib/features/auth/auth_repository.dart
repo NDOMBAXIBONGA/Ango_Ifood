@@ -92,6 +92,49 @@ class AuthRepository {
     }
   }
 
+  /// Endpoint 1c: `POST /api/v1/auth/email/verify/`
+  /// Valida o código OTP de 6 dígitos enviado por e-mail.
+  Future<bool> verifyEmailOtp(String email, String code) async {
+    try {
+      final sanitizedEmail = email.trim().toLowerCase();
+      final sanitizedCode = code.trim();
+      developer.log('Verificando OTP para e-mail: $sanitizedEmail', name: 'AuthRepository');
+
+      final response = await _dio.post(
+        '$_baseUrl/email/verify/',
+        data: {
+          'email': sanitizedEmail,
+          'codigo_otp': sanitizedCode,
+        },
+      );
+
+      final data = response.data;
+      if (data is Map<String, dynamic>) {
+        return data['is_verificado'] == true || data['sucesso'] == true;
+      }
+      return response.statusCode == 200;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        try {
+          final fallback = await _dio.post(
+            '$_baseUrl/verify-otp/',
+            data: {
+              'telemovel': email.trim().toLowerCase(),
+              'codigo_otp': code.trim(),
+            },
+          );
+          return fallback.statusCode == 200;
+        } catch (_) {}
+      }
+      developer.log('Erro ao verificar OTP por e-mail: ${e.response?.statusCode} - ${e.message}',
+          name: 'AuthRepository', error: e);
+      throw _handleDioException(e);
+    } catch (e) {
+      developer.log('Erro inesperado em verifyEmailOtp: $e', name: 'AuthRepository', error: e);
+      throw AuthServerException(message: 'Erro inesperado ao validar código OTP: $e');
+    }
+  }
+
   /// Endpoint 2: `POST /api/v1/auth/verify-otp/`
   /// Valida o código OTP submetido. Emite tokens JWT se o utilizador já existir (RN-006)
   /// ou devolve `isRegistrationRequired=true` para novos utilizadores (RN-002).

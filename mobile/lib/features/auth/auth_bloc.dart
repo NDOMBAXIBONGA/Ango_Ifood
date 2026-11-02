@@ -33,6 +33,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<LogoutRequested>(_onLogoutRequested);
     on<RetryAuthRequested>(_onRetryAuthRequested);
     on<SendEmailOtpEvent>(_onSendEmailOtpEvent);
+    on<VerifyEmailOtpSubmitted>(_onVerifyEmailOtpSubmitted);
     on<GoogleLoginSubmitted>(_onGoogleLoginSubmitted);
   }
 
@@ -222,6 +223,61 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       emit(
         const AuthNetworkFailure(
           message: 'Falha Temporária de Conexão. Não foi possível contactar os servidores.',
+        ),
+      );
+    }
+  }
+
+  /// Manipula a validação do código OTP de 6 dígitos recebido por e-mail.
+  Future<void> _onVerifyEmailOtpSubmitted(
+    VerifyEmailOtpSubmitted event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(const AuthLoading(loadingMessage: 'A validar código de confirmação...'));
+    try {
+      final isSuccess = await _authRepository.verifyEmailOtp(event.email, event.otp);
+      if (isSuccess) {
+        emit(OtpVerifiedSuccess(email: event.email));
+      } else {
+        emit(const OtpVerificationFailure(message: 'Código de confirmação incorreto ou expirado.'));
+      }
+    } on DioException catch (e) {
+      final isNetwork = e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.sendTimeout ||
+          e.type == DioExceptionType.connectionError;
+
+      developer.log(
+        'Erro DioException em VerifyEmailOtpSubmitted: [${e.type}] ${e.message}',
+        name: 'AuthBloc',
+        error: e,
+      );
+
+      if (isNetwork) {
+        emit(
+          const AuthNetworkFailure(
+            message: 'Falha Temporária de Conexão. Verifique a sua ligação com a internet e tente novamente.',
+          ),
+        );
+      } else {
+        emit(
+          OtpVerificationFailure(
+            message: e.response?.data?['detalhe']?.toString() ??
+                e.response?.data?['detail']?.toString() ??
+                'Falha ao validar código de confirmação.',
+          ),
+        );
+      }
+    } on AuthException catch (e) {
+      emit(
+        OtpVerificationFailure(
+          message: e.message,
+        ),
+      );
+    } catch (e) {
+      emit(
+        OtpVerificationFailure(
+          message: 'Erro inesperado ao validar código: $e',
         ),
       );
     }

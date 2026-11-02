@@ -12,11 +12,13 @@ import '../theme/role_theme.dart';
 
 class RegistrationFormScreen extends StatefulWidget {
   final String phone;
+  final String? email;
   final PlatformRole selectedRole;
 
   const RegistrationFormScreen({
     super.key,
     required this.phone,
+    this.email,
     required this.selectedRole,
   });
 
@@ -38,6 +40,16 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
   bool _termsAccepted = true;
   bool _privacyAccepted = true;
   bool _marketingAccepted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.email != null && widget.email!.isNotEmpty) {
+      _emailController.text = widget.email!;
+    } else if (widget.phone.contains('@')) {
+      _emailController.text = widget.phone;
+    }
+  }
 
   @override
   void dispose() {

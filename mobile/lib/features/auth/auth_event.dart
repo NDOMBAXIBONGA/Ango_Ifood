@@ -104,3 +104,17 @@ class GoogleLoginSubmitted extends AuthEvent {
   List<Object?> get props => [token];
 }
 
+/// Disparado quando o utilizador preenche os 6 dígitos do código OTP recebido por e-mail.
+class VerifyEmailOtpSubmitted extends AuthEvent {
+  final String email;
+  final String otp;
+
+  const VerifyEmailOtpSubmitted({
+    required this.email,
+    required this.otp,
+  });
+
+  @override
+  List<Object?> get props => [email, otp];
+}
+
