@@ -276,3 +276,4 @@ class AppLocalizationsPtAoDelegate
 extension AppLocalizationsX on BuildContext {
   AppLocalizationsPtAo get l10n => AppLocalizationsPtAo.of(this);
 }
+
