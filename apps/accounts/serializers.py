@@ -39,20 +39,38 @@ def calcular_idade(data_nascimento: date, referencia: date | None = None) -> int
 class RequestOTPSerializer(serializers.Serializer):
     """
     Endpoint 1: `POST /api/v1/auth/request-otp/`
-    Serializer para receção e validação do número de telemóvel destinatário do desafio OTP.
-    Aplica a regra RN-001 garantindo o formato internacional E.164.
+    Serializer para receção e validação do identificador (telemóvel E.164 ou endereço de e-mail)
+    destinatário do desafio OTP.
     """
 
     telemovel = serializers.CharField(
-        max_length=20,
-        validators=[validador_telemovel],
-        help_text=_("RN-001: Número de telemóvel no formato internacional E.164 (ex.: +244923000000 ou +351912345678)."),
+        max_length=150,
+        required=False,
+        allow_blank=True,
+        help_text=_("Número de telemóvel no formato internacional E.164 ou endereço de e-mail."),
+    )
+    email = serializers.EmailField(
+        required=False,
+        allow_blank=True,
+        help_text=_("Endereço de e-mail para envio de código OTP via Brevo."),
     )
 
-    def validate_telemovel(self, value: str) -> str:
-        """RN-001: Sanitiza o número de telemóvel removendo espaços e caracteres espúrios."""
-        telemovel_limpo = value.strip().replace(" ", "")
-        return telemovel_limpo
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        telemovel = attrs.get("telemovel", "").strip().replace(" ", "")
+        email = attrs.get("email", "").strip().lower()
+
+        if not telemovel and not email:
+            raise serializers.ValidationError(_("Deve fornecer um número de telemóvel ou endereço de e-mail."))
+
+        # Se telemóvel contiver formato de e-mail e email não tiver sido especificado
+        if "@" in telemovel and not email:
+            email = telemovel
+        elif email and not telemovel:
+            telemovel = email
+
+        attrs["telemovel"] = telemovel
+        attrs["email"] = email
+        return attrs
 
 
 class VerifyOTPSerializer(serializers.Serializer):
@@ -63,9 +81,8 @@ class VerifyOTPSerializer(serializers.Serializer):
     """
 
     telemovel = serializers.CharField(
-        max_length=20,
-        validators=[validador_telemovel],
-        help_text=_("RN-001: Número de telemóvel que recebeu o desafio OTP."),
+        max_length=150,
+        help_text=_("RN-001: Número de telemóvel ou endereço de e-mail que recebeu o desafio OTP."),
     )
     codigo_otp = serializers.RegexField(
         regex=r"^\d{6}$",

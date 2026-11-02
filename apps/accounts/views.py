@@ -23,6 +23,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from apps.accounts.brevo_service import BrevoEmailService
 from apps.accounts.models import CustomUser, PerfilConsentimento, RegistoOTP
 from apps.accounts.serializers import (
     CompleteRegistrationSerializer,
@@ -166,9 +167,22 @@ class RequestOTPView(APIView):
             },
         )
 
-        # Simula o envio integrando um print em log
+        # Despacho do e-mail transacional via Brevo se um e-mail foi fornecido ou inferido
+        email_destino = serializer.validated_data.get("email") or (telemovel if "@" in telemovel else None)
+        if email_destino:
+            brevo_service = BrevoEmailService()
+            sucesso_brevo = brevo_service.enviar_email_otp(
+                email_destino=email_destino,
+                codigo_otp=codigo_seguro,
+            )
+            if sucesso_brevo:
+                logger.info("Código OTP enviado com sucesso via Brevo para o e-mail: %s", email_destino)
+            else:
+                logger.warning("Falha ao entregar código OTP via Brevo para o e-mail: %s", email_destino)
+
+        # Registo em log do envio do desafio OTP
         mensagem_log = (
-            f"[SMS GATEWAY SIMULADO] RN-002 | Telemóvel: {telemovel} | "
+            f"[CANAL AUTH] RN-002 | Destino: {telemovel} (E-mail: {email_destino or 'N/A'}) | "
             f"Código OTP: {codigo_seguro} | Expira em: {expira_em.isoformat()} ({OTP_EXPIRACAO_MINUTOS} min) | "
             f"Tentativas: {OTP_MAX_TENTATIVAS} | Envios na hora: {nova_contagem_envios}/{OTP_MAX_ENVIOS_HORA}"
         )
