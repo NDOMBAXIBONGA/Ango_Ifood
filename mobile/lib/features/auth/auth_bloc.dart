@@ -2,11 +2,13 @@
 /// Coordena o fluxo de login passwordless por SMS (OTP), validação de maioridade e persistência segura de tokens JWT.
 
 import 'dart:developer' as developer;
+import 'package:dio/dio.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'auth_event.dart';
 import 'auth_repository.dart';
 import 'auth_state.dart';
+import 'exceptions/auth_exceptions.dart';
 import 'storage/secure_token_storage.dart';
 
 export 'auth_event.dart';
@@ -29,6 +31,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<VerifyOtpSubmitted>(_onVerifyOtpSubmitted);
     on<RegistrationFormSubmitted>(_onRegistrationFormSubmitted);
     on<LogoutRequested>(_onLogoutRequested);
+    on<RetryAuthRequested>(_onRetryAuthRequested);
+  }
+
+  void _onRetryAuthRequested(
+    RetryAuthRequested event,
+    Emitter<AuthState> emit,
+  ) {
+    emit(const AuthInitial());
   }
 
   /// Verifica se já existem credenciais válidas persistidas localmente no arranque da aplicação.
@@ -100,6 +110,33 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           message: e.message,
         ),
       );
+    } on DioException catch (e) {
+      final isNetwork = e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.sendTimeout ||
+          e.type == DioExceptionType.connectionError;
+
+      developer.log(
+        'Erro DioException em RequestOtpRequested: [${e.type}] ${e.message}',
+        name: 'AuthBloc',
+        error: e,
+      );
+
+      if (isNetwork) {
+        emit(
+          const AuthNetworkFailure(
+            message: 'Falha Temporária de Conexão. Verifique a sua ligação com a internet e tente novamente.',
+          ),
+        );
+      } else {
+        emit(
+          OtpVerificationFailure(
+            message: e.response?.data?['detail']?.toString() ??
+                e.message ??
+                'Falha de comunicação com o servidor.',
+          ),
+        );
+      }
     } on AuthException catch (e) {
       emit(
         OtpVerificationFailure(
@@ -108,8 +145,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       );
     } catch (e) {
       emit(
-        OtpVerificationFailure(
-          message: 'Falha inesperada ao pedir código OTP: $e',
+        const AuthNetworkFailure(
+          message: 'Falha Temporária de Conexão. Não foi possível contactar os servidores.',
         ),
       );
     }

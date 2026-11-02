@@ -132,3 +132,20 @@ class Unauthenticated extends AuthState {
   List<Object?> get props => [message];
 }
 
+/// Estado emitido especificamente quando ocorre falha de conexão ou timeout com a infraestrutura cloud (Render).
+class AuthNetworkFailure extends AuthState {
+  final String message;
+  final String? errorDetails;
+
+  const AuthNetworkFailure({
+    required this.message,
+    this.errorDetails,
+  });
+
+  @override
+  List<Object?> get props => [message, errorDetails];
+}
+
+/// Alias para suporte semântico em interfaces
+typedef ConnectionFailure = AuthNetworkFailure;
+

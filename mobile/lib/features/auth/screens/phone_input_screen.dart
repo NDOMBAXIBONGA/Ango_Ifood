@@ -1,7 +1,7 @@
 /// Ecrã 2: `PhoneInputScreen`
-/// Exibe o logótipo da aplicação e um campo de texto formatado com máscara internacional
-/// para inserção do número de telemóvel (TextInputType.phone), com validação em tempo real.
-/// Botão de submissão conectado ao AuthBloc via BlocConsumer.
+/// Exibe a interface de introdução de número de telemóvel com alternância de estados
+/// mutuamente exclusiva via BlocConsumer<AuthBloc, AuthState>, impedindo qualquer
+/// sobreposição visual de ecrãs (UI Stack Overlap) em caso de falhas de rede.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +11,115 @@ import '../auth_bloc.dart';
 import '../theme/role_theme.dart';
 import 'otp_verification_screen.dart';
 
+// ==============================================================================
+// 1. COMPONENTE ISOLADO DE ERRO DE CONEXÃO (ConnectionErrorWidget)
+// ==============================================================================
+/// Componente responsivo isolado com SafeArea e SingleChildScrollView.
+/// Garante que, ao ocorrer falha de rede, os campos de formulário e textos anteriores
+/// sejam completamente descarregados da árvore de widgets, eliminando qualquer sobreposição.
+class ConnectionErrorWidget extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  final Color activeColor;
+
+  const ConnectionErrorWidget({
+    super.key,
+    required this.message,
+    required this.onRetry,
+    required this.activeColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Center(
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 28.0, vertical: 24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Ícone de Alerta de Conexão com Fundo Suave
+              Container(
+                width: 96.0,
+                height: 96.0,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFEF2F2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.cloud_off_rounded,
+                  size: 48.0,
+                  color: Color(0xFFDC2626),
+                ),
+              ),
+              const SizedBox(height: 24.0),
+
+              // Título Principal de Falha
+              const Text(
+                'Falha Temporária de Conexão',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 22.0,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A),
+                  letterSpacing: -0.4,
+                ),
+              ),
+              const SizedBox(height: 12.0),
+
+              // Mensagem Descritiva
+              Text(
+                message.isNotEmpty
+                    ? message
+                    : 'Não foi possível contactar os servidores cloud da plataforma. Verifique a sua ligação com a internet e tente novamente.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 14.0,
+                  color: Color(0xFF64748B),
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 36.0),
+
+              // Botão Tentar Novamente
+              SizedBox(
+                width: double.infinity,
+                height: 52.0,
+                child: FilledButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh_rounded, size: 20.0),
+                  label: const Text(
+                    'Tentar Novamente',
+                    style: TextStyle(
+                      fontSize: 15.0,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: activeColor,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16.0),
+                    ),
+                    elevation: 2,
+                    shadowColor: activeColor.withValues(alpha: 0.35),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ==============================================================================
+// 2. ECRÃ PRINCIPAL DE AUTENTICAÇÃO (PhoneInputScreen)
+// ==============================================================================
 class PhoneInputScreen extends StatefulWidget {
   final PlatformRole selectedRole;
 
@@ -27,7 +136,7 @@ class _PhoneInputScreenState extends State<PhoneInputScreen> {
   final TextEditingController _phoneController = TextEditingController();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
-  String _selectedCountryCode = '+244'; // Prefixo padrão (Angola) com suporte a Portugal (+351) e outros
+  String _selectedCountryCode = '+244'; // Prefixo padrão (Angola)
   bool _isPhoneValid = false;
 
   final List<Map<String, String>> _countryCodes = [
@@ -81,26 +190,11 @@ class _PhoneInputScreenState extends State<PhoneInputScreen> {
     final activeColor = widget.selectedRole.primaryColor;
 
     return BlocConsumer<AuthBloc, AuthState>(
+      // O listener processa exclusivamente efeitos secundários (Navegação / Notificações)
       listener: (context, state) {
         if (state is OtpSendSuccess) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.check_circle_outline, color: Colors.white),
-                  const SizedBox(width: 12.0),
-                  Expanded(
-                    child: Text('Código OTP enviado com sucesso para ${state.phone}.'),
-                  ),
-                ],
-              ),
-              backgroundColor: const Color(0xFF10B981),
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
-            ),
-          );
-
-          Navigator.of(context).push(
+          // Substituição de rota limpa sem acumular ecrãs na pilha do Navigator
+          Navigator.of(context).pushReplacement(
             MaterialPageRoute(
               builder: (_) => OtpVerificationScreen(
                 phone: state.phone,
@@ -115,56 +209,45 @@ class _PhoneInputScreenState extends State<PhoneInputScreen> {
             SnackBar(
               content: Row(
                 children: [
-                  const Icon(Icons.error_outline, color: Colors.white),
+                  const Icon(Icons.error_outline_rounded, color: Colors.white),
                   const SizedBox(width: 12.0),
                   Expanded(child: Text(state.message)),
                 ],
               ),
               backgroundColor: const Color(0xFFEF4444),
               behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12.0),
+              ),
             ),
           );
         }
       },
+      // O builder processa uma árvore de decisões condicional pura e mutuamente exclusiva
       builder: (context, state) {
+        // Cenário 1: Falha de conexão ou timeout de rede com o servidor Render
+        // Retorna unicamente o ConnectionErrorWidget, descarregando completamente o formulário
+        if (state is AuthNetworkFailure) {
+          return Scaffold(
+            backgroundColor: const Color(0xFFF8FAFC),
+            appBar: _buildAppBar(context, activeColor),
+            body: ConnectionErrorWidget(
+              message: state.message,
+              activeColor: activeColor,
+              onRetry: () {
+                context.read<AuthBloc>().add(const RetryAuthRequested());
+              },
+            ),
+          );
+        }
+
         final isLoading = state is AuthLoading;
 
+        // Cenário 2: Estado Inicial, Não Autenticado ou Carregamento
+        // Renderiza unicamente a interface de introdução do número com formulário protegido
         return Scaffold(
           backgroundColor: const Color(0xFFF8FAFC),
-          appBar: AppBar(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0F172A)),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            actions: [
-              Container(
-                margin: const EdgeInsets.only(right: 16.0),
-                padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
-                decoration: BoxDecoration(
-                  color: activeColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(20.0),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(widget.selectedRole.icon, size: 16.0, color: activeColor),
-                    const SizedBox(width: 6.0),
-                    Text(
-                      widget.selectedRole.title,
-                      style: TextStyle(
-                        fontSize: 12.0,
-                        fontWeight: FontWeight.w700,
-                        color: activeColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+          appBar: _buildAppBar(context, activeColor),
           body: SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24.0),
@@ -175,7 +258,7 @@ class _PhoneInputScreenState extends State<PhoneInputScreen> {
                   children: [
                     const SizedBox(height: 12.0),
 
-                    // Logótipo da Aplicação com a cor do papel
+                    // Logótipo da Aplicação com a cor do papel ativo
                     Center(
                       child: Container(
                         width: 88.0,
@@ -212,7 +295,7 @@ class _PhoneInputScreenState extends State<PhoneInputScreen> {
                     ),
                     const SizedBox(height: 8.0),
                     Text(
-                      'Enviaremos um código SMS de 6 dígitos para validar a sua identidade de forma rápida e segura (RN-001, RN-002).',
+                      'Enviaremos um código SMS de 6 dígitos para validar a sua identidade de forma rápida e segura.',
                       textAlign: TextAlign.center,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: const Color(0xFF64748B),
@@ -382,5 +465,40 @@ class _PhoneInputScreenState extends State<PhoneInputScreen> {
       },
     );
   }
-}
 
+  PreferredSizeWidget _buildAppBar(BuildContext context, Color activeColor) {
+    return AppBar(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0F172A)),
+        onPressed: () => Navigator.of(context).pop(),
+      ),
+      actions: [
+        Container(
+          margin: const EdgeInsets.only(right: 16.0),
+          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
+          decoration: BoxDecoration(
+            color: activeColor.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(20.0),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(widget.selectedRole.icon, size: 16.0, color: activeColor),
+              const SizedBox(width: 6.0),
+              Text(
+                widget.selectedRole.title,
+                style: TextStyle(
+                  fontSize: 12.0,
+                  fontWeight: FontWeight.w700,
+                  color: activeColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}

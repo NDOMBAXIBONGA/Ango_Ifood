@@ -76,3 +76,8 @@ class LogoutRequested extends AuthEvent {
   const LogoutRequested();
 }
 
+/// Disparado pelo utilizador ao clicar em "Tentar Novamente" após falha de rede/conexão.
+class RetryAuthRequested extends AuthEvent {
+  const RetryAuthRequested();
+}
+

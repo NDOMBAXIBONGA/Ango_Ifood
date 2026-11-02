@@ -255,3 +255,4 @@ class HandshakeResult {
     return 'HandshakeResult(success: $isSuccess, HTTP $statusCode, msg: $message)';
   }
 }
+
