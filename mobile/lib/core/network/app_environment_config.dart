@@ -6,6 +6,7 @@ import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../features/auth/storage/secure_token_storage.dart';
+import 'dio_client.dart';
 
 /// ==============================================================================
 /// 1. EXCEÇÃO DE PROTOCOLO INSEGURO
@@ -26,22 +27,21 @@ class InsecureProtocolException implements Exception {
 class AppEnvironmentConfig {
   AppEnvironmentConfig._();
 
-  // URLs de Produção com suporte a substituição via parâmetros de compilação:
-  // flutter build apk --dart-define=BASE_HTTP_URL=https://meu-servico.onrender.com
+  // URLs de Produção apontando para o servidor hospedado no Render
   static const String baseHttpUrl = String.fromEnvironment(
     'BASE_HTTP_URL',
-    defaultValue: 'https://delivery-backend-api.onrender.com',
+    defaultValue: 'https://onrender.com',
   );
 
   static const String baseWebsocketUrl = String.fromEnvironment(
     'BASE_WEBSOCKET_URL',
-    defaultValue: 'wss://delivery-backend-api.onrender.com',
+    defaultValue: 'wss://onrender.com',
   );
 
-  // Timeouts resilientes de rede (SLA de resposta para redes móveis em Angola e Cold Start Render: 20s)
-  static const Duration connectTimeout = Duration(seconds: 20);
-  static const Duration receiveTimeout = Duration(seconds: 20);
-  static const Duration sendTimeout = Duration(seconds: 20);
+  // Timeouts tolerantes de rede (Mercado de Angola Unitel/Movicel e Cold Start Render: 25s)
+  static const Duration connectTimeout = Duration(seconds: 25);
+  static const Duration receiveTimeout = Duration(seconds: 25);
+  static const Duration sendTimeout = Duration(seconds: 25);
 
   // Endpoint canónico de renovação de tokens JWT (SimpleJWT)
   static const String tokenRefreshEndpoint = '/api/v1/auth/token/refresh/';
@@ -300,6 +300,15 @@ Dio createSecureDioClient({
     JwtAuthInterceptor(
       tokenStorage: tokenStorage,
       onUnauthenticated: onUnauthenticated,
+    ),
+  );
+
+  // Injeta a política de retentativas automáticas (3 tentativas com 2s de intervalo)
+  dio.interceptors.add(
+    NetworkRetryPolicyInterceptor(
+      dio: dio,
+      maxRetries: 3,
+      retryInterval: const Duration(seconds: 2),
     ),
   );
 

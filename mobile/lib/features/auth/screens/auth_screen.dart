@@ -560,3 +560,4 @@ class _AuthScreenState extends State<AuthScreen> {
 
 /// Alias semântico para retrocompatibilidade com chamadas existentes no ecossistema
 typedef PhoneInputScreen = AuthScreen;
+
