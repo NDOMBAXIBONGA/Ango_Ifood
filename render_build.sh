@@ -54,3 +54,4 @@ python manage.py collectstatic --noinput --clear
 echo "======================================================================"
 echo "--> Build concluído com sucesso no Render! Pronto para iniciar."
 echo "======================================================================"
+
