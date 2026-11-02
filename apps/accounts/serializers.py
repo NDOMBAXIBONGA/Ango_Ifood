@@ -233,3 +233,109 @@ class UtilizadorResumoSerializer(serializers.ModelSerializer):
             "data_criacao",
         )
         read_only_fields = fields
+
+
+class EmailOTPRequestSerializer(serializers.Serializer):
+    """
+    Serializer para o endpoint POST /api/v1/auth/email/request/
+    Valida e normaliza o e-mail para geração e envio de OTP.
+    """
+    email = serializers.EmailField(
+        max_length=254,
+        help_text=_("Endereço de e-mail destinatário do código OTP de 6 dígitos."),
+    )
+
+    def validate_email(self, value: str) -> str:
+        return value.strip().lower()
+
+
+class EmailOTPVerifySerializer(serializers.Serializer):
+    """
+    Serializer para o endpoint POST /api/v1/auth/email/verify/
+    Valida o e-mail e o código numérico de 6 dígitos.
+    """
+    email = serializers.EmailField(
+        max_length=254,
+        help_text=_("Endereço de e-mail associado ao desafio OTP."),
+    )
+    codigo_otp = serializers.RegexField(
+        regex=r"^\d{6}$",
+        min_length=6,
+        max_length=6,
+        error_messages={
+            "invalid": _("O código OTP deve conter exatamente 6 dígitos numéricos."),
+        },
+        help_text=_("Código de validação de 6 dígitos numéricos enviado por e-mail."),
+    )
+
+    def validate_email(self, value: str) -> str:
+        return value.strip().lower()
+
+    def validate_codigo_otp(self, value: str) -> str:
+        return value.strip()
+
+
+class EmailRegisterSerializer(serializers.Serializer):
+    """
+    Serializer para o endpoint POST /api/v1/auth/email/register/
+    Recebe 'email', 'nome', 'data_nascimento' e 'password'.
+    Valida maioridade de 18 anos e unicidade de e-mail.
+    """
+    email = serializers.EmailField(
+        max_length=254,
+        help_text=_("Endereço de e-mail verificado anteriormente por OTP."),
+    )
+    nome = serializers.CharField(
+        max_length=150,
+        min_length=2,
+        help_text=_("Nome completo do titular da conta."),
+    )
+    data_nascimento = serializers.DateField(
+        help_text=_("Data de nascimento para validação de maioridade civil (>= 18 anos)."),
+    )
+    password = serializers.CharField(
+        write_only=True,
+        min_length=8,
+        help_text=_("Senha de acesso à plataforma (mínimo 8 caracteres)."),
+    )
+    telemovel = serializers.CharField(
+        max_length=20,
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text=_("Número de telemóvel de contacto opcional."),
+    )
+    termos_utilizacao = serializers.BooleanField(
+        default=True,
+        help_text=_("Aceitação dos Termos e Condições de Utilização."),
+    )
+    politica_privacidade = serializers.BooleanField(
+        default=True,
+        help_text=_("Aceitação da Política de Privacidade."),
+    )
+    marketing = serializers.BooleanField(
+        default=False,
+        required=False,
+        help_text=_("Consentimento opcional para comunicações promocionais."),
+    )
+
+    def validate_email(self, value: str) -> str:
+        email_limpo = value.strip().lower()
+        if CustomUser.objects.filter(email=email_limpo).exists():
+            raise serializers.ValidationError(_("Já existe uma conta registada com este endereço de e-mail."))
+        return email_limpo
+
+    def validate_data_nascimento(self, value: date) -> date:
+        idade = calcular_idade(value)
+        if idade < 18:
+            raise serializers.ValidationError(
+                _(f"Apenas utilizadores com idade igual ou superior a 18 anos civis podem criar conta (idade atual: {idade} anos).")
+            )
+        return value
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        if not attrs.get("termos_utilizacao", True) or not attrs.get("politica_privacidade", True):
+            raise serializers.ValidationError(
+                {"consentimentos": _("A aceitação dos Termos de Utilização e da Política de Privacidade é obrigatória.")}
+            )
+        return attrs

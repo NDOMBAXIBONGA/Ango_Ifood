@@ -42,27 +42,25 @@ class CustomUserManager(BaseUserManager):
 
     def create_user(
         self,
-        telemovel: str,
-        email: str,
-        nome: str,
+        telemovel: str | None = None,
+        email: str | None = None,
+        nome: str | None = None,
         password: str | None = None,
         **extra_fields: Any,
     ) -> "CustomUser":
         """
-        Cria e guarda um utilizador regular com telemóvel, email e nome (RN-001, RN-003).
+        Cria e guarda um utilizador regular com telemóvel ou email e nome (RN-001, RN-003).
         """
-        if not telemovel:
-            raise ValueError(_("RN-001: O campo 'telemovel' é obrigatório."))
-        if not email:
-            raise ValueError(_("RN-003: O campo 'email' é obrigatório."))
+        if not telemovel and not email:
+            raise ValueError(_("RN-001: É obrigatório fornecer pelo menos 'telemovel' ou 'email'."))
         if not nome:
             raise ValueError(_("RN-003: O campo 'nome' é obrigatório."))
 
-        email_normalizado = self.normalize_email(email)
+        email_normalizado = self.normalize_email(email) if email else None
         extra_fields.setdefault("is_active", True)
 
         user = self.model(
-            telemovel=telemovel.strip(),
+            telemovel=telemovel.strip() if telemovel else None,
             email=email_normalizado,
             nome=nome.strip(),
             **extra_fields,
@@ -132,15 +130,17 @@ class CustomUser(AbstractUser):
         help_text=_("RN-003: Nome completo do titular da conta."),
     )
 
-    # RN-001: Identificador principal único de autenticação e contacto para OTP
+    # RN-001: Identificador principal de autenticação e contacto para OTP (opcional para contas criadas via e-mail)
     telemovel = models.CharField(
         max_length=20,
         unique=True,
+        null=True,
+        blank=True,
         db_index=True,
         validators=[validador_telemovel],
         verbose_name=_("Número de Telemóvel"),
         help_text=_(
-            "RN-001: Identificador principal único do utilizador (formato E.164, ex: +351912345678)."
+            "RN-001: Identificador único do utilizador (formato E.164, ex: +351912345678)."
         ),
     )
 
@@ -465,3 +465,98 @@ class RegistoOTP(models.Model):
             f"OTP {self.telemovel} (Tentativas: {self.tentativas_restantes}, "
             f"Envios/h: {self.contagem_envios_hora}){estado_bloqueio}"
         )
+
+
+class RegistoOTPEmail(models.Model):
+    """
+    Entidade 5: Controlo de emissão, validação, rate-limiting e autorização de OTP por E-mail.
+    Garante que o endereço de e-mail é validado através de código de 6 dígitos antes de permitir o registo.
+    """
+
+    email = models.EmailField(
+        max_length=254,
+        db_index=True,
+        verbose_name=_("Endereço de E-mail"),
+        help_text=_("Endereço de e-mail destinatário do código OTP."),
+    )
+
+    codigo_hash = models.CharField(
+        max_length=255,
+        verbose_name=_("Hash do Código OTP"),
+        help_text=_("Hash criptográfico do código numérico de 6 dígitos enviado por e-mail."),
+    )
+
+    tentativas_restantes = models.PositiveSmallIntegerField(
+        default=5,
+        verbose_name=_("Tentativas Restantes"),
+        help_text=_("Número de tentativas restantes antes da invalidação do código."),
+    )
+
+    expira_em = models.DateTimeField(
+        db_index=True,
+        verbose_name=_("Expira Em"),
+        help_text=_("Data e hora de expiração do código (5 minutos após a emissão)."),
+    )
+
+    is_verificado = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name=_("E-mail Verificado"),
+        help_text=_("Indica se o código OTP foi validado com sucesso e o e-mail está habilitado para registo."),
+    )
+
+    ip_origem = models.GenericIPAddressField(
+        null=True,
+        blank=True,
+        verbose_name=_("IP de Origem"),
+        help_text=_("Endereço IP do cliente solicitante para controlo de abuso e rate-limiting."),
+    )
+
+    contagem_pedidos_hora = models.PositiveSmallIntegerField(
+        default=1,
+        verbose_name=_("Pedidos na Última Hora"),
+        help_text=_("Contador de solicitações de e-mail para rate limiting (máximo 3 por hora)."),
+    )
+
+    criado_em = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_("Criado Em"),
+    )
+
+    atualizado_em = models.DateTimeField(
+        auto_now=True,
+        verbose_name=_("Atualizado Em"),
+    )
+
+    class Meta:
+        db_table = "accounts_registo_otp_email"
+        verbose_name = _("Registo de OTP por E-mail")
+        verbose_name_plural = _("Registos de OTP por E-mail")
+        ordering = ["-expira_em"]
+        indexes = [
+            models.Index(fields=["email", "expira_em"], name="idx_otp_email_expira"),
+            models.Index(fields=["email", "is_verificado"], name="idx_otp_email_verif"),
+            models.Index(fields=["ip_origem", "criado_em"], name="idx_otp_email_ip_criado"),
+        ]
+
+    @property
+    def esta_expirado(self) -> bool:
+        return timezone.now() >= self.expira_em
+
+    def set_codigo(self, codigo_bruto: str) -> None:
+        from django.contrib.auth.hashers import make_password
+        self.codigo_hash = make_password(codigo_bruto)
+
+    def check_codigo(self, codigo_bruto: str) -> bool:
+        from django.contrib.auth.hashers import check_password
+        return check_password(codigo_bruto, self.codigo_hash)
+
+    def decrementar_tentativa(self) -> int:
+        if self.tentativas_restantes > 0:
+            self.tentativas_restantes -= 1
+            self.save(update_fields=["tentativas_restantes", "atualizado_em"])
+        return self.tentativas_restantes
+
+    def __str__(self) -> str:
+        verif = " [VERIFICADO]" if self.is_verificado else ""
+        return f"OTP E-mail: {self.email} (Tentativas: {self.tentativas_restantes}){verif}"

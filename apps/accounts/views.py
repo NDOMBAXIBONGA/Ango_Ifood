@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import secrets
+import threading
 from datetime import timedelta
 from typing import Any
 
@@ -24,15 +25,31 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.brevo_service import BrevoEmailService
-from apps.accounts.models import CustomUser, PerfilConsentimento, RegistoOTP
+from apps.accounts.models import (
+    CustomUser,
+    PerfilConsentimento,
+    RegistoOTP,
+    RegistoOTPEmail,
+)
 from apps.accounts.serializers import (
     CompleteRegistrationSerializer,
+    EmailOTPRequestSerializer,
+    EmailOTPVerifySerializer,
+    EmailRegisterSerializer,
     RequestOTPSerializer,
     UtilizadorResumoSerializer,
     VerifyOTPSerializer,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def obter_ip_cliente(request: Request) -> str:
+    """Extrai o endereço IP real do cliente, considerando cabeçalhos de proxies reversos."""
+    x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+    if x_forwarded_for:
+        return x_forwarded_for.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR", "").strip()
 
 # Parâmetros operacionais e SLAs da regra RN-002 (Secções 6.1 e 8)
 OTP_EXPIRACAO_MINUTOS = 5
@@ -470,3 +487,268 @@ class CompleteRegistrationView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
+
+# ==============================================================================
+# FLUXO DEDICADO DE AUTENTICAÇÃO POR E-MAIL E OTP (Brevo Transactional API)
+# ==============================================================================
+
+class EmailRequestOTPView(APIView):
+    """
+    Endpoint 1: `POST /api/v1/auth/email/request/`
+    - Recebe 'email' no payload. Valida o formato.
+    - Aplica Rate Limiting: Máximo de 3 pedidos de e-mail por hora para o mesmo IP ou e-mail.
+    - Gera um número aleatório e criptograficamente seguro de 6 dígitos.
+    - Grava no modelo `RegistoOTPEmail`: email, codigo_hash, tentativas_restantes (5),
+      expira_em (agora + 5 minutos) e is_verificado (False).
+    - Invoca de forma assíncrona o `BrevoEmailService.enviar_email_otp` para despachar o e-mail em background.
+    - Retorna HTTP 200 OK.
+    """
+
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self, request: Request) -> Response:
+        serializer = EmailOTPRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email: str = serializer.validated_data["email"]
+
+        agora = timezone.now()
+        uma_hora_atras = agora - timedelta(hours=1)
+        ip_cliente = obter_ip_cliente(request)
+
+        # Rate Limiting: Máximo de 3 pedidos de e-mail por hora para o mesmo e-mail ou mesmo IP
+        pedidos_email_hora = RegistoOTPEmail.objects.filter(
+            email=email,
+            criado_em__gte=uma_hora_atras,
+        ).count()
+
+        pedidos_ip_hora = 0
+        if ip_cliente:
+            pedidos_ip_hora = RegistoOTPEmail.objects.filter(
+                ip_origem=ip_cliente,
+                criado_em__gte=uma_hora_atras,
+            ).count()
+
+        if pedidos_email_hora >= 3 or pedidos_ip_hora >= 3:
+            logger.warning(
+                "Rate limit de OTP por e-mail excedido: e-mail=%s (pedidos=%d), IP=%s (pedidos=%d)",
+                email,
+                pedidos_email_hora,
+                ip_cliente,
+                pedidos_ip_hora,
+            )
+            return Response(
+                {
+                    "erro": "rate_limit_excedido",
+                    "detalhe": _("Limite máximo de 3 pedidos de código por hora atingido. Por favor, tente mais tarde."),
+                },
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        # Gera código numérico seguro de 6 dígitos (000000 a 999999)
+        codigo_seguro = f"{secrets.randbelow(1_000_000):06d}"
+        expira_em = agora + timedelta(minutes=5)
+
+        # Cria ou substitui registo pendente no modelo RegistoOTPEmail
+        registo = RegistoOTPEmail(
+            email=email,
+            tentativas_restantes=5,
+            expira_em=expira_em,
+            is_verificado=False,
+            ip_origem=ip_cliente or None,
+            contagem_pedidos_hora=pedidos_email_hora + 1,
+        )
+        registo.set_codigo(codigo_seguro)
+        registo.save()
+
+        # Invoca assincronamente o serviço BrevoEmailService para envio imediato em background
+        threading.Thread(
+            target=BrevoEmailService().enviar_email_otp,
+            args=(email, codigo_seguro),
+            daemon=True,
+        ).start()
+
+        logger.info(
+            "OTP por e-mail gerado para %s | IP=%s | Expira em %s",
+            email,
+            ip_cliente,
+            expira_em.isoformat(),
+        )
+
+        return Response(
+            {
+                "sucesso": True,
+                "mensagem": _("Código de confirmação enviado para o seu e-mail com sucesso."),
+                "email": email,
+                "expira_em": expira_em.isoformat(),
+                "validade_minutos": 5,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class EmailVerifyOTPView(APIView):
+    """
+    Endpoint 2: `POST /api/v1/auth/email/verify/`
+    - Recebe 'email' e 'codigo_otp' no payload.
+    - Busca o registo ativo mais recente na base de dados.
+    - Valida se o código está correto, se não ultrapassou as 5 tentativas falhadas e se não expirou (5 min).
+    - Se falhar: decrementa as tentativas e lança HTTP 400 Bad Request.
+    - Se validado com sucesso: altera flag para `is_verificado=True` e retorna HTTP 200 OK.
+    """
+
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self, request: Request) -> Response:
+        serializer = EmailOTPVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email: str = serializer.validated_data["email"]
+        codigo_otp: str = serializer.validated_data["codigo_otp"]
+
+        registo = (
+            RegistoOTPEmail.objects.filter(email=email)
+            .order_by("-criado_em")
+            .first()
+        )
+
+        if not registo:
+            return Response(
+                {
+                    "erro": "registo_nao_encontrado",
+                    "detalhe": _("Nenhum código de confirmação foi solicitado para este e-mail. Solicite um novo código."),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if registo.esta_expirado:
+            return Response(
+                {
+                    "erro": "codigo_expirado",
+                    "detalhe": _("O código de confirmação expirou (validade de 5 minutos). Solicite um novo código."),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if registo.tentativas_restantes <= 0:
+            return Response(
+                {
+                    "erro": "tentativas_esgotadas",
+                    "detalhe": _("Número máximo de 5 tentativas excedido. Solicite um novo código de confirmação."),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not registo.check_codigo(codigo_otp):
+            tentativas = registo.decrementar_tentativa()
+            return Response(
+                {
+                    "erro": "codigo_invalido",
+                    "detalhe": _(f"Código incorreto. Restam {tentativas} tentativa(s)."),
+                    "tentativas_restantes": tentativas,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Sucesso na validação do código
+        registo.is_verificado = True
+        registo.save(update_fields=["is_verificado", "atualizado_em"])
+
+        logger.info("E-mail verificado com sucesso via OTP: %s", email)
+
+        return Response(
+            {
+                "sucesso": True,
+                "mensagem": _("E-mail verificado com sucesso."),
+                "email": email,
+                "is_verificado": True,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class EmailRegisterView(APIView):
+    """
+    Endpoint 3: `POST /api/v1/auth/email/register/`
+    - Recebe 'email', 'nome', 'data_nascimento' e 'password'.
+    - Valida estritamente se o registo de e-mail associado possui a flag `is_verificado == True` na base de dados.
+      Se não estiver verificado, bloqueia imediatamente o registo com HTTP 403 Forbidden.
+    - Valida se o utilizador é maior de 18 anos.
+    - Se passar nas validações, cria a conta na tabela CustomUser e emite os tokens JWT finais da sessão.
+    """
+
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    @transaction.atomic
+    def post(self, request: Request) -> Response:
+        serializer = EmailRegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email: str = serializer.validated_data["email"]
+        nome: str = serializer.validated_data["nome"]
+        data_nascimento = serializer.validated_data["data_nascimento"]
+        password: str = serializer.validated_data["password"]
+        telemovel: str | None = serializer.validated_data.get("telemovel") or None
+
+        # Validação estrita: O e-mail DEVE estar com is_verificado == True na base de dados
+        registo_verificado = RegistoOTPEmail.objects.filter(
+            email=email,
+            is_verificado=True,
+        ).exists()
+
+        if not registo_verificado:
+            logger.warning("Tentativa de registo bloqueada: e-mail não verificado (%s)", email)
+            return Response(
+                {
+                    "erro": "email_nao_verificado",
+                    "detalhe": _(
+                        "O endereço de e-mail ainda não foi validado com código OTP. "
+                        "A validação é obrigatória antes de concluir a criação da conta."
+                    ),
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Criação do utilizador na tabela CustomUser
+        user = CustomUser.objects.create_user(
+            telemovel=telemovel,
+            email=email,
+            nome=nome,
+            password=password,
+            data_nascimento=data_nascimento,
+            estado=CustomUser.EstadoConta.ATIVO,
+        )
+
+        # Gravação dos consentimentos obrigatórios
+        PerfilConsentimento.objects.update_or_create(
+            utilizador=user,
+            defaults={
+                "termos_utilizacao": serializer.validated_data.get("termos_utilizacao", True),
+                "politica_privacidade": serializer.validated_data.get("politica_privacidade", True),
+                "marketing": serializer.validated_data.get("marketing", False),
+            },
+        )
+
+        # Invalida os registos OTP para este e-mail após a criação bem-sucedida
+        RegistoOTPEmail.objects.filter(email=email).delete()
+
+        logger.info(
+            "Utilizador registado e ativado via e-mail com sucesso: %s (id=%s)",
+            user.email,
+            user.id,
+        )
+
+        # Emissão dos tokens JWT de sessão
+        tokens = gerar_tokens_jwt_para_utilizador(user)
+
+        return Response(
+            {
+                "mensagem": _("Conta criada com sucesso."),
+                "tokens": tokens,
+                "perfil": UtilizadorResumoSerializer(user).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+

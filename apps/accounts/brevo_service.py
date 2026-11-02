@@ -321,3 +321,4 @@ class BrevoEmailService:
                 exc_info=True,
             )
             return False
+
