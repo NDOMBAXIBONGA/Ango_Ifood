@@ -215,13 +215,14 @@ CACHES = {
 }
 
 # ==============================================================================
-# 7. DJANGO CHANNELS (REDIS CHANNEL LAYER)
+# 7. DJANGO CHANNELS (REDIS CHANNEL LAYER NO RENDER)
 # ==============================================================================
+# Lê dinamicamente a variável REDIS_URL do Render para canais WebSockets assíncronos
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [env("CHANNEL_LAYERS_REDIS_URL", default=f"{REDIS_URL}/2")],
+            "hosts": [env("CHANNEL_LAYERS_REDIS_URL", default=REDIS_URL)],
             "capacity": 1500,  # Máximo de mensagens em fila por canal antes de descartar
             "expiry": 60,      # Tempo de expiração de mensagens em segundos
         },
@@ -304,11 +305,36 @@ SIMPLE_JWT = {
 }
 
 # ==============================================================================
-# 10. CORS (CROSS-ORIGIN RESOURCE SHARING)
+# 10. CORS (CROSS-ORIGIN RESOURCE SHARING) & SEGURANÇA MOBILE
 # ==============================================================================
-CORS_ALLOW_ALL_ORIGINS = DEBUG
-CORS_ALLOWED_ORIGINS = env.list("DJANGO_CORS_ALLOWED_ORIGINS")
+# Para consumo de APIs REST por aplicações móveis nativas (Flutter APK Release)
+# e clientes Web, permite todas as origens por padrão com suporte a credenciais.
+CORS_ALLOW_ALL_ORIGINS = env.bool("CORS_ALLOW_ALL_ORIGINS", default=True)
+CORS_ALLOWED_ORIGINS = env.list("DJANGO_CORS_ALLOWED_ORIGINS", default=[])
 CORS_ALLOW_CREDENTIALS = True
+
+# Cabeçalhos HTTP permitidos nas requisições do Flutter/Dio
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+]
+
+# Métodos HTTP permitidos
+CORS_ALLOW_METHODS = [
+    "DELETE",
+    "GET",
+    "OPTIONS",
+    "PATCH",
+    "POST",
+    "PUT",
+]
 
 # ==============================================================================
 # 11. VALIDAÇÃO DE PASSWORDS, INTERNACIONALIZAÇÃO E FICHEIROS ESTÁTICOS
