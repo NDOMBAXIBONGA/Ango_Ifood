@@ -40,10 +40,30 @@ if ENV_FILE.exists():
 # ==============================================================================
 # 2. SEGURANÇA E CORE
 # ==============================================================================
-SECRET_KEY = env("DJANGO_SECRET_KEY")
-DEBUG = env("DJANGO_DEBUG")
-ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS")
-CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS")
+# Suporta DJANGO_SECRET_KEY e SECRET_KEY (padrão Render), gerando fallback seguro caso ausente
+SECRET_KEY = (
+    env("DJANGO_SECRET_KEY", default=None)
+    or env("SECRET_KEY", default=None)
+    or os.environ.get("DJANGO_SECRET_KEY")
+    or os.environ.get("SECRET_KEY")
+)
+
+if not SECRET_KEY:
+    import secrets
+    SECRET_KEY = secrets.token_urlsafe(50)
+
+DEBUG = env.bool("DJANGO_DEBUG", default=False)
+ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.1", "*"])
+CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
+
+# Deteta automaticamente o hostname externo do Render (ex.: *.onrender.com)
+render_external_hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+if render_external_hostname:
+    if render_external_hostname not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(render_external_hostname)
+    render_origin = f"https://{render_external_hostname}"
+    if render_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(render_origin)
 
 # Headers de Proxy Reverso (Nginx / Traefik / AWS ALB)
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
