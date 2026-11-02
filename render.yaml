@@ -1,0 +1,130 @@
+# ==============================================================================
+# RENDER BLUEPRINTS SPECIFICATION (render.yaml)
+# Ecossistema de Produção: Delivery / Ango_Ifood
+# Componentes: PostgreSQL 16 (PostGIS), Redis Broker, Django ASGI (Daphne), Celery Worker
+# ==============================================================================
+
+# ==============================================================================
+# 1. BASE DE DADOS RELACIONAL POSTGRESQL + POSTGIS
+# ==============================================================================
+databases:
+  - name: delivery-production-db
+    databaseName: delivery_db
+    user: delivery_admin
+    plan: starter
+    postgresMajorVersion: 16
+
+# ==============================================================================
+# 2. SERVIÇOS DO ECOSSISTEMA (REDIS, WEB SERVICE ASGI, BACKGROUND WORKER)
+# ==============================================================================
+services:
+  # ----------------------------------------------------------------------------
+  # Serviço 1: Redis Broker & Cache em Alta Velocidade
+  # ----------------------------------------------------------------------------
+  - type: redis
+    name: delivery-broker-redis
+    plan: starter
+    ipAllowList: [] # Acesso restrito internamente à VPC privada do Render
+    maxmemoryPolicy: noeviction # Garante entrega de tarefas do Celery sem perda por expulsão
+
+  # ----------------------------------------------------------------------------
+  # Serviço 2: Web Service Django ASGI (Daphne - HTTP REST + WebSockets)
+  # ----------------------------------------------------------------------------
+  - type: web
+    name: delivery-backend-api
+    runtime: python
+    plan: starter
+    buildCommand: ./render_build.sh
+    startCommand: daphne -b 0.0.0.0 -p $PORT config.asgi:application
+    envVars:
+      # Ligação Dinâmica à Base de Dados PostgreSQL
+      - key: DATABASE_URL
+        fromDatabase:
+          name: delivery-production-db
+          property: connectionString
+
+      # Ligação Dinâmica ao Broker Redis (Filas Celery e Channels Layer)
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: delivery-broker-redis
+          property: connectionString
+
+      # Chave Criptográfica Gerada Automaticamente pelo Render
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+
+      # Configurações Essenciais de Ambiente e Segurança
+      - key: DJANGO_DEBUG
+        value: "False"
+
+      - key: DJANGO_ALLOWED_HOSTS
+        value: "*"
+
+      - key: DJANGO_CSRF_TRUSTED_ORIGINS
+        value: "https://delivery-backend-api.onrender.com"
+
+      - key: DJANGO_CORS_ALLOWED_ORIGINS
+        value: "https://delivery-backend-api.onrender.com"
+
+      - key: DJANGO_TIME_ZONE
+        value: "Africa/Luanda"
+
+      - key: DJANGO_LANGUAGE_CODE
+        value: "pt-pt"
+
+      - key: DJANGO_SECURE_SSL_REDIRECT
+        value: "True"
+
+      - key: DJANGO_SESSION_COOKIE_SECURE
+        value: "True"
+
+      - key: DJANGO_CSRF_COOKIE_SECURE
+        value: "True"
+
+      # Versão do Runtime Python
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+
+  # ----------------------------------------------------------------------------
+  # Serviço 3: Background Worker Celery (Tarefas Assíncronas e Máquina de Estados)
+  # ----------------------------------------------------------------------------
+  - type: worker
+    name: delivery-celery-worker
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A config worker --loglevel=info
+    envVars:
+      # Herança da Base de Dados PostgreSQL Compartilhada
+      - key: DATABASE_URL
+        fromDatabase:
+          name: delivery-production-db
+          property: connectionString
+
+      # Herança do Broker Redis Compartilhado
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: delivery-broker-redis
+          property: connectionString
+
+      # Espelhamento da Chave Criptográfica do Web Service
+      - key: DJANGO_SECRET_KEY
+        fromService:
+          type: web
+          name: delivery-backend-api
+          envVarKey: DJANGO_SECRET_KEY
+
+      # Configurações de Ambiente Espelhadas
+      - key: DJANGO_DEBUG
+        value: "False"
+
+      - key: DJANGO_TIME_ZONE
+        value: "Africa/Luanda"
+
+      - key: DJANGO_LANGUAGE_CODE
+        value: "pt-pt"
+
+      - key: PYTHON_VERSION
+        value: "3.11.9"
