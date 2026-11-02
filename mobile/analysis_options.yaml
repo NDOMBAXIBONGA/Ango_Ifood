@@ -19,6 +19,7 @@ analyzer:
     unnecessary_type_check: ignore
     unnecessary_cast: ignore
     unused_element_parameter: ignore
+    ambiguous_export: ignore
     todo: ignore
 
 linter:
