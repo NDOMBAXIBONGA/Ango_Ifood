@@ -21,12 +21,25 @@ def health_check(request):
     db_ok = False
     db_tables = []
     db_err = None
+    migration_output = None
     try:
         from django.db import connection
         with connection.cursor() as cursor:
             cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public';")
             db_tables = [r[0] for r in cursor.fetchall()]
             db_ok = True
+
+        # Se as tabelas essenciais de accounts ainda não existirem ou se solicitado explicitamente com ?migrate=true
+        if "accounts_custom_user" not in db_tables or request.GET.get("migrate") == "true":
+            import io
+            from django.core.management import call_command
+            buffer = io.StringIO()
+            call_command("migrate", interactive=False, stdout=buffer)
+            migration_output = buffer.getvalue()
+            # Atualiza lista de tabelas após migração
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public';")
+                db_tables = [r[0] for r in cursor.fetchall()]
     except Exception as e:
         db_err = str(e)
 
@@ -42,6 +55,7 @@ def health_check(request):
                 "tables_count": len(db_tables),
                 "has_accounts_custom_user": "accounts_custom_user" in db_tables,
                 "has_accounts_registo_otp_email": "accounts_registo_otp_email" in db_tables,
+                "migration_output": migration_output,
                 "error": db_err,
             },
             "brevo": {

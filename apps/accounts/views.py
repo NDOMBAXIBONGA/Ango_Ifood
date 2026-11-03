@@ -601,6 +601,47 @@ class EmailRequestOTPView(APIView):
             )
         except Exception as e:
             logger.error("Erro interno no processamento de pedido de OTP por e-mail: %s", e, exc_info=True)
+            # Auto-recuperação resiliente caso a tabela da base de dados ainda não tenha sido migrada
+            err_msg = str(e).lower()
+            if "does not exist" in err_msg or "relation" in err_msg or "table" in err_msg:
+                try:
+                    logger.info("A aplicar migrações pendentes automaticamente para restabelecer tabelas...")
+                    from django.core.management import call_command
+                    call_command("migrate", interactive=False)
+
+                    # Executa a criação do OTP após migração bem-sucedida
+                    codigo_seguro = f"{secrets.randbelow(1_000_000):06d}"
+                    expira_em = timezone.now() + timedelta(minutes=5)
+                    registo = RegistoOTPEmail(
+                        email=email,
+                        tentativas_restantes=5,
+                        expira_em=expira_em,
+                        is_verificado=False,
+                        ip_origem=ip_cliente or None,
+                        contagem_pedidos_hora=1,
+                    )
+                    registo.set_codigo(codigo_seguro)
+                    registo.save()
+
+                    threading.Thread(
+                        target=BrevoEmailService().enviar_email_otp,
+                        args=(email, codigo_seguro),
+                        daemon=True,
+                    ).start()
+
+                    return Response(
+                        {
+                            "sucesso": True,
+                            "mensagem": _("Código de confirmação enviado para o seu e-mail com sucesso."),
+                            "email": email,
+                            "expira_em": expira_em.isoformat(),
+                            "validade_minutos": 5,
+                        },
+                        status=status.HTTP_200_OK,
+                    )
+                except Exception as retry_err:
+                    logger.critical("Falha na auto-migração e reprocessamento: %s", retry_err, exc_info=True)
+
             return Response(
                 {
                     "erro": "erro_interno",

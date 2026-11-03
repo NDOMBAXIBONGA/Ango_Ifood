@@ -58,6 +58,13 @@ void main() {
         baseUrl: '${AppEnvironmentConfig.baseHttpUrl}/api/v1/auth',
       );
 
+      // Warm-up não bloqueante em segundo plano para acordar o contentor Render no arranque do APK
+      unawaited(
+        dio.get('${AppEnvironmentConfig.baseHttpUrl}/api/v1/health/').then((_) {
+          developer.log('Servidor Render acordado e operacional.', name: 'Warmup');
+        }).catchError((_) {}),
+      );
+
       runApp(
         DeliveryApp(
           dio: dio,
