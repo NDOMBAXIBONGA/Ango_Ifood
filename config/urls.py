@@ -34,7 +34,14 @@ def health_check(request):
             import io
             from django.core.management import call_command
             buffer = io.StringIO()
-            call_command("migrate", interactive=False, stdout=buffer)
+
+            # Executa migrações direcionadas das aplicações do ecossistema de autenticação e core
+            for app_target in ["contenttypes", "auth", "accounts", "sessions"]:
+                try:
+                    call_command("migrate", app_target, interactive=False, stdout=buffer)
+                except Exception as app_err:
+                    buffer.write(f"Aviso migração {app_target}: {app_err}\n")
+
             migration_output = buffer.getvalue()
             # Atualiza lista de tabelas após migração
             with connection.cursor() as cursor:

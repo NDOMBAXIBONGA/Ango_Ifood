@@ -25,7 +25,11 @@ class AccountsConfig(AppConfig):
                 existe = cursor.fetchone()[0]
             if not existe:
                 import logging
-                logging.getLogger(__name__).info("Tabelas ausentes no PostgreSQL. A aplicar migrações no arranque...")
-                call_command("migrate", interactive=False)
+                logging.getLogger(__name__).info("Tabelas de accounts ausentes. A aplicar migrações no arranque...")
+                for app_target in ["contenttypes", "auth", "accounts", "sessions"]:
+                    try:
+                        call_command("migrate", app_target, interactive=False)
+                    except Exception:
+                        pass
         except Exception:
             pass

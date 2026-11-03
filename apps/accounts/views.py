@@ -605,9 +605,13 @@ class EmailRequestOTPView(APIView):
             err_msg = str(e).lower()
             if "does not exist" in err_msg or "relation" in err_msg or "table" in err_msg:
                 try:
-                    logger.info("A aplicar migrações pendentes automaticamente para restabelecer tabelas...")
+                    logger.info("A aplicar migrações pendentes de autenticação automaticamente...")
                     from django.core.management import call_command
-                    call_command("migrate", interactive=False)
+                    for app_target in ["contenttypes", "auth", "accounts", "sessions"]:
+                        try:
+                            call_command("migrate", app_target, interactive=False)
+                        except Exception:
+                            pass
 
                     # Executa a criação do OTP após migração bem-sucedida
                     codigo_seguro = f"{secrets.randbelow(1_000_000):06d}"

@@ -51,7 +51,9 @@ class BrevoEmailService:
         self.sender_email: str = (
             os.environ.get("BREVO_SENDER_EMAIL")
             or getattr(settings, "BREVO_SENDER_EMAIL", None)
-            or getattr(settings, "DEFAULT_FROM_EMAIL", self.DEFAULT_SENDER_EMAIL)
+            or os.environ.get("DEFAULT_FROM_EMAIL")
+            or getattr(settings, "DEFAULT_FROM_EMAIL", None)
+            or "jobdealmeida016@gmail.com"
         )
 
         if not self.api_key:
