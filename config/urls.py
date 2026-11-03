@@ -51,7 +51,35 @@ def health_check(request):
         db_err = str(e)
 
     brevo_key_present = bool(os.environ.get("BREVO_API_KEY") or getattr(settings, "BREVO_API_KEY", ""))
-    brevo_sender = os.environ.get("BREVO_SENDER_EMAIL") or getattr(settings, "BREVO_SENDER_EMAIL", "no-reply@deliverypro.ao")
+    from apps.accounts.brevo_service import BrevoEmailService
+    brevo_svc = BrevoEmailService()
+    brevo_sender = brevo_svc.sender_email
+
+    test_email = request.GET.get("test_email")
+    brevo_test_result = None
+    if test_email:
+        import requests
+        headers = {
+            "api-key": brevo_svc.api_key,
+            "content-type": "application/json",
+            "accept": "application/json",
+        }
+        payload = {
+            "sender": {"name": brevo_svc.sender_name, "email": brevo_svc.sender_email},
+            "to": [{"email": test_email.strip().lower()}],
+            "subject": "Seu Código de Confirmação - Delivery Pro",
+            "htmlContent": brevo_svc._gerar_html_template_otp("123456"),
+        }
+        try:
+            resp = requests.post(brevo_svc.api_url, json=payload, headers=headers, timeout=15)
+            brevo_test_result = {
+                "status_code": resp.status_code,
+                "response_text": resp.text,
+                "sender_used": brevo_svc.sender_email,
+                "api_key_prefix": brevo_svc.api_key[:10] + "..." if brevo_svc.api_key else "EMPTY",
+            }
+        except Exception as te:
+            brevo_test_result = {"error": str(te)}
 
     return JsonResponse(
         {
@@ -69,6 +97,7 @@ def health_check(request):
             "brevo": {
                 "api_key_configured": brevo_key_present,
                 "sender_email": brevo_sender,
+                "test_result": brevo_test_result,
             },
             "timestamp": timezone.now().isoformat(),
         },
