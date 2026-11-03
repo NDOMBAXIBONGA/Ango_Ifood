@@ -83,6 +83,7 @@ class RequestOTPView(APIView):
 
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
+    throttle_classes = []
 
     @transaction.atomic
     def post(self, request: Request) -> Response:
@@ -240,6 +241,7 @@ class VerifyOTPView(APIView):
 
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
+    throttle_classes = []
 
     @transaction.atomic
     def post(self, request: Request) -> Response:
@@ -517,17 +519,17 @@ class EmailRequestOTPView(APIView):
 
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
+    throttle_classes = []
 
     def post(self, request: Request) -> Response:
-        serializer = EmailOTPRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        email: str = serializer.validated_data["email"]
-
-        agora = timezone.now()
-        uma_hora_atras = agora - timedelta(hours=1)
-        ip_cliente = obter_ip_cliente(request)
-
         try:
+            serializer = EmailOTPRequestSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            email: str = serializer.validated_data["email"]
+
+            agora = timezone.now()
+            uma_hora_atras = agora - timedelta(hours=1)
+            ip_cliente = obter_ip_cliente(request)
             # Rate Limiting: Máximo de 3 pedidos de e-mail por hora para o mesmo e-mail ou mesmo IP
             pedidos_email_hora = RegistoOTPEmail.objects.filter(
                 email=email,
@@ -620,6 +622,7 @@ class EmailVerifyOTPView(APIView):
 
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
+    throttle_classes = []
 
     def post(self, request: Request) -> Response:
         serializer = EmailOTPVerifySerializer(data=request.data)
@@ -700,6 +703,7 @@ class EmailRegisterView(APIView):
 
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
+    throttle_classes = []
 
     @transaction.atomic
     def post(self, request: Request) -> Response:
@@ -783,6 +787,7 @@ class GoogleAuthView(APIView):
 
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
+    throttle_classes = []
 
     def post(self, request: Request) -> Response:
         token = request.data.get("token")

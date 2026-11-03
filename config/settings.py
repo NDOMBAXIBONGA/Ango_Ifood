@@ -225,29 +225,45 @@ if os.name == "nt":
 # ==============================================================================
 # 6. CACHE & REDIS CONFIGURATION (REDIS_URL)
 # ==============================================================================
-REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379")
+REDIS_URL = env("REDIS_URL", default=None) or os.environ.get("REDIS_URL")
 
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": env("REDIS_CACHE_URL", default=f"{REDIS_URL}/3"),
+# Se REDIS_URL estiver definida e não for localhost sem servidor, utiliza Redis; caso contrário, LocMemCache
+if REDIS_URL and not REDIS_URL.startswith("redis://127.0.0.1") and not REDIS_URL.startswith("redis://localhost"):
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": env("REDIS_CACHE_URL", default=f"{REDIS_URL}/3"),
+        }
     }
-}
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "delivery-default-cache",
+        }
+    }
 
 # ==============================================================================
 # 7. DJANGO CHANNELS (REDIS CHANNEL LAYER NO RENDER)
 # ==============================================================================
 # Lê dinamicamente a variável REDIS_URL do Render para canais WebSockets assíncronos
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [env("CHANNEL_LAYERS_REDIS_URL", default=REDIS_URL)],
-            "capacity": 1500,  # Máximo de mensagens em fila por canal antes de descartar
-            "expiry": 60,      # Tempo de expiração de mensagens em segundos
+if REDIS_URL and not REDIS_URL.startswith("redis://127.0.0.1") and not REDIS_URL.startswith("redis://localhost"):
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [env("CHANNEL_LAYERS_REDIS_URL", default=REDIS_URL)],
+                "capacity": 1500,  # Máximo de mensagens em fila por canal antes de descartar
+                "expiry": 60,      # Tempo de expiração de mensagens em segundos
+            },
         },
-    },
-}
+    }
+else:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+        },
+    }
 
 
 # ==============================================================================

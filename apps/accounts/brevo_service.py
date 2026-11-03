@@ -276,13 +276,27 @@ class BrevoEmailService:
                 )
                 return True
 
-            logger.error(
-                "A API da Brevo rejeitou o envio do e-mail para %s. "
-                "Código de resposta HTTP: %s | Detalhes: %s",
-                sanitized_email,
-                response.status_code,
-                response.text,
-            )
+            if response.status_code == 401:
+                logger.critical(
+                    "BREVO API KEY INVÁLIDA: A Brevo rejeitou a autenticação (HTTP 401). "
+                    "Verifique se a variável BREVO_API_KEY no painel do Render é uma chave válida (xkeysib-...)."
+                )
+            elif response.status_code == 400 and ("sender" in response.text.lower() or "unauthorized" in response.text.lower()):
+                logger.error(
+                    "REMETENTE BREVO NÃO AUTORIZADO: A Brevo rejeitou o e-mail remetente '%s'. "
+                    "Configure a variável de ambiente BREVO_SENDER_EMAIL no Render com um endereço de e-mail "
+                    "ou domínio validado na sua conta Brevo (Senders & IP). Resposta: %s",
+                    self.sender_email,
+                    response.text,
+                )
+            else:
+                logger.error(
+                    "A API da Brevo rejeitou o envio do e-mail para %s. "
+                    "Código de resposta HTTP: %s | Detalhes: %s",
+                    sanitized_email,
+                    response.status_code,
+                    response.text,
+                )
             return False
 
         except requests.exceptions.Timeout as e:
