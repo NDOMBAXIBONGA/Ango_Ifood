@@ -325,6 +325,14 @@ FRAUD_SCORE_THRESHOLD = env.int("FRAUD_SCORE_THRESHOLD", default=80)
 FRAUD_MAX_ACCOUNTS_PER_DEVICE = env.int("FRAUD_MAX_ACCOUNTS_PER_DEVICE", default=3)
 FRAUD_MAX_ACCOUNTS_PER_CARD = env.int("FRAUD_MAX_ACCOUNTS_PER_CARD", default=3)
 
+# ==============================================================================
+# 12. CONFIGURAÇÃO DE E-MAILS TRANSACIONAIS & BREVO
+# ==============================================================================
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="jobdealmeida016@gmail.com")
+BREVO_SENDER_EMAIL = env("BREVO_SENDER_EMAIL", default="jobdealmeida016@gmail.com")
+BREVO_API_KEY = env("BREVO_API_KEY", default="")
+
+
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=env.int("JWT_ACCESS_TOKEN_LIFETIME_MINUTES")),
@@ -452,4 +460,12 @@ LOGGING = {
 FRAUD_SCORE_THRESHOLD = env.int("FRAUD_SCORE_THRESHOLD", default=80)
 FRAUD_MAX_ACCOUNTS_PER_DEVICE = env.int("FRAUD_MAX_ACCOUNTS_PER_DEVICE", default=3)
 FRAUD_MAX_ACCOUNTS_PER_CARD = env.int("FRAUD_MAX_ACCOUNTS_PER_CARD", default=3)
+
+# ==============================================================================
+# 12. CONFIGURAÇÃO DE E-MAILS TRANSACIONAIS & BREVO
+# ==============================================================================
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="jobdealmeida016@gmail.com")
+BREVO_SENDER_EMAIL = env("BREVO_SENDER_EMAIL", default="jobdealmeida016@gmail.com")
+BREVO_API_KEY = env("BREVO_API_KEY", default="")
+
 

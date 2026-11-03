@@ -48,13 +48,15 @@ class BrevoEmailService:
             or getattr(settings, "BREVO_SENDER_NAME", self.DEFAULT_SENDER_NAME)
         )
 
-        self.sender_email: str = (
+        sender = (
             os.environ.get("BREVO_SENDER_EMAIL")
             or getattr(settings, "BREVO_SENDER_EMAIL", None)
             or os.environ.get("DEFAULT_FROM_EMAIL")
             or getattr(settings, "DEFAULT_FROM_EMAIL", None)
-            or "jobdealmeida016@gmail.com"
         )
+        if not sender or "@localhost" in str(sender) or "deliverypro.ao" in str(sender):
+            sender = "jobdealmeida016@gmail.com"
+        self.sender_email: str = sender
 
         if not self.api_key:
             logger.warning(
