@@ -45,6 +45,8 @@ except Exception as erro:
 
 # Passo 4: Execução atómica das migrações do banco de dados
 echo "--> [4/5] A aplicar migrações na base de dados PostgreSQL..."
+python manage.py makemigrations accounts --noinput || true
+python manage.py makemigrations --noinput || true
 python manage.py migrate --noinput
 
 # Passo 3: Recolha de todos os ficheiros estáticos para CDN/WhiteNoise

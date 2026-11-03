@@ -527,75 +527,85 @@ class EmailRequestOTPView(APIView):
         uma_hora_atras = agora - timedelta(hours=1)
         ip_cliente = obter_ip_cliente(request)
 
-        # Rate Limiting: Máximo de 3 pedidos de e-mail por hora para o mesmo e-mail ou mesmo IP
-        pedidos_email_hora = RegistoOTPEmail.objects.filter(
-            email=email,
-            criado_em__gte=uma_hora_atras,
-        ).count()
-
-        pedidos_ip_hora = 0
-        if ip_cliente:
-            pedidos_ip_hora = RegistoOTPEmail.objects.filter(
-                ip_origem=ip_cliente,
+        try:
+            # Rate Limiting: Máximo de 3 pedidos de e-mail por hora para o mesmo e-mail ou mesmo IP
+            pedidos_email_hora = RegistoOTPEmail.objects.filter(
+                email=email,
                 criado_em__gte=uma_hora_atras,
             ).count()
 
-        if pedidos_email_hora >= 3 or pedidos_ip_hora >= 3:
-            logger.warning(
-                "Rate limit de OTP por e-mail excedido: e-mail=%s (pedidos=%d), IP=%s (pedidos=%d)",
-                email,
-                pedidos_email_hora,
-                ip_cliente,
-                pedidos_ip_hora,
+            pedidos_ip_hora = 0
+            if ip_cliente:
+                pedidos_ip_hora = RegistoOTPEmail.objects.filter(
+                    ip_origem=ip_cliente,
+                    criado_em__gte=uma_hora_atras,
+                ).count()
+
+            if pedidos_email_hora >= 3 or pedidos_ip_hora >= 3:
+                logger.warning(
+                    "Rate limit de OTP por e-mail excedido: e-mail=%s (pedidos=%d), IP=%s (pedidos=%d)",
+                    email,
+                    pedidos_email_hora,
+                    ip_cliente,
+                    pedidos_ip_hora,
+                )
+                return Response(
+                    {
+                        "erro": "rate_limit_excedido",
+                        "detalhe": _("Limite máximo de 3 pedidos de código por hora atingido. Por favor, tente mais tarde."),
+                    },
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
+
+            # Gera código numérico seguro de 6 dígitos (000000 a 999999)
+            codigo_seguro = f"{secrets.randbelow(1_000_000):06d}"
+            expira_em = agora + timedelta(minutes=5)
+
+            # Cria ou substitui registo pendente no modelo RegistoOTPEmail
+            registo = RegistoOTPEmail(
+                email=email,
+                tentativas_restantes=5,
+                expira_em=expira_em,
+                is_verificado=False,
+                ip_origem=ip_cliente or None,
+                contagem_pedidos_hora=pedidos_email_hora + 1,
             )
+            registo.set_codigo(codigo_seguro)
+            registo.save()
+
+            # Invoca assincronamente o serviço BrevoEmailService para envio imediato em background
+            threading.Thread(
+                target=BrevoEmailService().enviar_email_otp,
+                args=(email, codigo_seguro),
+                daemon=True,
+            ).start()
+
+            logger.info(
+                "OTP por e-mail gerado para %s | IP=%s | Expira em %s",
+                email,
+                ip_cliente,
+                expira_em.isoformat(),
+            )
+
             return Response(
                 {
-                    "erro": "rate_limit_excedido",
-                    "detalhe": _("Limite máximo de 3 pedidos de código por hora atingido. Por favor, tente mais tarde."),
+                    "sucesso": True,
+                    "mensagem": _("Código de confirmação enviado para o seu e-mail com sucesso."),
+                    "email": email,
+                    "expira_em": expira_em.isoformat(),
+                    "validade_minutos": 5,
                 },
-                status=status.HTTP_429_TOO_MANY_REQUESTS,
+                status=status.HTTP_200_OK,
             )
-
-        # Gera código numérico seguro de 6 dígitos (000000 a 999999)
-        codigo_seguro = f"{secrets.randbelow(1_000_000):06d}"
-        expira_em = agora + timedelta(minutes=5)
-
-        # Cria ou substitui registo pendente no modelo RegistoOTPEmail
-        registo = RegistoOTPEmail(
-            email=email,
-            tentativas_restantes=5,
-            expira_em=expira_em,
-            is_verificado=False,
-            ip_origem=ip_cliente or None,
-            contagem_pedidos_hora=pedidos_email_hora + 1,
-        )
-        registo.set_codigo(codigo_seguro)
-        registo.save()
-
-        # Invoca assincronamente o serviço BrevoEmailService para envio imediato em background
-        threading.Thread(
-            target=BrevoEmailService().enviar_email_otp,
-            args=(email, codigo_seguro),
-            daemon=True,
-        ).start()
-
-        logger.info(
-            "OTP por e-mail gerado para %s | IP=%s | Expira em %s",
-            email,
-            ip_cliente,
-            expira_em.isoformat(),
-        )
-
-        return Response(
-            {
-                "sucesso": True,
-                "mensagem": _("Código de confirmação enviado para o seu e-mail com sucesso."),
-                "email": email,
-                "expira_em": expira_em.isoformat(),
-                "validade_minutos": 5,
-            },
-            status=status.HTTP_200_OK,
-        )
+        except Exception as e:
+            logger.error("Erro interno no processamento de pedido de OTP por e-mail: %s", e, exc_info=True)
+            return Response(
+                {
+                    "erro": "erro_interno",
+                    "detalhe": _("Não foi possível gerar o código neste momento. Tente novamente."),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 
 class EmailVerifyOTPView(APIView):

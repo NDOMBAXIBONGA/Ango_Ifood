@@ -30,12 +30,12 @@ class AppEnvironmentConfig {
   // URLs de Produção apontando para o servidor hospedado no Render
   static const String baseHttpUrl = String.fromEnvironment(
     'BASE_HTTP_URL',
-    defaultValue: 'https://planoaulas.onrender.com',
+    defaultValue: 'https://ango-ifood.onrender.com',
   );
 
   static const String baseWebsocketUrl = String.fromEnvironment(
     'BASE_WEBSOCKET_URL',
-    defaultValue: 'wss://planoaulas.onrender.com',
+    defaultValue: 'wss://ango-ifood.onrender.com',
   );
 
   /// Web Client ID do Google Cloud Console para o backend Django

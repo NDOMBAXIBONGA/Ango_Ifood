@@ -58,6 +58,7 @@ ALLOWED_HOSTS = env.list(
     default=[
         ".onrender.com",
         "onrender.com",
+        "ango-ifood.onrender.com",
         "delivery-backend-api.onrender.com",
         "localhost",
         "127.0.0.1",
@@ -68,6 +69,7 @@ CSRF_TRUSTED_ORIGINS = env.list(
     "DJANGO_CSRF_TRUSTED_ORIGINS",
     default=[
         "https://*.onrender.com",
+        "https://ango-ifood.onrender.com",
         "https://delivery-backend-api.onrender.com",
     ],
 )
