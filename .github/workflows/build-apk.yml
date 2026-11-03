@@ -65,6 +65,15 @@ jobs:
             rm -f test/widget_test.dart
           fi
 
+          # Fixa o applicationId estritamente como com.delivery.app para coincidir com a consola Google Cloud
+          if [ -f "android/app/build.gradle" ]; then
+            sed -i 's/applicationId "[^"]*"/applicationId "com.delivery.app"/g' android/app/build.gradle
+            sed -i 's/applicationId = "[^"]*"/applicationId = "com.delivery.app"/g' android/app/build.gradle
+          fi
+          if [ -f "android/app/build.gradle.kts" ]; then
+            sed -i 's/applicationId = "[^"]*"/applicationId = "com.delivery.app"/g' android/app/build.gradle.kts
+          fi
+
           # Aplica o nome oficial 'Delivery Pro', permissões e usesCleartextTraffic no AndroidManifest.xml
           if [ -f "android/app/src/main/AndroidManifest.xml" ]; then
             echo "A configurar AndroidManifest.xml (Delivery Pro, INTERNET, ACCESS_NETWORK_STATE, usesCleartextTraffic)..."

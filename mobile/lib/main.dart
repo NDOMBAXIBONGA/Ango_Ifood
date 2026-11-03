@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'core/localization/app_localizations_pt_ao.dart';
 import 'core/network/app_environment_config.dart';
@@ -115,9 +116,15 @@ class DeliveryApp extends StatelessWidget {
         locale: AppLocalizationsPtAo.locale,
         supportedLocales: const [
           AppLocalizationsPtAo.locale,
+          Locale('pt', 'PT'),
+          Locale('pt', 'BR'),
+          Locale('en', 'US'),
         ],
         localizationsDelegates: const [
           AppLocalizationsPtAoDelegate(),
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
         ],
         theme: AppThemeData.lightTheme,
         home: const SplashScreen(),
