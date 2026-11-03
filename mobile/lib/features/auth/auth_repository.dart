@@ -68,8 +68,8 @@ class AuthRepository {
   /// Endpoint 1b: `POST /api/v1/auth/email/request/` (com trailing slash obrigatória)
   /// Solicita o envio de um código OTP de 6 dígitos para o endereço de e-mail informado via Brevo.
   Future<OtpRequestResult> requestEmailOtp(String email) async {
+    final sanitizedEmail = email.trim().toLowerCase();
     try {
-      final sanitizedEmail = email.trim().toLowerCase();
       developer.log('Solicitando OTP para e-mail: $sanitizedEmail', name: 'AuthRepository');
 
       final response = await _dio.post(
@@ -108,9 +108,9 @@ class AuthRepository {
   /// Endpoint 1c: `POST /api/v1/auth/email/verify/`
   /// Valida o código OTP de 6 dígitos enviado por e-mail.
   Future<bool> verifyEmailOtp(String email, String code) async {
+    final sanitizedEmail = email.trim().toLowerCase();
+    final sanitizedCode = code.trim();
     try {
-      final sanitizedEmail = email.trim().toLowerCase();
-      final sanitizedCode = code.trim();
       developer.log('Verificando OTP para e-mail: $sanitizedEmail', name: 'AuthRepository');
 
       final response = await _dio.post(
@@ -132,8 +132,8 @@ class AuthRepository {
           final fallback = await _dio.post(
             '$_baseUrl/verify-otp/',
             data: {
-              'telemovel': email.trim().toLowerCase(),
-              'codigo_otp': code.trim(),
+              'telemovel': sanitizedEmail,
+              'codigo_otp': sanitizedCode,
             },
           );
           return fallback.statusCode == 200;
