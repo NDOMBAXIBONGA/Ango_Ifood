@@ -41,6 +41,19 @@ class AuthRepository {
               ),
             );
 
+  /// Constrói URLs de endpoints de forma segura, eliminando barras duplas ('//')
+  /// e garantindo estritamente a barra final ('/') requerida pelo Django (APPEND_SLASH = True).
+  String _buildUrl(String path) {
+    final cleanBase = _baseUrl.endsWith('/')
+        ? _baseUrl.substring(0, _baseUrl.length - 1)
+        : _baseUrl;
+    var cleanPath = path.startsWith('/') ? path.substring(1) : path;
+    if (!cleanPath.endsWith('/')) {
+      cleanPath = '$cleanPath/';
+    }
+    return '$cleanBase/$cleanPath';
+  }
+
   /// Endpoint 1: `POST /api/v1/auth/request-otp/`
   /// Solicita o envio de um código OTP de 6 dígitos para o número de telemóvel informado (RN-001, RN-002).
   Future<OtpRequestResult> requestOtp(String phone) async {
@@ -49,7 +62,7 @@ class AuthRepository {
       developer.log('Solicitando OTP para: $sanitizedPhone', name: 'AuthRepository');
 
       final response = await _dio.post(
-        '$_baseUrl/request-otp/',
+        _buildUrl('request-otp'),
         data: {'telemovel': sanitizedPhone},
       );
 
@@ -73,7 +86,7 @@ class AuthRepository {
       developer.log('Solicitando OTP para e-mail: $sanitizedEmail', name: 'AuthRepository');
 
       final response = await _dio.post(
-        '$_baseUrl/email/request/',
+        _buildUrl('email/request'),
         data: {
           'email': sanitizedEmail,
         },
@@ -86,7 +99,7 @@ class AuthRepository {
       if (e.response?.statusCode == 404) {
         try {
           final fallback = await _dio.post(
-            '$_baseUrl/request-otp/',
+            _buildUrl('request-otp'),
             data: {
               'email': sanitizedEmail,
               'telemovel': sanitizedEmail,
@@ -114,7 +127,7 @@ class AuthRepository {
       developer.log('Verificando OTP para e-mail: $sanitizedEmail', name: 'AuthRepository');
 
       final response = await _dio.post(
-        '$_baseUrl/email/verify/',
+        _buildUrl('email/verify'),
         data: {
           'email': sanitizedEmail,
           'codigo_otp': sanitizedCode,
@@ -130,7 +143,7 @@ class AuthRepository {
       if (e.response?.statusCode == 404) {
         try {
           final fallback = await _dio.post(
-            '$_baseUrl/verify-otp/',
+            _buildUrl('verify-otp'),
             data: {
               'telemovel': sanitizedEmail,
               'codigo_otp': sanitizedCode,
@@ -159,7 +172,7 @@ class AuthRepository {
       developer.log('Verificando OTP para: $sanitizedPhone', name: 'AuthRepository');
 
       final response = await _dio.post(
-        '$_baseUrl/verify-otp/',
+        _buildUrl('verify-otp'),
         data: {
           'telemovel': sanitizedPhone,
           'codigo_otp': sanitizedCode,
@@ -202,7 +215,7 @@ class AuthRepository {
       );
 
       final response = await _dio.post(
-        '$_baseUrl/complete-registration/',
+        _buildUrl('complete-registration'),
         data: {
           'telemovel': sanitizedPhone,
           'nome': name.trim(),
@@ -232,7 +245,7 @@ class AuthRepository {
     try {
       developer.log('Enviando token Google ao backend Django...', name: 'AuthRepository');
       final response = await _dio.post(
-        '$_baseUrl/google/',
+        _buildUrl('google'),
         data: {'token': token},
       );
 

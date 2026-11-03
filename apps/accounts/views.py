@@ -86,6 +86,11 @@ class RequestOTPView(APIView):
 
     @transaction.atomic
     def post(self, request: Request) -> Response:
+        # Delegação transparente para EmailRequestOTPView caso o payload contenha e-mail
+        email_param = request.data.get("email") or request.data.get("telemovel")
+        if email_param and "@" in str(email_param):
+            return EmailRequestOTPView().post(request)
+
         serializer = RequestOTPSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         telemovel: str = serializer.validated_data["telemovel"]
@@ -238,6 +243,11 @@ class VerifyOTPView(APIView):
 
     @transaction.atomic
     def post(self, request: Request) -> Response:
+        # Delegação transparente para EmailVerifyOTPView caso o payload contenha e-mail
+        email_param = request.data.get("email") or request.data.get("telemovel")
+        if email_param and "@" in str(email_param):
+            return EmailVerifyOTPView().post(request)
+
         serializer = VerifyOTPSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
