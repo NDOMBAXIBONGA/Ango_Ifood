@@ -33,6 +33,8 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     # Endpoints de Autenticação Passwordless OTP e Gestão de Conta (RN-001, RN-002, RN-003, RN-006)
     path("api/v1/auth/", include("apps.accounts.urls", namespace="accounts")),
+    path("api/auth/", include("apps.accounts.urls")),
+    path("auth/", include("apps.accounts.urls")),
     # Endpoints de Descoberta Geoespacial de Lojas (RN-025 a RN-030)
     path("api/v1/catalog/", include("apps.catalog.urls", namespace="catalog")),
     # Endpoints de Gestão do Catálogo pelo Parceiro (RN-014, RN-015, RN-016, RN-017, RN-020)
