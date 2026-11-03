@@ -60,6 +60,7 @@ def health_check(request):
             "database": {
                 "connected": db_ok,
                 "tables_count": len(db_tables),
+                "tables": db_tables,
                 "has_accounts_custom_user": "accounts_custom_user" in db_tables,
                 "has_accounts_registo_otp_email": "accounts_registo_otp_email" in db_tables,
                 "migration_output": migration_output,

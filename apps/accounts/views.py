@@ -44,12 +44,30 @@ from apps.accounts.serializers import (
 logger = logging.getLogger(__name__)
 
 
-def obter_ip_cliente(request: Request) -> str:
-    """Extrai o endereço IP real do cliente, considerando cabeçalhos de proxies reversos."""
+import ipaddress
+
+
+def obter_ip_cliente(request: Request) -> str | None:
+    """Extrai o endereço IP real do cliente, considerando cabeçalhos de proxies reversos e sanitizando o valor."""
+    ip_raw = None
     x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
     if x_forwarded_for:
-        return x_forwarded_for.split(",")[0].strip()
-    return request.META.get("REMOTE_ADDR", "").strip()
+        ip_raw = x_forwarded_for.split(",")[0].strip()
+    else:
+        ip_raw = request.META.get("REMOTE_ADDR", "").strip()
+
+    if not ip_raw:
+        return None
+
+    # Remove porta caso venha agregada em cabeçalhos (ex.: '192.168.1.1:54321')
+    if ":" in ip_raw and "." in ip_raw:
+        ip_raw = ip_raw.split(":")[0].strip()
+
+    try:
+        ipaddress.ip_address(ip_raw)
+        return ip_raw
+    except ValueError:
+        return None
 
 # Parâmetros operacionais e SLAs da regra RN-002 (Secções 6.1 e 8)
 OTP_EXPIRACAO_MINUTOS = 5
@@ -650,6 +668,7 @@ class EmailRequestOTPView(APIView):
                 {
                     "erro": "erro_interno",
                     "detalhe": _("Não foi possível gerar o código neste momento. Tente novamente."),
+                    "debug_erro": f"{type(e).__name__}: {str(e)}",
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
