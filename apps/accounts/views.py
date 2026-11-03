@@ -752,3 +752,119 @@ class EmailRegisterView(APIView):
             status=status.HTTP_201_CREATED,
         )
 
+
+class GoogleAuthView(APIView):
+    """
+    Endpoint para autenticação social com Google Sign-In (POST /api/v1/auth/google/).
+    Recebe o ID token emitido pelo Google Play Services / Google OAuth,
+    valida a assinatura e dados do utilizador diretamente junto da API Google,
+    e emite os tokens de sessão JWT (SimpleJWT).
+    """
+
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self, request: Request) -> Response:
+        token = request.data.get("token")
+        if not token or not isinstance(token, str):
+            return Response(
+                {
+                    "erro": "token_obrigatorio",
+                    "detalhe": _("O token de autenticação Google é obrigatório."),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        import requests
+
+        # Validação do ID token na API oficial de verificação de tokens da Google
+        try:
+            google_response = requests.get(
+                "https://oauth2.googleapis.com/tokeninfo",
+                params={"id_token": token.strip()},
+                timeout=10,
+            )
+        except Exception as e:
+            logger.error("Erro ao contactar API Google para validação de token: %s", e)
+            return Response(
+                {
+                    "erro": "erro_comunicacao_google",
+                    "detalhe": _("Não foi possível validar o token junto dos servidores Google."),
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        if google_response.status_code != 200:
+            logger.warning("Token Google inválido rejeitado pela API da Google: %s", google_response.text)
+            return Response(
+                {
+                    "erro": "token_invalido",
+                    "detalhe": _("Token Google inválido ou expirado."),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        payload = google_response.json()
+        email = payload.get("email")
+        if not email:
+            return Response(
+                {
+                    "erro": "email_nao_encontrado",
+                    "detalhe": _("A conta Google não forneceu um endereço de e-mail válido."),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        email_normalizado = email.strip().lower()
+        nome = payload.get("name") or payload.get("given_name") or email_normalizado.split("@")[0]
+
+        # Procura ou cria o utilizador
+        try:
+            with transaction.atomic():
+                user = CustomUser.objects.filter(email=email_normalizado).first()
+                if user:
+                    if user.estado == CustomUser.EstadoConta.SUSPENSO or not user.is_active:
+                        return Response(
+                            {
+                                "erro": "conta_suspensa",
+                                "detalhe": _("Esta conta encontra-se suspensa ou inativa. Contacte o suporte."),
+                            },
+                            status=status.HTTP_403_FORBIDDEN,
+                        )
+                else:
+                    user = CustomUser.objects.create_user(
+                        email=email_normalizado,
+                        nome=nome,
+                        estado=CustomUser.EstadoConta.ATIVO,
+                    )
+                    # Cria os consentimentos obrigatórios
+                    PerfilConsentimento.objects.get_or_create(
+                        utilizador=user,
+                        defaults={
+                            "termos_utilizacao": True,
+                            "politica_privacidade": True,
+                            "marketing": False,
+                        },
+                    )
+
+            tokens = gerar_tokens_jwt_para_utilizador(user)
+            logger.info("Autenticação Google bem-sucedida para o e-mail: %s", user.email)
+            return Response(
+                {
+                    "mensagem": _("Autenticado com sucesso via Google."),
+                    "tokens": tokens,
+                    "perfil": UtilizadorResumoSerializer(user).data,
+                },
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            logger.error("Erro ao autenticar utilizador Google: %s", e, exc_info=True)
+            return Response(
+                {
+                    "erro": "erro_interno",
+                    "detalhe": _("Erro interno ao processar a autenticação Google."),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+

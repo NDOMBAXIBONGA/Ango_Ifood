@@ -213,6 +213,31 @@ class AuthRepository {
     }
   }
 
+  /// Endpoint: `POST /api/v1/auth/google/`
+  /// Valida o ID Token do Google Sign-In junto da API Django e devolve os tokens de sessão JWT.
+  Future<AuthResult> authenticateWithGoogle(String token) async {
+    try {
+      developer.log('Enviando token Google ao backend Django...', name: 'AuthRepository');
+      final response = await _dio.post(
+        '$_baseUrl/google/',
+        data: {'token': token},
+      );
+
+      final data = response.data as Map<String, dynamic>;
+      return AuthResult.fromCompleteRegistrationJson(data);
+    } on DioException catch (e) {
+      developer.log(
+        'Erro ao validar token Google no backend: ${e.response?.statusCode} - ${e.message}',
+        name: 'AuthRepository',
+        error: e,
+      );
+      throw _handleDioException(e);
+    } catch (e) {
+      developer.log('Erro inesperado em authenticateWithGoogle: $e', name: 'AuthRepository', error: e);
+      throw AuthServerException(message: 'Erro inesperado na validação do login Google: $e');
+    }
+  }
+
   /// Mapeador centralizado de exceções HTTP do Dio para exceções de domínio tipificadas.
   AuthException _handleDioException(DioException e) {
     final response = e.response;

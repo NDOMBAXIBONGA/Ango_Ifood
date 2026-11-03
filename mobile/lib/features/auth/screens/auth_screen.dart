@@ -12,6 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import '../../../core/network/app_environment_config.dart';
 import '../auth_bloc.dart';
 import '../theme/role_theme.dart';
 import 'email_otp_verification_screen.dart';
@@ -88,23 +89,43 @@ class _AuthScreenState extends State<AuthScreen> {
 
     try {
       final GoogleSignIn googleSignIn = GoogleSignIn(
-        scopes: <String>['email', 'profile'],
+        serverClientId: AppEnvironmentConfig.googleServerClientId.isNotEmpty
+            ? AppEnvironmentConfig.googleServerClientId
+            : null,
+        scopes: <String>['email', 'profile', 'openid'],
       );
 
       final GoogleSignInAccount? account = await googleSignIn.signIn();
       if (account != null) {
         final GoogleSignInAuthentication auth = await account.authentication;
+        final String? token = auth.idToken ?? auth.accessToken;
         if (mounted) {
-          context.read<AuthBloc>().add(
-                GoogleLoginSubmitted(token: auth.idToken ?? auth.accessToken),
-              );
+          if (token != null && token.isNotEmpty) {
+            context.read<AuthBloc>().add(
+                  GoogleLoginSubmitted(token: token),
+                );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Falha ao obter token de validação da conta Google.'),
+                backgroundColor: Color(0xFFDC2626),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
         }
       }
     } catch (error) {
       if (mounted) {
+        String errorMessage = 'Falha ao autenticar com a Google: $error';
+        final errorStr = error.toString();
+        if (errorStr.contains('10') || errorStr.contains('DEVELOPER_ERROR')) {
+          errorMessage =
+              'Erro de configuração Google (Código 10): Certifique-se de que a assinatura SHA-1 e o pacote com.delivery.app estão registados na consola Google Cloud.';
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Falha ao autenticar com a Google: $error'),
+            content: Text(errorMessage),
             backgroundColor: const Color(0xFFDC2626),
             behavior: SnackBarBehavior.floating,
           ),

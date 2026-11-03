@@ -8,6 +8,7 @@ from apps.accounts.views import (
     EmailRegisterView,
     EmailRequestOTPView,
     EmailVerifyOTPView,
+    GoogleAuthView,
     RequestOTPView,
     VerifyOTPView,
 )
@@ -24,4 +25,7 @@ urlpatterns = [
     path("email/request/", EmailRequestOTPView.as_view(), name="email_request_otp"),
     path("email/verify/", EmailVerifyOTPView.as_view(), name="email_verify_otp"),
     path("email/register/", EmailRegisterView.as_view(), name="email_register"),
+
+    # Autenticação Social via Google Sign-In (ID Token)
+    path("google/", GoogleAuthView.as_view(), name="google_auth"),
 ]

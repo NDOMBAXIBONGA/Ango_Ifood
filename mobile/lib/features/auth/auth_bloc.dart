@@ -295,22 +295,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     emit(const AuthLoading(loadingMessage: 'A autenticar com a Google...'));
     try {
-      final tokens = AuthTokens(
-        accessToken: event.token!,
-        refreshToken: event.token!,
-      );
-      final user = UserProfile(
-        id: 'google-user',
-        telemovel: '',
-        nome: 'Utilizador Google',
-        email: '',
-        estado: 'ATIVO',
-      );
-      await _tokenStorage.saveTokens(
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-      );
-      emit(Authenticated(tokens: tokens, user: user));
+      final result = await _authRepository.authenticateWithGoogle(event.token!);
+      if (result.tokens != null && result.userProfile != null) {
+        await _tokenStorage.saveTokens(
+          accessToken: result.tokens!.accessToken,
+          refreshToken: result.tokens!.refreshToken,
+        );
+        emit(Authenticated(tokens: result.tokens!, user: result.userProfile!));
+      } else {
+        emit(const OtpVerificationFailure(message: 'Resposta inválida do servidor ao autenticar com a Google.'));
+      }
+    } on AuthException catch (e) {
+      emit(OtpVerificationFailure(message: e.message));
     } catch (e) {
       emit(OtpVerificationFailure(message: 'Erro ao validar login social com a Google: $e'));
     }

@@ -38,6 +38,13 @@ class AppEnvironmentConfig {
     defaultValue: 'wss://onrender.com',
   );
 
+  /// Web Client ID do Google Cloud Console para o backend Django
+  /// Configurado via `--dart-define=GOOGLE_SERVER_CLIENT_ID=...` ou padrão
+  static const String googleServerClientId = String.fromEnvironment(
+    'GOOGLE_SERVER_CLIENT_ID',
+    defaultValue: '',
+  );
+
   // Timeouts tolerantes de rede (Mercado de Angola Unitel/Movicel e Cold Start Render: 25s)
   static const Duration connectTimeout = Duration(seconds: 25);
   static const Duration receiveTimeout = Duration(seconds: 25);
