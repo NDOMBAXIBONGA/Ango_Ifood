@@ -91,7 +91,7 @@ class NetworkRetryPolicyInterceptor extends Interceptor {
 /// Configurado com timeouts tolerantes de 25 segundos para acomodar o arranque do
 /// contentor Django no plano gratuito do Render e a latência de redes móveis angolanas.
 class DioClient {
-  static const String defaultProductionUrl = 'https://onrender.com';
+  static const String defaultProductionUrl = 'https://planoaulas.onrender.com';
 
   final Dio dio;
   final ISecureTokenStorage tokenStorage;
@@ -120,7 +120,9 @@ class DioClient {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
-      validateStatus: (status) => status != null && status >= 200 && status < 300,
+      followRedirects: true,
+      maxRedirects: 5,
+      validateStatus: (status) => status != null && status >= 200 && status < 400,
     );
 
     final dioInstance = Dio(baseOptions);

@@ -105,7 +105,9 @@ jobs:
           echo "A iniciar compilação da APK Release..."
           # A flag --no-tree-shake-icons impede que o compilador elimine glifos de ícones
           # referenciados dinamicamente, evitando a renderização de caracteres em mandarim/CJK
-          flutter build apk --release --no-tree-shake-icons
+          flutter build apk --release --no-tree-shake-icons \
+            --dart-define=BASE_HTTP_URL=https://planoaulas.onrender.com \
+            --dart-define=BASE_WEBSOCKET_URL=wss://planoaulas.onrender.com
 
       # ==============================================================================
       # Passo 7: Upload do artefacto final compilado (app-release.apk)

@@ -65,24 +65,37 @@ class AuthRepository {
     }
   }
 
-  /// Endpoint 1b: `POST /api/v1/auth/request-email-otp/` (ou fallback para request-otp)
-  /// Solicita o envio de um código OTP de 6 dígitos para o endereço de e-mail informado.
+  /// Endpoint 1b: `POST /api/v1/auth/email/request/` (com trailing slash obrigatória)
+  /// Solicita o envio de um código OTP de 6 dígitos para o endereço de e-mail informado via Brevo.
   Future<OtpRequestResult> requestEmailOtp(String email) async {
     try {
       final sanitizedEmail = email.trim().toLowerCase();
       developer.log('Solicitando OTP para e-mail: $sanitizedEmail', name: 'AuthRepository');
 
       final response = await _dio.post(
-        '$_baseUrl/request-otp/',
+        '$_baseUrl/email/request/',
         data: {
           'email': sanitizedEmail,
-          'telemovel': sanitizedEmail,
         },
       );
 
       final data = response.data as Map<String, dynamic>;
       return OtpRequestResult.fromJson(data);
     } on DioException catch (e) {
+      // Fallback seguro caso o endpoint dedicado ainda não esteja ativo
+      if (e.response?.statusCode == 404) {
+        try {
+          final fallback = await _dio.post(
+            '$_baseUrl/request-otp/',
+            data: {
+              'email': sanitizedEmail,
+              'telemovel': sanitizedEmail,
+            },
+          );
+          final data = fallback.data as Map<String, dynamic>;
+          return OtpRequestResult.fromJson(data);
+        } catch (_) {}
+      }
       developer.log('Erro ao solicitar OTP por e-mail: ${e.response?.statusCode} - ${e.message}',
           name: 'AuthRepository', error: e);
       throw _handleDioException(e);

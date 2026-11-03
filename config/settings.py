@@ -81,10 +81,11 @@ if render_external_hostname:
     if render_origin not in CSRF_TRUSTED_ORIGINS:
         CSRF_TRUSTED_ORIGINS.append(render_origin)
 
-# Headers de Proxy Reverso (Nginx / Traefik / AWS ALB)
+# Headers de Proxy Reverso (Nginx / Traefik / AWS ALB / Render Cloud)
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
 USE_X_FORWARDED_PORT = True
+APPEND_SLASH = True
 
 if not DEBUG:
     SECURE_SSL_REDIRECT = env.bool("DJANGO_SECURE_SSL_REDIRECT")

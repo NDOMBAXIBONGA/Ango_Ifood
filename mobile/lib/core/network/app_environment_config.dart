@@ -30,12 +30,12 @@ class AppEnvironmentConfig {
   // URLs de Produção apontando para o servidor hospedado no Render
   static const String baseHttpUrl = String.fromEnvironment(
     'BASE_HTTP_URL',
-    defaultValue: 'https://onrender.com',
+    defaultValue: 'https://planoaulas.onrender.com',
   );
 
   static const String baseWebsocketUrl = String.fromEnvironment(
     'BASE_WEBSOCKET_URL',
-    defaultValue: 'wss://onrender.com',
+    defaultValue: 'wss://planoaulas.onrender.com',
   );
 
   /// Web Client ID do Google Cloud Console para o backend Django
@@ -283,7 +283,9 @@ Dio createSecureDioClient({
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     },
-    validateStatus: (status) => status != null && status >= 200 && status < 300,
+    followRedirects: true,
+    maxRedirects: 5,
+    validateStatus: (status) => status != null && status >= 200 && status < 400,
   );
 
   final dio = Dio(options);
