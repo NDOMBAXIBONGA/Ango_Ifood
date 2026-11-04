@@ -27,7 +27,7 @@ class CustomerProfileScreen extends StatelessWidget {
           String userEmail = '';
           String userPhone = '';
 
-          if (authState is AuthAuthenticated) {
+          if (authState is Authenticated) {
             userName = authState.user.nome.isNotEmpty
                 ? authState.user.nome
                 : 'Cliente';
@@ -285,3 +285,4 @@ class CustomerProfileScreen extends StatelessWidget {
     );
   }
 }
+

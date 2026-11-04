@@ -31,7 +31,6 @@ class _CustomerOrdersHistoryScreenState
   final SecureTokenStorage _tokenStorage = SecureTokenStorage();
 
   bool _isLoading = true;
-  String? _errorMessage;
   List<CustomerOrderSummaryModel> _orders = [];
 
   @override
@@ -50,7 +49,6 @@ class _CustomerOrdersHistoryScreenState
   Future<void> _loadOrders() async {
     setState(() {
       _isLoading = true;
-      _errorMessage = null;
     });
 
     try {
@@ -93,7 +91,6 @@ class _CustomerOrdersHistoryScreenState
         setState(() {
           _orders = [];
           _isLoading = false;
-          _errorMessage = null; // Mostra empty state limpo
         });
       }
     }
@@ -341,3 +338,4 @@ class _CustomerOrdersHistoryScreenState
     );
   }
 }
+

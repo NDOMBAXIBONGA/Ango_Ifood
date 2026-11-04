@@ -62,3 +62,4 @@ class CustomerOrderSummaryModel extends Equatable {
         dataCriacao,
       ];
 }
+

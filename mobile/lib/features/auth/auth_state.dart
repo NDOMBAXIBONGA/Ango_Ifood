@@ -163,4 +163,5 @@ class OtpVerifiedSuccess extends AuthState {
 /// Alias para suporte semântico em interfaces
 typedef ConnectionFailure = AuthNetworkFailure;
 typedef AuthNetworkError = AuthNetworkFailure;
+typedef AuthAuthenticated = Authenticated;
 

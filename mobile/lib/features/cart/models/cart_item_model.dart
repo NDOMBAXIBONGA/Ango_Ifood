@@ -64,3 +64,4 @@ class CartItemModel extends Equatable {
         notas,
       ];
 }
+

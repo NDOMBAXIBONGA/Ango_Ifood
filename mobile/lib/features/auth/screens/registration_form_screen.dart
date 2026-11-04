@@ -5,7 +5,7 @@
 /// Reage com `BlocConsumer` ao `AuthBloc`.
 
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../auth_bloc.dart';
 import '../theme/role_theme.dart';
