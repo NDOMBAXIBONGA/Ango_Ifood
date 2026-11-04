@@ -11,6 +11,24 @@ enum PlatformRole {
 }
 
 extension PlatformRoleExtension on PlatformRole {
+  String get tipoUtilizador {
+    switch (this) {
+      case PlatformRole.cliente:
+        return 'CLIENTE';
+      case PlatformRole.parceiro:
+        return 'PARCEIRO';
+      case PlatformRole.estafeta:
+        return 'ESTAFETA';
+    }
+  }
+
+  static PlatformRole fromTipoUtilizador(String? tipo) {
+    final t = (tipo ?? 'CLIENTE').toUpperCase();
+    if (t == 'PARCEIRO') return PlatformRole.parceiro;
+    if (t == 'ESTAFETA') return PlatformRole.estafeta;
+    return PlatformRole.cliente;
+  }
+
   String get displayName {
     switch (this) {
       case PlatformRole.cliente:

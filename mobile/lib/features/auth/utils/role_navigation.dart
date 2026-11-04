@@ -19,10 +19,12 @@ Widget getHomeScreenForRole(PlatformRole role) {
   }
 }
 
-/// Route Guard RBAC: Valida se o papel oficial da conta do utilizador confere
-/// acesso à área pretendida. Se um utilizador com conta 'CLIENTE' tentar abrir áreas
-/// de Parceiro ou Estafeta, o acesso é bloqueado e o utilizador é redirecionado
-/// com segurança para o CustomerMainNavigationShell.
+/// Route Guard RBAC: Garante isolamento estrito de papéis na plataforma.
+/// Cada conta criada para "Comprar" (Cliente), "Negócio" (Parceiro) ou "Entregar" (Estafeta)
+/// é exclusiva para essa atividade no sistema e navega estritamente para a sua área correspondente:
+/// - CLIENTE -> CustomerMainNavigationShell
+/// - PARCEIRO -> PartnerMainNavigationShell
+/// - ESTAFETA -> CourierMainNavigationShell
 Widget getAuthorizedHomeScreen({
   required UserProfile user,
   required PlatformRole requestedRole,
@@ -30,8 +32,53 @@ Widget getAuthorizedHomeScreen({
 }) {
   final userRole = user.tipoUtilizador.toUpperCase();
 
-  // Caso 1: Utilizador é CLIENTE e tentou abrir Parceiro ou Estafeta
-  if (userRole == 'CLIENTE' && requestedRole != PlatformRole.cliente) {
+  // 1. Conta oficial de PARCEIRO (Tenho um Negócio)
+  if (userRole == 'PARCEIRO') {
+    if (requestedRole != PlatformRole.parceiro) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            const SnackBar(
+              behavior: SnackBarBehavior.floating,
+              content: Text(
+                'A sua conta é de Parceiro Comercial. Redirecionado para o Portal do Restaurante.',
+              ),
+            ),
+          );
+      });
+    }
+    RoleThemeManager.instance.setRole(PlatformRole.parceiro);
+    return const PartnerMainNavigationShell();
+  }
+
+  // 2. Conta oficial de ESTAFETA (Quero Entregar)
+  if (userRole == 'ESTAFETA') {
+    if (requestedRole != PlatformRole.estafeta) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            const SnackBar(
+              behavior: SnackBarBehavior.floating,
+              content: Text(
+                'A sua conta é de Estafeta. Redirecionado para a Central de Entregas.',
+              ),
+            ),
+          );
+      });
+    }
+    RoleThemeManager.instance.setRole(PlatformRole.estafeta);
+    return const CourierMainNavigationShell();
+  }
+
+  // 3. Administrador de Plataforma
+  if (userRole == 'ADMIN') {
+    return getHomeScreenForRole(requestedRole);
+  }
+
+  // 4. Conta oficial de CLIENTE (Quero Comprar)
+  if (requestedRole != PlatformRole.cliente) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
@@ -39,55 +86,14 @@ Widget getAuthorizedHomeScreen({
           const SnackBar(
             behavior: SnackBarBehavior.floating,
             content: Text(
-              'A sua conta está registada como Cliente. Redirecionado para a área de compras.',
+              'A sua conta é de Cliente. Redirecionado para a área de compras.',
             ),
           ),
         );
     });
-    return const CustomerMainNavigationShell();
   }
-
-  // Caso 2: Área de Parceiro solicitada
-  if (requestedRole == PlatformRole.parceiro) {
-    if (userRole != 'PARCEIRO' && userRole != 'ADMIN') {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            const SnackBar(
-              behavior: SnackBarBehavior.floating,
-              content: Text(
-                'Acesso restrito: Esta conta não possui perfil de parceiro comercial ativo.',
-              ),
-            ),
-          );
-      });
-      return const CustomerMainNavigationShell();
-    }
-    return const PartnerMainNavigationShell();
-  }
-
-  // Caso 3: Área de Estafeta solicitada
-  if (requestedRole == PlatformRole.estafeta) {
-    if (userRole != 'ESTAFETA' && userRole != 'ADMIN') {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            const SnackBar(
-              behavior: SnackBarBehavior.floating,
-              content: Text(
-                'Acesso restrito: Esta conta não possui registo aprovado de estafeta.',
-              ),
-            ),
-          );
-      });
-      return const CustomerMainNavigationShell();
-    }
-    return const CourierMainNavigationShell();
-  }
-
-  return getHomeScreenForRole(requestedRole);
+  RoleThemeManager.instance.setRole(PlatformRole.cliente);
+  return const CustomerMainNavigationShell();
 }
 
 

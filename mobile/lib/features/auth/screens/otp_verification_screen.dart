@@ -10,6 +10,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../auth_bloc.dart';
 import '../theme/role_theme.dart';
+import '../utils/role_navigation.dart';
 import 'registration_form_screen.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
@@ -167,8 +168,17 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
             ),
           );
 
-          // Navega para o destino correspondente ao papel (pop até a raiz)
-          Navigator.of(context).popUntil((route) => route.isFirst);
+          // Redireciona com isolamento estrito de papéis (RBAC)
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (ctx) => getAuthorizedHomeScreen(
+                user: state.user,
+                requestedRole: widget.selectedRole,
+                context: ctx,
+              ),
+            ),
+            (route) => false,
+          );
         } else if (state is RegistrationRequired) {
           // Utilizador validou o telemóvel mas ainda não preencheu dados de perfil (RN-003)
           Navigator.of(context).pushReplacement(

@@ -46,6 +46,7 @@ class RegistrationFormSubmitted extends AuthEvent {
   final String email;
   final DateTime birthDate;
   final String? password;
+  final String tipoUtilizador;
   final bool termsAccepted;
   final bool privacyAccepted;
   final bool marketingAccepted;
@@ -56,6 +57,7 @@ class RegistrationFormSubmitted extends AuthEvent {
     required this.email,
     required this.birthDate,
     this.password,
+    this.tipoUtilizador = 'CLIENTE',
     this.termsAccepted = true,
     this.privacyAccepted = true,
     this.marketingAccepted = false,
@@ -68,6 +70,7 @@ class RegistrationFormSubmitted extends AuthEvent {
         email,
         birthDate,
         password,
+        tipoUtilizador,
         termsAccepted,
         privacyAccepted,
         marketingAccepted,

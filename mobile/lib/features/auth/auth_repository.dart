@@ -200,6 +200,7 @@ class AuthRepository {
     required String email,
     required DateTime birthDate,
     String? password,
+    String tipoUtilizador = 'CLIENTE',
     bool termsAccepted = true,
     bool privacyAccepted = true,
     bool marketingAccepted = false,
@@ -212,7 +213,7 @@ class AuthRepository {
           '${birthDate.year.toString().padLeft(4, '0')}-${birthDate.month.toString().padLeft(2, '0')}-${birthDate.day.toString().padLeft(2, '0')}';
 
       developer.log(
-        'Completando registo: phone=$sanitizedPhone | email=$sanitizedEmail | name=$name | birth=$formattedBirthDate',
+        'Completando registo: phone=$sanitizedPhone | email=$sanitizedEmail | name=$name | birth=$formattedBirthDate | tipo=$tipoUtilizador',
         name: 'AuthRepository',
       );
 
@@ -220,6 +221,7 @@ class AuthRepository {
         'nome': name.trim(),
         'email': sanitizedEmail,
         'data_nascimento': formattedBirthDate,
+        'tipo_utilizador': tipoUtilizador,
         'termos_utilizacao': termsAccepted,
         'politica_privacidade': privacyAccepted,
         'marketing': marketingAccepted,

@@ -184,6 +184,7 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
               email: _emailController.text.trim(),
               birthDate: _selectedBirthDate!,
               password: password.isNotEmpty ? password : null,
+              tipoUtilizador: widget.selectedRole.tipoUtilizador,
               termsAccepted: _termsAccepted,
               privacyAccepted: _privacyAccepted,
               marketingAccepted: _marketingAccepted,

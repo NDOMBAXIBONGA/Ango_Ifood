@@ -202,7 +202,11 @@ class _EmailOtpVerificationScreenState extends State<EmailOtpVerificationScreen>
           if (state is Authenticated) {
             Navigator.of(context).pushAndRemoveUntil(
               MaterialPageRoute(
-                builder: (_) => getHomeScreenForRole(widget.selectedRole),
+                builder: (ctx) => getAuthorizedHomeScreen(
+                  user: state.user,
+                  requestedRole: widget.selectedRole,
+                  context: ctx,
+                ),
               ),
               (route) => false,
             );
