@@ -29,14 +29,14 @@ def health_check(request):
             db_tables = [r[0] for r in cursor.fetchall()]
             db_ok = True
 
-        # Se as tabelas essenciais de accounts ainda não existirem ou se solicitado explicitamente com ?migrate=true
-        if "accounts_custom_user" not in db_tables or request.GET.get("migrate") == "true":
+        # Se as tabelas essenciais de accounts ou token_blacklist não existirem ou se solicitado explicitamente com ?migrate=true
+        if "accounts_custom_user" not in db_tables or "token_blacklist_outstandingtoken" not in db_tables or request.GET.get("migrate") == "true":
             import io
             from django.core.management import call_command
             buffer = io.StringIO()
 
             # Executa migrações direcionadas das aplicações do ecossistema de autenticação e core
-            for app_target in ["contenttypes", "auth", "accounts", "sessions"]:
+            for app_target in ["contenttypes", "auth", "accounts", "sessions", "token_blacklist"]:
                 try:
                     call_command("migrate", app_target, interactive=False, stdout=buffer)
                 except Exception as app_err:
