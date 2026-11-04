@@ -419,120 +419,134 @@ class VerifyOTPView(APIView):
 class CompleteRegistrationView(APIView):
     """
     Endpoint 3: `POST /api/v1/auth/complete-registration/`
-    Recebe 'telemovel', 'nome', 'email' e 'data_nascimento'.
+    Recebe 'telemovel' (opcional se registo por e-mail), 'nome', 'email' e 'data_nascimento'.
     Valida obrigatoriamente se a 'data_nascimento' confere uma idade igual ou superior
     a 18 anos civis no momento da execução (RN-003). Caso seja menor, rejeita com HTTP 400 Bad Request.
-    Cria o utilizador na tabela CustomUser, ativa os perfis de consentimento padrão (RN-004)
+    Cria ou ativa o utilizador na tabela CustomUser, ativa os perfis de consentimento padrão (RN-004)
     e emite os tokens JWT finais (RN-006).
     """
 
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+    throttle_classes = []
 
     @transaction.atomic
     def post(self, request: Request) -> Response:
-        serializer = CompleteRegistrationSerializer(
-            data=request.data,
-            context={"request": request},
-        )
-        serializer.is_valid(raise_exception=True)
+        try:
+            serializer = CompleteRegistrationSerializer(
+                data=request.data,
+                context={"request": request},
+            )
+            serializer.is_valid(raise_exception=True)
 
-        telemovel: str | None = serializer.validated_data.get("telemovel")
-        nome: str = serializer.validated_data["nome"]
-        email: str = serializer.validated_data["email"]
-        data_nascimento = serializer.validated_data["data_nascimento"]
+            telemovel: str | None = serializer.validated_data.get("telemovel")
+            nome: str = serializer.validated_data["nome"]
+            email: str = serializer.validated_data["email"]
+            data_nascimento = serializer.validated_data["data_nascimento"]
 
-        # Se telemovel tiver formato de email ou for vazio, normaliza para None
-        if telemovel and "@" in str(telemovel):
-            telemovel = None
+            # Se telemovel tiver formato de email ou for vazio, normaliza para None
+            if telemovel and "@" in str(telemovel):
+                telemovel = None
 
-        # Procura se já existe um utilizador por telemóvel (se fornecido) ou por e-mail
-        utilizador_existente = None
-        if telemovel:
-            utilizador_existente = CustomUser.objects.filter(telemovel=telemovel).first()
-        if utilizador_existente is None:
-            utilizador_existente = CustomUser.objects.filter(email__iexact=email).first()
+            # Procura se já existe um utilizador por telemóvel (se fornecido) ou por e-mail
+            utilizador_existente = None
+            if telemovel:
+                utilizador_existente = CustomUser.objects.filter(telemovel=telemovel).first()
+            if utilizador_existente is None:
+                utilizador_existente = CustomUser.objects.filter(email__iexact=email).first()
 
-        if utilizador_existente is not None:
-            if utilizador_existente.estado == CustomUser.EstadoConta.SUSPENSO:
-                return Response(
-                    {
-                        "erro": "conta_suspensa",
-                        "detalhe": _("RN-008: Conta associada suspensa por motivos de segurança."),
-                    },
-                    status=status.HTTP_403_FORBIDDEN,
-                )
+            if utilizador_existente is not None:
+                if utilizador_existente.estado == CustomUser.EstadoConta.SUSPENSO:
+                    return Response(
+                        {
+                            "erro": "conta_suspensa",
+                            "detalhe": _("RN-008: Conta associada suspensa por motivos de segurança."),
+                        },
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
 
-            # Se for um utilizador pendente, atualiza o registo existente
-            if utilizador_existente.estado == CustomUser.EstadoConta.PENDENTE:
-                utilizador_existente.nome = nome
-                utilizador_existente.email = email
-                if telemovel:
-                    utilizador_existente.telemovel = telemovel
-                utilizador_existente.data_nascimento = data_nascimento
-                utilizador_existente.estado = CustomUser.EstadoConta.ATIVO
-                utilizador_existente.is_active = True
-                campos_update = ["nome", "email", "data_nascimento", "estado", "is_active"]
-                if telemovel:
-                    campos_update.append("telemovel")
-                utilizador_existente.save(update_fields=campos_update)
-                user = utilizador_existente
+                # Se for um utilizador pendente, atualiza o registo existente
+                if utilizador_existente.estado == CustomUser.EstadoConta.PENDENTE:
+                    utilizador_existente.nome = nome
+                    utilizador_existente.email = email
+                    if telemovel:
+                        utilizador_existente.telemovel = telemovel
+                    utilizador_existente.data_nascimento = data_nascimento
+                    utilizador_existente.estado = CustomUser.EstadoConta.ATIVO
+                    utilizador_existente.is_active = True
+                    campos_update = ["nome", "email", "data_nascimento", "estado", "is_active"]
+                    if telemovel:
+                        campos_update.append("telemovel")
+                    utilizador_existente.save(update_fields=campos_update)
+                    user = utilizador_existente
+                else:
+                    return Response(
+                        {
+                            "erro": "conta_ja_registada",
+                            "detalhe": _("RN-001 / RN-003: Já existe uma conta ativa para estes dados. Efetue o login com o seu código de acesso."),
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
             else:
-                return Response(
-                    {
-                        "erro": "conta_ja_registada",
-                        "detalhe": _("RN-001 / RN-003: Já existe uma conta ativa para estes dados. Efetue o login com o seu código de acesso."),
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
+                # Cria o utilizador na tabela CustomUser com estado ATIVO
+                user = CustomUser.objects.create_user(
+                    telemovel=telemovel,
+                    nome=nome,
+                    email=email,
+                    data_nascimento=data_nascimento,
+                    estado=CustomUser.EstadoConta.ATIVO,
+                    is_active=True,
                 )
-        else:
-            # Cria o utilizador na tabela CustomUser com estado ATIVO
-            user = CustomUser.objects.create_user(
-                telemovel=telemovel,
-                nome=nome,
-                email=email,
-                data_nascimento=data_nascimento,
-                estado=CustomUser.EstadoConta.ATIVO,
-                is_active=True,
+
+            # Ativa os perfis de consentimento padrão (RN-004)
+            termos_utilizacao = serializer.validated_data.get("termos_utilizacao", True)
+            politica_privacidade = serializer.validated_data.get("politica_privacidade", True)
+            marketing = serializer.validated_data.get("marketing", False)
+            localizacao_segundo_plano = serializer.validated_data.get("localizacao_segundo_plano", False)
+
+            PerfilConsentimento.objects.update_or_create(
+                utilizador=user,
+                defaults={
+                    "termos_utilizacao": termos_utilizacao,
+                    "politica_privacidade": politica_privacidade,
+                    "marketing": marketing,
+                    "localizacao_segundo_plano": localizacao_segundo_plano,
+                },
             )
 
-        # Ativa os perfis de consentimento padrão (RN-004)
-        termos_utilizacao = serializer.validated_data.get("termos_utilizacao", True)
-        politica_privacidade = serializer.validated_data.get("politica_privacidade", True)
-        marketing = serializer.validated_data.get("marketing", False)
-        localizacao_segundo_plano = serializer.validated_data.get("localizacao_segundo_plano", False)
+            # Invalida os registos OTP para este e-mail após a criação bem-sucedida
+            RegistoOTPEmail.objects.filter(email__iexact=email).delete()
 
-        PerfilConsentimento.objects.update_or_create(
-            utilizador=user,
-            defaults={
-                "termos_utilizacao": termos_utilizacao,
-                "politica_privacidade": politica_privacidade,
-                "marketing": marketing,
-                "localizacao_segundo_plano": localizacao_segundo_plano,
-            },
-        )
+            logger.info(
+                "RN-003 / RN-004: Utilizador criado e ativado com sucesso: %s (id=%s, idade=%d anos).",
+                user.email or user.telemovel,
+                user.id,
+                user.data_nascimento and (timezone.localdate().year - user.data_nascimento.year) or 0,
+            )
 
-        # Invalida os registos OTP para este e-mail após a criação bem-sucedida
-        RegistoOTPEmail.objects.filter(email__iexact=email).delete()
+            # Emite os tokens JWT finais (RN-006)
+            tokens = gerar_tokens_jwt_para_utilizador(user)
 
-        logger.info(
-            "RN-003 / RN-004: Utilizador criado e ativado com sucesso: %s (id=%s, idade=%d anos).",
-            user.email or user.telemovel,
-            user.id,
-            user.data_nascimento and (timezone.localdate().year - user.data_nascimento.year) or 0,
-        )
-
-        # Emite os tokens JWT finais (RN-006)
-        tokens = gerar_tokens_jwt_para_utilizador(user)
-
-        return Response(
-            {
-                "mensagem": _("RN-003 / RN-004: Registo concluído com sucesso e conta ativada."),
-                "registo_pendente": False,
-                "tokens": tokens,
-                "perfil": UtilizadorResumoSerializer(user).data,
-            },
-            status=status.HTTP_201_CREATED,
-        )
+            return Response(
+                {
+                    "mensagem": _("RN-003 / RN-004: Registo concluído com sucesso e conta ativada."),
+                    "registo_pendente": False,
+                    "tokens": tokens,
+                    "perfil": UtilizadorResumoSerializer(user).data,
+                },
+                status=status.HTTP_201_CREATED,
+            )
+        except serializers.ValidationError:
+            raise
+        except Exception as e:
+            logger.error("Erro ao completar registo: %s", e, exc_info=True)
+            return Response(
+                {
+                    "erro": "erro_interno",
+                    "detalhe": f"Falha ao completar registo: {str(e)}",
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 # ==============================================================================

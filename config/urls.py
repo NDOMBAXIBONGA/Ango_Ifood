@@ -84,6 +84,7 @@ def health_check(request):
     return JsonResponse(
         {
             "status": "healthy" if db_ok else "degraded",
+            "version": "v1.0.4-auth-fix",
             "service": "delivery-backend-api",
             "database": {
                 "connected": db_ok,
