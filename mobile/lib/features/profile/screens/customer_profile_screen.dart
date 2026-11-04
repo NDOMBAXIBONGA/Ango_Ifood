@@ -31,8 +31,8 @@ class CustomerProfileScreen extends StatelessWidget {
             userName = authState.user.nome.isNotEmpty
                 ? authState.user.nome
                 : 'Cliente';
-            userEmail = authState.user.email ?? '';
-            userPhone = authState.user.telemovel ?? '';
+            userEmail = authState.user.email;
+            userPhone = authState.user.telemovel;
           }
 
           return ListView(

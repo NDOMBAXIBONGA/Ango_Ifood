@@ -35,8 +35,8 @@ class CourierProfileScreen extends StatelessWidget {
             driverName = authState.user.nome.isNotEmpty
                 ? authState.user.nome
                 : 'Estafeta Condutor';
-            driverEmail = authState.user.email ?? '';
-            driverPhone = authState.user.telemovel ?? '';
+            driverEmail = authState.user.email;
+            driverPhone = authState.user.telemovel;
           }
 
           return ListView(

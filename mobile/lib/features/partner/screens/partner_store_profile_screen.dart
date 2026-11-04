@@ -6,6 +6,7 @@ import '../../auth/auth_event.dart';
 import '../../auth/auth_state.dart';
 import '../../splash/screens/splash_screen.dart';
 import '../bloc/partner_bloc.dart';
+import '../models/partner_models.dart';
 
 /// Ecrã de Perfil da Loja, Métricas Financeiras e Definições do Parceiro (`PartnerStoreProfileScreen`).
 class PartnerStoreProfileScreen extends StatelessWidget {
@@ -29,12 +30,13 @@ class PartnerStoreProfileScreen extends StatelessWidget {
             merchantName = authState.user.nome.isNotEmpty
                 ? authState.user.nome
                 : 'Restaurante Parceiro';
-            merchantEmail = authState.user.email ?? '';
+            merchantEmail = authState.user.email;
           }
 
           return BlocBuilder<PartnerBloc, PartnerState>(
             builder: (context, partnerState) {
-              final store = partnerState is PartnerLoaded ? partnerState.store : null;
+              final store = partnerState.storeStatus;
+              final isAberta = store?.status == StoreOperationalStatus.disponivel;
 
               return ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
@@ -76,15 +78,15 @@ class PartnerStoreProfileScreen extends StatelessWidget {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: store?.isAberta == true
+                            color: isAberta
                                 ? Colors.green.shade100
                                 : Colors.amber.shade100,
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
-                            store?.isAberta == true ? 'Loja Aberta' : 'Loja Pausada / Fechada',
+                            isAberta ? 'Loja Aberta' : 'Loja Pausada / Fechada',
                             style: theme.textTheme.labelMedium?.copyWith(
-                              color: store?.isAberta == true
+                              color: isAberta
                                   ? Colors.green.shade900
                                   : Colors.amber.shade900,
                               fontWeight: FontWeight.bold,
@@ -105,7 +107,7 @@ class PartnerStoreProfileScreen extends StatelessWidget {
                         child: _buildMetricCard(
                           context,
                           title: 'Vendas Hoje',
-                          value: CurrencyFormatter.formatKwanza(12500000), // 125.000,00 Kz
+                          value: _formatKwanza(12500000), // 125.000,00 Kz
                           icon: Icons.payments_rounded,
                           color: Colors.green,
                         ),
@@ -313,6 +315,16 @@ class PartnerStoreProfileScreen extends StatelessWidget {
           content: Text('$feature estará disponível na próxima atualização do portal.'),
         ),
       );
+  }
+
+  static String _formatKwanza(int centimos) {
+    final valor = centimos / 100;
+    final partes = valor.toStringAsFixed(2).split('.');
+    final inteira = partes[0].replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (m) => '${m[1]}.',
+    );
+    return '$inteira,${partes[1]} Kz';
   }
 
   void _showLogoutConfirmDialog(BuildContext context) {

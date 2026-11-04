@@ -36,6 +36,36 @@ class CourierPinVerificationSheet extends StatefulWidget {
     this.onDeliveryCompleted,
   });
 
+  /// Exibe o modal bottom sheet de verificação presencial de PIN e tolerância (RN-095, RN-096).
+  static Future<void> show(
+    BuildContext context, {
+    required String pedidoId,
+    required String nomeCliente,
+    required String moradaClienteTexto,
+    int tempoToleranciaSegundos = 420,
+    String apiBaseUrl = 'http://10.0.2.2:8000',
+    String jwtAccessToken = '',
+    double? currentLatitude,
+    double? currentLongitude,
+    VoidCallback? onSucessoEntrega,
+  }) {
+    return showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => CourierPinVerificationSheet(
+        pedidoId: pedidoId,
+        clienteNome: nomeCliente,
+        moradaTexto: moradaClienteTexto,
+        apiBaseUrl: apiBaseUrl,
+        jwtAccessToken: jwtAccessToken,
+        currentLatitude: currentLatitude,
+        currentLongitude: currentLongitude,
+        onDeliveryCompleted: onSucessoEntrega,
+      ),
+    );
+  }
+
   @override
   State<CourierPinVerificationSheet> createState() => _CourierPinVerificationSheetState();
 }
