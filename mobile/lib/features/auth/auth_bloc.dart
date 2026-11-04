@@ -35,6 +35,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<SendEmailOtpEvent>(_onSendEmailOtpEvent);
     on<VerifyEmailOtpSubmitted>(_onVerifyEmailOtpSubmitted);
     on<GoogleLoginSubmitted>(_onGoogleLoginSubmitted);
+    on<LoginWithPasswordRequested>(_onLoginWithPasswordRequested);
   }
 
   void _onRetryAuthRequested(
@@ -404,6 +405,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         name: event.name,
         email: event.email,
         birthDate: event.birthDate,
+        password: event.password,
         termsAccepted: event.termsAccepted,
         privacyAccepted: event.privacyAccepted,
         marketingAccepted: event.marketingAccepted,
@@ -470,6 +472,63 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       developer.log('Erro ao limpar tokens no logout: $e', name: 'AuthBloc', error: e);
     }
     emit(const Unauthenticated(message: 'Sessão encerrada com sucesso.'));
+  }
+
+  /// Manipula a autenticação direta por e-mail e palavra-passe.
+  Future<void> _onLoginWithPasswordRequested(
+    LoginWithPasswordRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(const AuthLoading(loadingMessage: 'A verificar credenciais...'));
+    try {
+      final result = await _authRepository.loginWithPassword(
+        email: event.email,
+        password: event.password,
+      );
+
+      if (result.tokens != null && result.userProfile != null) {
+        await _tokenStorage.saveTokens(
+          accessToken: result.tokens!.accessToken,
+          refreshToken: result.tokens!.refreshToken,
+        );
+
+        emit(
+          Authenticated(
+            tokens: result.tokens!,
+            user: result.userProfile!,
+          ),
+        );
+      } else {
+        emit(
+          const OtpVerificationFailure(
+            message: 'Falha ao autenticar utilizador.',
+          ),
+        );
+      }
+    } on DioException catch (e) {
+      final isNetwork = e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.sendTimeout ||
+          e.type == DioExceptionType.connectionError;
+
+      if (isNetwork) {
+        emit(
+          const AuthNetworkFailure(
+            message: 'Falha Temporária de Conexão. Verifique a sua ligação com a internet e tente novamente.',
+          ),
+        );
+      } else {
+        final erroMsg = e.response?.data?['detalhe']?.toString() ??
+            e.response?.data?['detail']?.toString() ??
+            e.response?.data?['erro']?.toString() ??
+            'Credenciais inválidas. Verifique o seu e-mail e palavra-passe.';
+        emit(OtpVerificationFailure(message: erroMsg));
+      }
+    } on AuthException catch (e) {
+      emit(OtpVerificationFailure(message: e.message));
+    } catch (e) {
+      emit(OtpVerificationFailure(message: 'Erro inesperado: $e'));
+    }
   }
 }
 

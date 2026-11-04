@@ -15,6 +15,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import '../../../core/network/app_environment_config.dart';
 import '../auth_bloc.dart';
 import '../theme/role_theme.dart';
+import '../utils/role_navigation.dart';
 import 'email_otp_verification_screen.dart';
 import 'otp_verification_screen.dart';
 
@@ -35,11 +36,14 @@ class AuthScreen extends StatefulWidget {
 
 class _AuthScreenState extends State<AuthScreen> {
   final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
   final FocusNode _emailFocusNode = FocusNode();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
   bool _isEmailValid = false;
   bool _isGoogleSigningIn = false;
+  bool _usePasswordMode = false;
+  bool _obscurePassword = true;
 
   // Expressão regular padrão RFC 5322 para validação de formato de e-mail
   static final RegExp _emailRegex = RegExp(
@@ -56,6 +60,7 @@ class _AuthScreenState extends State<AuthScreen> {
   void dispose() {
     _emailController.removeListener(_validateEmail);
     _emailController.dispose();
+    _passwordController.dispose();
     _emailFocusNode.dispose();
     super.dispose();
   }
@@ -68,6 +73,38 @@ class _AuthScreenState extends State<AuthScreen> {
         _isEmailValid = isValid;
       });
     }
+  }
+
+  void _submitPasswordLogin() {
+    final email = _emailController.text.trim().toLowerCase();
+    final password = _passwordController.text;
+    if (email.isEmpty || !_emailRegex.hasMatch(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor, insira um endereço de e-mail válido.'),
+          backgroundColor: Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    if (password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor, introduza a sua palavra-passe.'),
+          backgroundColor: Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    context.read<AuthBloc>().add(
+          LoginWithPasswordRequested(
+            email: email,
+            password: password,
+          ),
+        );
   }
 
   void _submitEmail() {
@@ -183,6 +220,12 @@ class _AuthScreenState extends State<AuthScreen> {
               behavior: SnackBarBehavior.floating,
             ),
           );
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (_) => getHomeScreenForRole(widget.selectedRole),
+            ),
+            (route) => false,
+          );
         }
       },
       // ========================================================================
@@ -267,31 +310,108 @@ class _AuthScreenState extends State<AuthScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 8),
+
+                        // Seletor de Modo: Código OTP vs Entrar com Senha
+                        Container(
+                          padding: const EdgeInsets.all(4.0),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(14.0),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: InkWell(
+                                  onTap: () => setState(() => _usePasswordMode = false),
+                                  borderRadius: BorderRadius.circular(12.0),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 10.0),
+                                    decoration: BoxDecoration(
+                                      color: !_usePasswordMode ? Colors.white : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(12.0),
+                                      boxShadow: !_usePasswordMode
+                                          ? [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 2))]
+                                          : null,
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.mark_email_read_outlined, size: 16.0, color: !_usePasswordMode ? activeColor : const Color(0xFF64748B)),
+                                        const SizedBox(width: 6.0),
+                                        Text(
+                                          'Código OTP',
+                                          style: TextStyle(
+                                            fontSize: 13.0,
+                                            fontWeight: FontWeight.w700,
+                                            color: !_usePasswordMode ? activeColor : const Color(0xFF64748B),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: InkWell(
+                                  onTap: () => setState(() => _usePasswordMode = true),
+                                  borderRadius: BorderRadius.circular(12.0),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 10.0),
+                                    decoration: BoxDecoration(
+                                      color: _usePasswordMode ? Colors.white : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(12.0),
+                                      boxShadow: _usePasswordMode
+                                          ? [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 2))]
+                                          : null,
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.key_outlined, size: 16.0, color: _usePasswordMode ? activeColor : const Color(0xFF64748B)),
+                                        const SizedBox(width: 6.0),
+                                        Text(
+                                          'Entrar com Senha',
+                                          style: TextStyle(
+                                            fontSize: 13.0,
+                                            fontWeight: FontWeight.w700,
+                                            color: _usePasswordMode ? activeColor : const Color(0xFF64748B),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
 
                         // Ícone de cabeçalho do perfil/papel
                         Align(
                           alignment: Alignment.centerLeft,
                           child: Container(
-                            width: 64,
-                            height: 64,
+                            width: 60,
+                            height: 60,
                             decoration: BoxDecoration(
                               color: activeColor.withOpacity(0.12),
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
-                              Icons.mail_lock_rounded,
-                              size: 32,
+                              _usePasswordMode ? Icons.lock_person_rounded : Icons.mail_lock_rounded,
+                              size: 30,
                               color: activeColor,
                             ),
                           ),
                         ),
 
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 20),
 
                         // Título do Ecrã
                         Text(
-                          'Qual é o seu e-mail?',
+                          _usePasswordMode ? 'Iniciar Sessão' : 'Qual é o seu e-mail?',
                           style: theme.textTheme.headlineSmall?.copyWith(
                             fontWeight: FontWeight.w800,
                             color: const Color(0xFF0F172A),
@@ -303,7 +423,9 @@ class _AuthScreenState extends State<AuthScreen> {
 
                         // Subtítulo Explicativo
                         Text(
-                          'Enviaremos um código de 6 dígitos para o seu e-mail para validar a sua identidade de forma rápida e segura.',
+                          _usePasswordMode
+                              ? 'Introduza o seu e-mail e palavra-passe para aceder diretamente à sua conta.'
+                              : 'Enviaremos um código de 6 dígitos para o seu e-mail para validar a sua identidade de forma rápida e segura.',
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: const Color(0xFF64748B),
                             height: 1.45,
@@ -311,7 +433,7 @@ class _AuthScreenState extends State<AuthScreen> {
                           ),
                         ),
 
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 24),
 
                         // Rótulo do Campo
                         const Text(
@@ -330,10 +452,10 @@ class _AuthScreenState extends State<AuthScreen> {
                           controller: _emailController,
                           focusNode: _emailFocusNode,
                           keyboardType: TextInputType.emailAddress,
-                          textInputAction: TextInputAction.done,
+                          textInputAction: _usePasswordMode ? TextInputAction.next : TextInputAction.done,
                           autocorrect: false,
                           enableSuggestions: true,
-                          onFieldSubmitted: (_) => _submitEmail(),
+                          onFieldSubmitted: (_) => _usePasswordMode ? null : _submitEmail(),
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
@@ -386,35 +508,100 @@ class _AuthScreenState extends State<AuthScreen> {
                           ),
                         ),
 
+                        // Campo de Palavra-passe (Visível no modo de Senha)
+                        if (_usePasswordMode) ...[
+                          const SizedBox(height: 18),
+                          const Text(
+                            'Palavra-passe',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF334155),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _passwordController,
+                            obscureText: _obscurePassword,
+                            textInputAction: TextInputAction.done,
+                            onFieldSubmitted: (_) => _submitPasswordLogin(),
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF0F172A),
+                            ),
+                            decoration: InputDecoration(
+                              filled: true,
+                              fillColor: Colors.white,
+                              hintText: '••••••••',
+                              hintStyle: const TextStyle(
+                                color: Color(0xFF94A3B8),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w400,
+                              ),
+                              prefixIcon: Icon(
+                                Icons.lock_outline_rounded,
+                                color: const Color(0xFF94A3B8),
+                                size: 22,
+                              ),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                                  color: const Color(0xFF64748B),
+                                  size: 20,
+                                ),
+                                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFFE2E8F0),
+                                  width: 1.5,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide(
+                                  color: activeColor,
+                                  width: 2.0,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+
                         const SizedBox(height: 24),
 
-                        // Botão Principal: Continuar
+                        // Botão Principal de Submissão
                         ElevatedButton(
-                          onPressed: _isEmailValid ? _submitEmail : null,
+                          onPressed: _usePasswordMode
+                              ? _submitPasswordLogin
+                              : (_isEmailValid ? _submitEmail : null),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: activeColor,
                             disabledBackgroundColor: const Color(0xFFE2E8F0),
                             foregroundColor: Colors.white,
                             disabledForegroundColor: const Color(0xFF94A3B8),
-                            elevation: _isEmailValid ? 2 : 0,
+                            elevation: (_usePasswordMode || _isEmailValid) ? 2 : 0,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
                             ),
                           ),
-                          child: const Row(
+                          child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
-                                'Continuar',
-                                style: TextStyle(
+                                _usePasswordMode ? 'Iniciar Sessão' : 'Continuar com Código',
+                                style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: 0.3,
                                 ),
                               ),
-                              SizedBox(width: 8),
-                              Icon(Icons.arrow_forward_rounded, size: 18),
+                              const SizedBox(width: 8),
+                              Icon(_usePasswordMode ? Icons.login_rounded : Icons.arrow_forward_rounded, size: 18),
                             ],
                           ),
                         ),

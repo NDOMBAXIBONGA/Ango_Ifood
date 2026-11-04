@@ -45,6 +45,7 @@ class RegistrationFormSubmitted extends AuthEvent {
   final String name;
   final String email;
   final DateTime birthDate;
+  final String? password;
   final bool termsAccepted;
   final bool privacyAccepted;
   final bool marketingAccepted;
@@ -54,6 +55,7 @@ class RegistrationFormSubmitted extends AuthEvent {
     required this.name,
     required this.email,
     required this.birthDate,
+    this.password,
     this.termsAccepted = true,
     this.privacyAccepted = true,
     this.marketingAccepted = false,
@@ -65,6 +67,7 @@ class RegistrationFormSubmitted extends AuthEvent {
         name,
         email,
         birthDate,
+        password,
         termsAccepted,
         privacyAccepted,
         marketingAccepted,
@@ -116,5 +119,19 @@ class VerifyEmailOtpSubmitted extends AuthEvent {
 
   @override
   List<Object?> get props => [email, otp];
+}
+
+/// Disparado quando o utilizador submete e-mail e palavra-passe para login direto.
+class LoginWithPasswordRequested extends AuthEvent {
+  final String email;
+  final String password;
+
+  const LoginWithPasswordRequested({
+    required this.email,
+    required this.password,
+  });
+
+  @override
+  List<Object?> get props => [email, password];
 }
 

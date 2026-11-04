@@ -199,6 +199,7 @@ class AuthRepository {
     required String name,
     required String email,
     required DateTime birthDate,
+    String? password,
     bool termsAccepted = true,
     bool privacyAccepted = true,
     bool marketingAccepted = false,
@@ -225,6 +226,9 @@ class AuthRepository {
       };
       if (sanitizedPhone != null && sanitizedPhone.isNotEmpty) {
         payload['telemovel'] = sanitizedPhone;
+      }
+      if (password != null && password.isNotEmpty) {
+        payload['password'] = password;
       }
 
       final response = await _dio.post(
@@ -266,6 +270,39 @@ class AuthRepository {
     } catch (e) {
       developer.log('Erro inesperado em authenticateWithGoogle: $e', name: 'AuthRepository', error: e);
       throw AuthServerException(message: 'Erro inesperado na validação do login Google: $e');
+    }
+  }
+
+  /// Endpoint: `POST /api/v1/auth/login/`
+  /// Autentica diretamente o utilizador por e-mail e palavra-passe.
+  Future<AuthResult> loginWithPassword({
+    required String email,
+    required String password,
+  }) async {
+    try {
+      final sanitizedEmail = email.trim().toLowerCase();
+      developer.log('Efetuando login com palavra-passe para: $sanitizedEmail', name: 'AuthRepository');
+
+      final response = await _dio.post(
+        _buildUrl('login'),
+        data: {
+          'email': sanitizedEmail,
+          'password': password,
+        },
+      );
+
+      final data = response.data as Map<String, dynamic>;
+      return AuthResult.fromCompleteRegistrationJson(data);
+    } on DioException catch (e) {
+      developer.log(
+        'Erro ao autenticar com palavra-passe: ${e.response?.statusCode} - ${e.message}',
+        name: 'AuthRepository',
+        error: e,
+      );
+      throw _handleDioException(e);
+    } catch (e) {
+      developer.log('Erro inesperado em loginWithPassword: $e', name: 'AuthRepository', error: e);
+      throw AuthServerException(message: 'Erro inesperado ao realizar autenticação: $e');
     }
   }
 

@@ -132,6 +132,14 @@ class CompleteRegistrationSerializer(serializers.Serializer):
     data_nascimento = serializers.DateField(
         help_text=_("RN-003: Data de nascimento (formato YYYY-MM-DD). Requer obrigatoriamente idade >= 18 anos."),
     )
+    password = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        min_length=6,
+        default="",
+        help_text=_("Palavra-passe de acesso à plataforma (mínimo de 6 caracteres)."),
+    )
 
     # Consentimentos RGPD (RN-004)
     termos_utilizacao = serializers.BooleanField(
@@ -354,3 +362,19 @@ class EmailRegisterSerializer(serializers.Serializer):
                 {"consentimentos": _("A aceitação dos Termos de Utilização e da Política de Privacidade é obrigatória.")}
             )
         return attrs
+
+
+class EmailPasswordLoginSerializer(serializers.Serializer):
+    """
+    Serializer para o endpoint POST /api/v1/auth/login/
+    Recebe e-mail (ou telemóvel) e palavra-passe para autenticação direta.
+    """
+    email = serializers.CharField(
+        max_length=254,
+        help_text=_("Endereço de e-mail ou número de telemóvel associado à conta."),
+    )
+    password = serializers.CharField(
+        write_only=True,
+        style={"input_type": "password"},
+        help_text=_("Palavra-passe da conta."),
+    )

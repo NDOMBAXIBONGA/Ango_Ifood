@@ -5,10 +5,11 @@
 /// Reage com `BlocConsumer` ao `AuthBloc`.
 
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_bloc/flutter_bloc';
 
 import '../auth_bloc.dart';
 import '../theme/role_theme.dart';
+import '../utils/role_navigation.dart';
 
 class RegistrationFormScreen extends StatefulWidget {
   final String phone;
@@ -32,6 +33,11 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _birthDateController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmPasswordController = TextEditingController();
+
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
   DateTime? _selectedBirthDate;
   bool _isUnderage = false;
@@ -56,6 +62,8 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
     _nameController.dispose();
     _emailController.dispose();
     _birthDateController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -140,6 +148,33 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
         return;
       }
 
+      final password = _passwordController.text.trim();
+      final confirmPassword = _confirmPasswordController.text.trim();
+
+      if (password.isNotEmpty && password.length < 6) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('A palavra-passe deve conter pelo menos 6 caracteres.'),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
+          ),
+        );
+        return;
+      }
+
+      if (password.isNotEmpty && password != confirmPassword) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('As palavras-passe não coincidem. Verifique a confirmação.'),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
+          ),
+        );
+        return;
+      }
+
       FocusScope.of(context).unfocus();
 
       context.read<AuthBloc>().add(
@@ -148,6 +183,7 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
               name: _nameController.text.trim(),
               email: _emailController.text.trim(),
               birthDate: _selectedBirthDate!,
+              password: password.isNotEmpty ? password : null,
               termsAccepted: _termsAccepted,
               privacyAccepted: _privacyAccepted,
               marketingAccepted: _marketingAccepted,
@@ -181,8 +217,13 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
             ),
           );
 
-          // Redireciona para o fluxo principal pós-autenticação
-          Navigator.of(context).popUntil((route) => route.isFirst);
+          // Redireciona diretamente para o interior da aplicação conforme o papel escolhido
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (_) => getHomeScreenForRole(widget.selectedRole),
+            ),
+            (route) => false,
+          );
         } else if (state is RegistrationFailure) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -382,6 +423,71 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                         ),
                       ),
                     ],
+
+                    const SizedBox(height: 18.0),
+
+                    // 4. Campo: Palavra-passe de Acesso
+                    _buildInputFieldLabel('Criar Palavra-passe de Acesso (Mínimo 6 caracteres) *'),
+                    const SizedBox(height: 6.0),
+                    TextFormField(
+                      controller: _passwordController,
+                      enabled: !isLoading,
+                      obscureText: _obscurePassword,
+                      decoration: _buildInputDecoration(
+                        hintText: '••••••••',
+                        icon: Icons.lock_outline_rounded,
+                        activeColor: activeColor,
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                            color: const Color(0xFF64748B),
+                            size: 20.0,
+                          ),
+                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                        ),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Por favor, crie uma palavra-passe de acesso.';
+                        }
+                        if (value.trim().length < 6) {
+                          return 'A palavra-passe deve ter pelo menos 6 caracteres.';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 18.0),
+
+                    // 5. Campo: Confirmar Palavra-passe
+                    _buildInputFieldLabel('Confirmar Palavra-passe *'),
+                    const SizedBox(height: 6.0),
+                    TextFormField(
+                      controller: _confirmPasswordController,
+                      enabled: !isLoading,
+                      obscureText: _obscureConfirmPassword,
+                      decoration: _buildInputDecoration(
+                        hintText: '••••••••',
+                        icon: Icons.lock_reset_rounded,
+                        activeColor: activeColor,
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscureConfirmPassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                            color: const Color(0xFF64748B),
+                            size: 20.0,
+                          ),
+                          onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                        ),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Por favor, confirme a sua palavra-passe.';
+                        }
+                        if (value != _passwordController.text) {
+                          return 'As palavras-passe não coincidem.';
+                        }
+                        return null;
+                      },
+                    ),
 
                     const SizedBox(height: 24.0),
 

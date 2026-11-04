@@ -10,6 +10,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../auth_bloc.dart';
 import '../theme/role_theme.dart';
+import '../utils/role_navigation.dart';
 import 'auth_screen.dart';
 import 'registration_form_screen.dart';
 
@@ -198,7 +199,14 @@ class _EmailOtpVerificationScreenState extends State<EmailOtpVerificationScreen>
             setState(() => _isVerifying = false);
           }
 
-          if (state is OtpVerifiedSuccess) {
+          if (state is Authenticated) {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(
+                builder: (_) => getHomeScreenForRole(widget.selectedRole),
+              ),
+              (route) => false,
+            );
+          } else if (state is OtpVerifiedSuccess) {
             // Navega diretamente para o formulário de finalização de registo
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(

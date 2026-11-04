@@ -5,6 +5,7 @@ from django.urls import path
 
 from apps.accounts.views import (
     CompleteRegistrationView,
+    EmailPasswordLoginView,
     EmailRegisterView,
     EmailRequestOTPView,
     EmailVerifyOTPView,
@@ -16,6 +17,10 @@ from apps.accounts.views import (
 app_name = "accounts"
 
 urlpatterns = [
+    # Autenticação Direta com E-mail/Telemóvel e Palavra-passe
+    path("login/", EmailPasswordLoginView.as_view(), name="login"),
+    path("email/login/", EmailPasswordLoginView.as_view(), name="email_login_alias"),
+
     # Fluxo Passwordless por Telemóvel / SMS
     path("request-otp/", RequestOTPView.as_view(), name="request_otp"),
     path("verify-otp/", VerifyOTPView.as_view(), name="verify_otp"),

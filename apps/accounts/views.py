@@ -35,6 +35,7 @@ from apps.accounts.serializers import (
     CompleteRegistrationSerializer,
     EmailOTPRequestSerializer,
     EmailOTPVerifySerializer,
+    EmailPasswordLoginSerializer,
     EmailRegisterSerializer,
     RequestOTPSerializer,
     UtilizadorResumoSerializer,
@@ -459,6 +460,7 @@ class CompleteRegistrationView(APIView):
             nome: str = serializer.validated_data["nome"]
             email: str = serializer.validated_data["email"]
             data_nascimento = serializer.validated_data["data_nascimento"]
+            password: str | None = serializer.validated_data.get("password") or None
 
             # Se telemovel tiver formato de email ou for vazio, normaliza para None
             if telemovel and "@" in str(telemovel):
@@ -493,13 +495,16 @@ class CompleteRegistrationView(APIView):
                     campos_update = ["nome", "email", "data_nascimento", "estado", "is_active"]
                     if telemovel:
                         campos_update.append("telemovel")
+                    if password:
+                        utilizador_existente.set_password(password)
+                        campos_update.append("password")
                     utilizador_existente.save(update_fields=campos_update)
                     user = utilizador_existente
                 else:
                     return Response(
                         {
                             "erro": "conta_ja_registada",
-                            "detalhe": _("RN-001 / RN-003: Já existe uma conta ativa para estes dados. Efetue o login com o seu código de acesso."),
+                            "detalhe": _("RN-001 / RN-003: Já existe uma conta ativa para estes dados. Efetue o login com a sua palavra-passe ou código OTP."),
                         },
                         status=status.HTTP_400_BAD_REQUEST,
                     )
@@ -509,6 +514,7 @@ class CompleteRegistrationView(APIView):
                     telemovel=telemovel,
                     nome=nome,
                     email=email,
+                    password=password,
                     data_nascimento=data_nascimento,
                     estado=CustomUser.EstadoConta.ATIVO,
                     is_active=True,
@@ -1001,5 +1007,72 @@ class GoogleAuthView(APIView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+class EmailPasswordLoginView(APIView):
+    """
+    Endpoint: `POST /api/v1/auth/login/`
+    Autenticação tradicional por e-mail (ou telemóvel) e palavra-passe.
+    Valida as credenciais, verifica suspensão de conta (RN-008) e emite o par de tokens JWT.
+    """
+
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+    throttle_classes = []
+
+    def post(self, request: Request) -> Response:
+        serializer = EmailPasswordLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        identificador: str = serializer.validated_data["email"].strip()
+        password: str = serializer.validated_data["password"]
+
+        # Busca o utilizador por e-mail ou por telemóvel
+        user = CustomUser.objects.filter(email__iexact=identificador).first()
+        if not user:
+            user = CustomUser.objects.filter(telemovel=identificador).first()
+
+        if not user or not user.check_password(password):
+            return Response(
+                {
+                    "erro": "credenciais_invalidas",
+                    "detalhe": _("E-mail/telemóvel ou palavra-passe incorretos."),
+                },
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        # RN-008: Verificação de suspensão
+        if user.estado == CustomUser.EstadoConta.SUSPENSO:
+            return Response(
+                {
+                    "erro": "conta_suspensa",
+                    "detalhe": _("RN-008: Conta suspensa por motivos de segurança. Contacte o suporte."),
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Se o utilizador estava PENDENTE, ativa a conta
+        if user.estado == CustomUser.EstadoConta.PENDENTE:
+            user.estado = CustomUser.EstadoConta.ATIVO
+            user.is_active = True
+            user.save(update_fields=["estado", "is_active"])
+
+        tokens = gerar_tokens_jwt_para_utilizador(user)
+
+        logger.info(
+            "Utilizador autenticado com sucesso via palavra-passe: %s (id=%s)",
+            user.email or user.telemovel,
+            user.id,
+        )
+
+        return Response(
+            {
+                "mensagem": _("Autenticação realizada com sucesso."),
+                "registo_pendente": False,
+                "tokens": tokens,
+                "perfil": UtilizadorResumoSerializer(user).data,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
