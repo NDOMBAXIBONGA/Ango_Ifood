@@ -81,10 +81,43 @@ def health_check(request):
         except Exception as te:
             brevo_test_result = {"error": str(te)}
 
+    if request.GET.get("debug_registration"):
+        import json
+        import traceback
+        from rest_framework.test import APIRequestFactory
+        from apps.accounts.views import CompleteRegistrationView
+
+        factory = APIRequestFactory()
+        req = factory.post(
+            "/api/v1/auth/complete-registration/",
+            data=json.dumps({
+                "telemovel": "jobdealmeida016@gmail.com",
+                "nome": "Job Almeida Bongo",
+                "email": "jobdealmeida016@gmail.com",
+                "data_nascimento": "2002-05-06",
+                "termos_utilizacao": True,
+                "politica_privacidade": True,
+                "marketing": False,
+            }),
+            content_type="application/json",
+        )
+        try:
+            view = CompleteRegistrationView.as_view()
+            resp = view(req)
+            return JsonResponse({
+                "status_code": resp.status_code,
+                "data": getattr(resp, "data", None) or resp.content.decode("utf-8", errors="replace"),
+            })
+        except Exception as err:
+            return JsonResponse({
+                "error": str(err),
+                "trace": traceback.format_exc(),
+            }, status=500)
+
     return JsonResponse(
         {
             "status": "healthy" if db_ok else "degraded",
-            "version": "v1.0.4-auth-fix",
+            "version": "v1.0.5-probe",
             "service": "delivery-backend-api",
             "database": {
                 "connected": db_ok,
