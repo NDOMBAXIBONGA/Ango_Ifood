@@ -27,6 +27,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from apps.accounts.brevo_service import BrevoEmailService
 from apps.accounts.models import (
     CustomUser,
+    Morada,
     PerfilConsentimento,
     RegistoOTP,
     RegistoOTPEmail,
@@ -37,6 +38,7 @@ from apps.accounts.serializers import (
     EmailOTPVerifySerializer,
     EmailPasswordLoginSerializer,
     EmailRegisterSerializer,
+    MoradaSerializer,
     RequestOTPSerializer,
     UtilizadorResumoSerializer,
     VerifyOTPSerializer,
@@ -1074,5 +1076,27 @@ class EmailPasswordLoginView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class MoradaViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet para gestão de moradas do cliente autenticado (RN-005):
+    - GET /api/v1/auth/moradas/
+    - POST /api/v1/auth/moradas/
+    - DELETE /api/v1/auth/moradas/{id}/
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = MoradaSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        if not user.is_authenticated:
+            return Morada.objects.none()
+        return Morada.objects.filter(utilizador=user)
+
+    def perform_create(self, serializer):
+        serializer.save(utilizador=self.request.user)
+
 
 

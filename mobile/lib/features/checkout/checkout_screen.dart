@@ -20,6 +20,10 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+
+import '../cart/cart.dart';
+import '../tracking/order_real_time_tracking_screen.dart';
 
 // ============================================================================
 // 1. UTILITÁRIO DE FORMATAÇÃO MONETÁRIA INTEIRA (RN-059)
@@ -1378,7 +1382,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   width: double.infinity,
                   child: FilledButton.icon(
                     onPressed: () {
+                      CartService.instance.clear();
                       Navigator.of(sheetContext).pop();
+                      Navigator.of(context).pushReplacement(
+                        MaterialPageRoute<void>(
+                          builder: (_) => OrderRealTimeTrackingScreen(
+                            pedidoId: resultado.pedidoId,
+                            jwtToken: '',
+                            nomeLoja: widget.lojaNome,
+                            moradaLojaTexto: 'Restaurante ${widget.lojaNome}',
+                            coordenadasLoja: const LatLng(-8.839988, 13.289437),
+                            moradaClienteTexto: widget.moradaTexto,
+                            coordenadasCliente: const LatLng(-8.836804, 13.234321),
+                          ),
+                        ),
+                      );
                     },
                     icon: const Icon(Icons.delivery_dining_rounded),
                     label: const Text('Acompanhar Pedido em Tempo Real'),

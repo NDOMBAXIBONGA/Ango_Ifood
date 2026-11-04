@@ -15,6 +15,9 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../cart/cart.dart';
+import '../checkout/checkout_screen.dart';
+
 // ============================================================================
 // 1. MODELOS DE DADOS DO CATÁLOGO E DESCOBERTA (RN-014, RN-015, RN-025 a RN-029)
 // ============================================================================
@@ -1438,6 +1441,14 @@ class StoreMenuScreen extends StatelessWidget {
                                 context
                                     .read<StoreMenuBloc>()
                                     .add(AddMenuItemToCartEvent(item: item));
+                                CartService.instance.addItem(
+                                  itemId: item.id,
+                                  lojaId: store.id,
+                                  lojaNome: store.nome,
+                                  nome: item.nome,
+                                  imagemUrl: item.imagemUrl,
+                                  precoUnitarioCentimos: item.preco,
+                                );
                               },
                             );
                           },
@@ -1452,12 +1463,43 @@ class StoreMenuScreen extends StatelessWidget {
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: FilledButton(
-                        onPressed: () {},
+                        onPressed: () {
+                          final itens = <CheckoutCartItemInput>[];
+                          for (final category in loadedState.categories) {
+                            for (final menuItem in category.itens) {
+                              final qty =
+                                  loadedState.cartQuantities[menuItem.id] ?? 0;
+                              if (qty > 0) {
+                                itens.add(
+                                  CheckoutCartItemInput(
+                                    itemId: menuItem.id,
+                                    nome: menuItem.nome,
+                                    imagemUrl: menuItem.imagemUrl,
+                                    quantidade: qty,
+                                  ),
+                                );
+                              }
+                            }
+                          }
+
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => CheckoutScreen(
+                                lojaId: store.id,
+                                lojaNome: store.nome,
+                                moradaId: 'morada_principal',
+                                moradaLabel: 'Minha Morada Principal',
+                                moradaTexto: 'Luanda, Angola',
+                                itensCarrinho: itens,
+                              ),
+                            ),
+                          );
+                        },
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              '${loadedState.totalCartItems} item(ns) no carrinho',
+                              '${loadedState.totalCartItems} item(ns) • Ver Pedido',
                             ),
                             Text(
                               formatarMoedaUnidadesMinimas(

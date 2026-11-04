@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/role_theme.dart';
-import '../../catalog/customer_catalog_screens.dart';
+import '../../catalog/customer_main_navigation_shell.dart';
 import '../../partner/screens/partner_portal_screen.dart';
 import '../../courier/courier_flow_screens.dart';
 
@@ -10,10 +10,11 @@ import '../../courier/courier_flow_screens.dart';
 Widget getHomeScreenForRole(PlatformRole role) {
   switch (role) {
     case PlatformRole.cliente:
-      return const HomeScreen();
+      return const CustomerMainNavigationShell();
     case PlatformRole.parceiro:
       return const PartnerPortalScreen();
     case PlatformRole.estafeta:
       return const CourierMainAppNavigation();
   }
 }
+

@@ -397,3 +397,25 @@ class CheckoutViewSet(viewsets.GenericViewSet):
                 ),
                 codigo_regra="RN-056",
             )
+
+
+class CustomerOrderViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet para consulta de pedidos do cliente autenticado (RN-007, Secção 4 Passo 9).
+    - `GET /api/v1/orders/`: Lista os pedidos do utilizador autenticado
+    - `GET /api/v1/orders/{id}/`: Consulta detalhada de um pedido específico
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = PedidoConfirmadoOutputSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        if not user.is_authenticated:
+            return Pedido.objects.none()
+        return (
+            Pedido.objects.filter(cliente=user)
+            .select_related("loja", "cliente")
+            .prefetch_related("linhas__item", "linhas__opcoes_selecionadas")
+            .order_by("-data_criacao")
+        )

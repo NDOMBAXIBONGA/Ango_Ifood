@@ -10,13 +10,22 @@ from apps.accounts.views import (
     EmailRequestOTPView,
     EmailVerifyOTPView,
     GoogleAuthView,
+    MoradaViewSet,
     RequestOTPView,
     VerifyOTPView,
 )
 
 app_name = "accounts"
 
+moradas_list = MoradaViewSet.as_view({"get": "list", "post": "create"})
+moradas_detail = MoradaViewSet.as_view(
+    {"get": "retrieve", "delete": "destroy", "put": "update", "patch": "partial_update"}
+)
+
 urlpatterns = [
+    # Gestão de Moradas do Utilizador (RN-005)
+    path("moradas/", moradas_list, name="moradas-list"),
+    path("moradas/<uuid:pk>/", moradas_detail, name="moradas-detail"),
     # Autenticação Direta com E-mail/Telemóvel e Palavra-passe
     path("login/", EmailPasswordLoginView.as_view(), name="login"),
     path("email/login/", EmailPasswordLoginView.as_view(), name="email_login_alias"),

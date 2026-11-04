@@ -20,7 +20,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
-from apps.accounts.models import CustomUser, PerfilConsentimento, validador_telemovel
+from apps.accounts.models import CustomUser, Morada, PerfilConsentimento, validador_telemovel
 
 
 def calcular_idade(data_nascimento: date, referencia: date | None = None) -> int:
@@ -378,3 +378,50 @@ class EmailPasswordLoginSerializer(serializers.Serializer):
         style={"input_type": "password"},
         help_text=_("Palavra-passe da conta."),
     )
+
+
+class MoradaSerializer(serializers.ModelSerializer):
+    """
+    Serializer para o endpoint /api/v1/auth/moradas/ (RN-005).
+    Permite listagem e cadastro de moradas de entrega do utilizador autenticado.
+    """
+    latitude = serializers.FloatField(write_only=True, required=False, default=-8.839988)
+    longitude = serializers.FloatField(write_only=True, required=False, default=13.289437)
+    lat = serializers.SerializerMethodField(read_only=True)
+    lng = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Morada
+        fields = [
+            "id",
+            "texto_endereco",
+            "referencia",
+            "andar_porta",
+            "instrucoes_estafeta",
+            "latitude",
+            "longitude",
+            "lat",
+            "lng",
+        ]
+        read_only_fields = ["id", "lat", "lng"]
+
+    def get_lat(self, obj) -> float | None:
+        if obj.geolocalizacao:
+            return obj.geolocalizacao.y
+        return None
+
+    def get_lng(self, obj) -> float | None:
+        if obj.geolocalizacao:
+            return obj.geolocalizacao.x
+        return None
+
+    def create(self, validated_data):
+        from django.contrib.gis.geos import Point
+        lat = validated_data.pop("latitude", -8.839988)
+        lng = validated_data.pop("longitude", 13.289437)
+        user = self.context["request"].user
+        return Morada.objects.create(
+            utilizador=user,
+            geolocalizacao=Point(lng, lat, srid=4326),
+            **validated_data,
+        )
