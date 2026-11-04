@@ -30,3 +30,4 @@ class Migration(migrations.Migration):
             index=models.Index(fields=['tipo_utilizador'], name='idx_user_tipo_utilizador'),
         ),
     ]
+
