@@ -18,7 +18,7 @@ from typing import Any
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from rest_framework import permissions, serializers, status
+from rest_framework import permissions, serializers, status, viewsets
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
