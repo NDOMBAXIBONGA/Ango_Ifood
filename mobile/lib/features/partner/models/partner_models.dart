@@ -101,6 +101,9 @@ class PartnerStoreStatus extends Equatable {
       isPausaTemporaria &&
       (reativacaoAutomaticaEm == null || reativacaoAutomaticaEm!.isAfter(DateTime.now()));
 
+  /// Tempo estimado padrão de preparo na cozinha em minutos (RN-075)
+  int get tempoPreparoMinutos => 30;
+
   Duration? get tempoRestantePausa {
     if (!isPausada || reativacaoAutomaticaEm == null) return null;
     final diff = reativacaoAutomaticaEm!.difference(DateTime.now());

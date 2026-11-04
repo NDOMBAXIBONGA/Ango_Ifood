@@ -148,7 +148,7 @@ class PartnerStoreProfileScreen extends StatelessWidget {
                     context,
                     icon: Icons.timer_outlined,
                     title: 'Tempo Médio de Preparo',
-                    subtitle: '${store?.tempoPreparoMinutos ?? 30} minutos',
+                    subtitle: '30 - 45 minutos (Padrão)',
                     onTap: () => _showComingSoonSnackBar(context, 'Ajuste de Tempo Base'),
                   ),
                   _buildSettingsTile(
