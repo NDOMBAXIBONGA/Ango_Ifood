@@ -82,7 +82,8 @@ def gerar_tokens_jwt_para_utilizador(user: CustomUser) -> dict[str, str]:
     injetando claims adicionais para controlo de sessão e identificação rápida.
     """
     refresh = RefreshToken.for_user(user)
-    refresh["telemovel"] = user.telemovel
+    refresh["telemovel"] = user.telemovel or ""
+    refresh["email"] = user.email or ""
     refresh["estado"] = user.estado
     refresh["nome"] = user.nome
     return {
@@ -435,13 +436,22 @@ class CompleteRegistrationView(APIView):
         )
         serializer.is_valid(raise_exception=True)
 
-        telemovel: str = serializer.validated_data["telemovel"]
+        telemovel: str | None = serializer.validated_data.get("telemovel")
         nome: str = serializer.validated_data["nome"]
         email: str = serializer.validated_data["email"]
         data_nascimento = serializer.validated_data["data_nascimento"]
 
-        # Verifica se já existe um utilizador registado com este telemóvel
-        utilizador_existente = CustomUser.objects.filter(telemovel=telemovel).first()
+        # Se telemovel tiver formato de email ou for vazio, normaliza para None
+        if telemovel and "@" in str(telemovel):
+            telemovel = None
+
+        # Procura se já existe um utilizador por telemóvel (se fornecido) ou por e-mail
+        utilizador_existente = None
+        if telemovel:
+            utilizador_existente = CustomUser.objects.filter(telemovel=telemovel).first()
+        if utilizador_existente is None:
+            utilizador_existente = CustomUser.objects.filter(email__iexact=email).first()
+
         if utilizador_existente is not None:
             if utilizador_existente.estado == CustomUser.EstadoConta.SUSPENSO:
                 return Response(
@@ -456,18 +466,21 @@ class CompleteRegistrationView(APIView):
             if utilizador_existente.estado == CustomUser.EstadoConta.PENDENTE:
                 utilizador_existente.nome = nome
                 utilizador_existente.email = email
+                if telemovel:
+                    utilizador_existente.telemovel = telemovel
                 utilizador_existente.data_nascimento = data_nascimento
                 utilizador_existente.estado = CustomUser.EstadoConta.ATIVO
                 utilizador_existente.is_active = True
-                utilizador_existente.save(
-                    update_fields=["nome", "email", "data_nascimento", "estado", "is_active"]
-                )
+                campos_update = ["nome", "email", "data_nascimento", "estado", "is_active"]
+                if telemovel:
+                    campos_update.append("telemovel")
+                utilizador_existente.save(update_fields=campos_update)
                 user = utilizador_existente
             else:
                 return Response(
                     {
-                        "erro": "telemovel_ja_registado",
-                        "detalhe": _("RN-001: Já existe uma conta ativa para este número de telemóvel. Efetue o login com OTP."),
+                        "erro": "conta_ja_registada",
+                        "detalhe": _("RN-001 / RN-003: Já existe uma conta ativa para estes dados. Efetue o login com o seu código de acesso."),
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
@@ -498,9 +511,12 @@ class CompleteRegistrationView(APIView):
             },
         )
 
+        # Invalida os registos OTP para este e-mail após a criação bem-sucedida
+        RegistoOTPEmail.objects.filter(email__iexact=email).delete()
+
         logger.info(
             "RN-003 / RN-004: Utilizador criado e ativado com sucesso: %s (id=%s, idade=%d anos).",
-            user.telemovel,
+            user.email or user.telemovel,
             user.id,
             user.data_nascimento and (timezone.localdate().year - user.data_nascimento.year) or 0,
         )

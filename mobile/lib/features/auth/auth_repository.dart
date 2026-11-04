@@ -204,27 +204,32 @@ class AuthRepository {
     bool marketingAccepted = false,
   }) async {
     try {
-      final sanitizedPhone = phone.trim().replaceAll(' ', '');
+      final isEmailPhone = phone.contains('@');
+      final sanitizedPhone = isEmailPhone ? null : phone.trim().replaceAll(' ', '');
       final sanitizedEmail = email.trim().toLowerCase();
       final formattedBirthDate =
           '${birthDate.year.toString().padLeft(4, '0')}-${birthDate.month.toString().padLeft(2, '0')}-${birthDate.day.toString().padLeft(2, '0')}';
 
       developer.log(
-        'Completando registo: $sanitizedPhone | $name | $formattedBirthDate',
+        'Completando registo: phone=$sanitizedPhone | email=$sanitizedEmail | name=$name | birth=$formattedBirthDate',
         name: 'AuthRepository',
       );
 
+      final payload = <String, dynamic>{
+        'nome': name.trim(),
+        'email': sanitizedEmail,
+        'data_nascimento': formattedBirthDate,
+        'termos_utilizacao': termsAccepted,
+        'politica_privacidade': privacyAccepted,
+        'marketing': marketingAccepted,
+      };
+      if (sanitizedPhone != null && sanitizedPhone.isNotEmpty) {
+        payload['telemovel'] = sanitizedPhone;
+      }
+
       final response = await _dio.post(
         _buildUrl('complete-registration'),
-        data: {
-          'telemovel': sanitizedPhone,
-          'nome': name.trim(),
-          'email': sanitizedEmail,
-          'data_nascimento': formattedBirthDate,
-          'termos_utilizacao': termsAccepted,
-          'politica_privacidade': privacyAccepted,
-          'marketing': marketingAccepted,
-        },
+        data: payload,
       );
 
       final data = response.data as Map<String, dynamic>;
@@ -332,8 +337,17 @@ class AuthRepository {
         );
       }
 
-      // 6. Trata outros erros de validação de formulário (e-mail duplicado, telemóvel existente, etc.)
+      // 6. Trata outros erros de validação de formulário (telemóvel, e-mail duplicado, consentimentos, etc.)
       if (statusCode == 400) {
+        final telemovelError = responseData['telemovel'];
+        if (telemovelError != null) {
+          final msg = telemovelError is List ? telemovelError.first.toString() : telemovelError.toString();
+          return RegistrationValidationException(
+            message: msg,
+            fieldErrors: responseData,
+          );
+        }
+
         final emailError = responseData['email'];
         if (emailError != null) {
           final msg = emailError is List ? emailError.first.toString() : emailError.toString();
@@ -343,8 +357,34 @@ class AuthRepository {
           );
         }
 
+        final nomeError = responseData['nome'];
+        if (nomeError != null) {
+          final msg = nomeError is List ? nomeError.first.toString() : nomeError.toString();
+          return RegistrationValidationException(
+            message: msg,
+            fieldErrors: responseData,
+          );
+        }
+
+        final consentimentosError = responseData['consentimentos'];
+        if (consentimentosError != null) {
+          final msg = consentimentosError is List ? consentimentosError.first.toString() : consentimentosError.toString();
+          return RegistrationValidationException(
+            message: msg,
+            fieldErrors: responseData,
+          );
+        }
+
+        final detalheErro = detalhe ?? responseData['message'] ?? responseData['detail'] ?? responseData['erro'];
+        if (detalheErro != null) {
+          return RegistrationValidationException(
+            message: detalheErro.toString(),
+            fieldErrors: responseData,
+          );
+        }
+
         return RegistrationValidationException(
-          message: detalhe ?? 'Dados de formulário inválidos. Verifique os campos submetidos.',
+          message: 'Dados de formulário inválidos. Verifique os campos submetidos.',
           fieldErrors: responseData,
         );
       }

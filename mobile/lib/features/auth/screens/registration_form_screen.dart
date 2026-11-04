@@ -244,7 +244,9 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
                           const SizedBox(width: 10.0),
                           Expanded(
                             child: Text(
-                              'Número validado com sucesso: ${widget.phone}',
+                              widget.phone.contains('@')
+                                  ? 'E-mail validado com sucesso: ${widget.phone}'
+                                  : 'Número validado com sucesso: ${widget.phone}',
                               style: const TextStyle(
                                 fontSize: 13.0,
                                 fontWeight: FontWeight.w700,

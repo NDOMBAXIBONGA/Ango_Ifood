@@ -107,16 +107,19 @@ class CompleteRegistrationSerializer(serializers.Serializer):
     Serializer para finalização do registo de novos utilizadores após validação bem-sucedida do OTP.
     
     Aplica rigorosamente:
-    - RN-001: Formato válido do número de telemóvel.
+    - RN-001: Formato válido do número de telemóvel (se fornecido).
     - RN-003: Validação estrita de maioridade civil (>= 18 anos) no momento exato da submissão
       e unicidade global do endereço de e-mail.
     - RN-004: Aceitação obrigatória dos Termos de Utilização e Política de Privacidade.
     """
 
     telemovel = serializers.CharField(
-        max_length=20,
-        validators=[validador_telemovel],
-        help_text=_("RN-001: Número de telemóvel verificado no passo anterior."),
+        max_length=150,
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        default=None,
+        help_text=_("RN-001: Número de telemóvel verificado no passo anterior (opcional se registado via e-mail)."),
     )
     nome = serializers.CharField(
         max_length=150,
@@ -152,8 +155,18 @@ class CompleteRegistrationSerializer(serializers.Serializer):
         help_text=_("RN-004: Consentimento opcional para rastreamento de entregas em segundo plano."),
     )
 
-    def validate_telemovel(self, value: str) -> str:
-        return value.strip().replace(" ", "")
+    def validate_telemovel(self, value: str | None) -> str | None:
+        if not value:
+            return None
+        val_limpo = str(value).strip().replace(" ", "")
+        if not val_limpo:
+            return None
+        # Se for um endereço de e-mail repassado do front-end
+        if "@" in val_limpo:
+            return None
+        # Validação internacional E.164 para números móveis
+        validador_telemovel(val_limpo)
+        return val_limpo
 
     def validate_nome(self, value: str) -> str:
         nome_limpo = value.strip()
@@ -171,9 +184,11 @@ class CompleteRegistrationSerializer(serializers.Serializer):
         if user_atual is not None:
             qs = qs.exclude(pk=user_atual.pk)
         if qs.exists():
-            raise serializers.ValidationError(
-                _("RN-003: Já existe uma conta registada com este endereço de e-mail.")
-            )
+            user_existente = qs.first()
+            if user_existente.estado != CustomUser.EstadoConta.PENDENTE:
+                raise serializers.ValidationError(
+                    _("RN-003: Já existe uma conta ativa registada com este endereço de e-mail.")
+                )
         return email_normalizado
 
     def validate_data_nascimento(self, value: date) -> date:
