@@ -105,6 +105,8 @@ def gerar_tokens_jwt_para_utilizador(user: CustomUser) -> dict[str, str]:
     refresh["email"] = user.email or ""
     refresh["estado"] = user.estado
     refresh["nome"] = user.nome
+    refresh["tipo_utilizador"] = getattr(user, "tipo_utilizador", CustomUser.TipoUtilizador.CLIENTE)
+    refresh["role"] = getattr(user, "tipo_utilizador", CustomUser.TipoUtilizador.CLIENTE).lower()
     return {
         "access": str(refresh.access_token),
         "refresh": str(refresh),
@@ -485,6 +487,10 @@ class CompleteRegistrationView(APIView):
                         status=status.HTTP_403_FORBIDDEN,
                     )
 
+                tipo_solicitado = serializer.validated_data.get(
+                    "tipo_utilizador", CustomUser.TipoUtilizador.CLIENTE
+                )
+
                 # Se for um utilizador pendente, atualiza o registo existente
                 if utilizador_existente.estado == CustomUser.EstadoConta.PENDENTE:
                     utilizador_existente.nome = nome
@@ -493,8 +499,9 @@ class CompleteRegistrationView(APIView):
                         utilizador_existente.telemovel = telemovel
                     utilizador_existente.data_nascimento = data_nascimento
                     utilizador_existente.estado = CustomUser.EstadoConta.ATIVO
+                    utilizador_existente.tipo_utilizador = tipo_solicitado
                     utilizador_existente.is_active = True
-                    campos_update = ["nome", "email", "data_nascimento", "estado", "is_active"]
+                    campos_update = ["nome", "email", "data_nascimento", "estado", "tipo_utilizador", "is_active"]
                     if telemovel:
                         campos_update.append("telemovel")
                     if password:
@@ -511,6 +518,9 @@ class CompleteRegistrationView(APIView):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
             else:
+                tipo_solicitado = serializer.validated_data.get(
+                    "tipo_utilizador", CustomUser.TipoUtilizador.CLIENTE
+                )
                 # Cria o utilizador na tabela CustomUser com estado ATIVO
                 user = CustomUser.objects.create_user(
                     telemovel=telemovel,
@@ -518,6 +528,7 @@ class CompleteRegistrationView(APIView):
                     email=email,
                     password=password,
                     data_nascimento=data_nascimento,
+                    tipo_utilizador=tipo_solicitado,
                     estado=CustomUser.EstadoConta.ATIVO,
                     is_active=True,
                 )
@@ -853,6 +864,10 @@ class EmailRegisterView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        tipo_solicitado = serializer.validated_data.get(
+            "tipo_utilizador", CustomUser.TipoUtilizador.CLIENTE
+        )
+
         # Criação do utilizador na tabela CustomUser
         user = CustomUser.objects.create_user(
             telemovel=telemovel,
@@ -860,6 +875,7 @@ class EmailRegisterView(APIView):
             nome=nome,
             password=password,
             data_nascimento=data_nascimento,
+            tipo_utilizador=tipo_solicitado,
             estado=CustomUser.EstadoConta.ATIVO,
         )
 

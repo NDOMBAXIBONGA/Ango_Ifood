@@ -29,13 +29,16 @@ class AuthTokens extends Equatable {
   List<Object?> get props => [accessToken, refreshToken];
 }
 
-/// Perfil do utilizador autenticado (RN-003, RN-006, RN-008).
+/// Perfil do utilizador autenticado (RN-003, RN-006, RN-008, RBAC).
 class UserProfile extends Equatable {
   final String id;
   final String telemovel;
   final String nome;
   final String email;
   final String estado;
+  final String tipoUtilizador;
+  final String? lojaId;
+  final String? estafetaId;
   final DateTime? dataNascimento;
   final DateTime? dataCriacao;
 
@@ -45,9 +48,17 @@ class UserProfile extends Equatable {
     required this.nome,
     required this.email,
     required this.estado,
+    this.tipoUtilizador = 'CLIENTE',
+    this.lojaId,
+    this.estafetaId,
     this.dataNascimento,
     this.dataCriacao,
   });
+
+  bool get isCliente => tipoUtilizador.toUpperCase() == 'CLIENTE';
+  bool get isParceiro => tipoUtilizador.toUpperCase() == 'PARCEIRO';
+  bool get isEstafeta => tipoUtilizador.toUpperCase() == 'ESTAFETA';
+  bool get isAdmin => tipoUtilizador.toUpperCase() == 'ADMIN';
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     return UserProfile(
@@ -56,6 +67,9 @@ class UserProfile extends Equatable {
       nome: json['nome'] as String? ?? '',
       email: json['email'] as String? ?? '',
       estado: json['estado'] as String? ?? 'ATIVO',
+      tipoUtilizador: (json['tipo_utilizador'] ?? 'CLIENTE').toString().toUpperCase(),
+      lojaId: json['loja_id']?.toString(),
+      estafetaId: json['estafeta_id']?.toString(),
       dataNascimento: json['data_nascimento'] != null
           ? DateTime.tryParse(json['data_nascimento'] as String)
           : null,
@@ -71,6 +85,9 @@ class UserProfile extends Equatable {
         'nome': nome,
         'email': email,
         'estado': estado,
+        'tipo_utilizador': tipoUtilizador,
+        'loja_id': lojaId,
+        'estafeta_id': estafetaId,
         'data_nascimento': dataNascimento?.toIso8601String().split('T').first,
         'data_criacao': dataCriacao?.toIso8601String(),
       };
@@ -82,6 +99,9 @@ class UserProfile extends Equatable {
         nome,
         email,
         estado,
+        tipoUtilizador,
+        lojaId,
+        estafetaId,
         dataNascimento,
         dataCriacao,
       ];

@@ -217,10 +217,14 @@ class _RegistrationFormScreenState extends State<RegistrationFormScreen> {
             ),
           );
 
-          // Redireciona diretamente para o interior da aplicação conforme o papel escolhido
+          // Redireciona de forma segura e protegida por RBAC conforme o papel do utilizador
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(
-              builder: (_) => getHomeScreenForRole(widget.selectedRole),
+              builder: (ctx) => getAuthorizedHomeScreen(
+                user: state.user,
+                requestedRole: widget.selectedRole,
+                context: ctx,
+              ),
             ),
             (route) => false,
           );

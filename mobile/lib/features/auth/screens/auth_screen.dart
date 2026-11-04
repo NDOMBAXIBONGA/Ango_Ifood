@@ -222,7 +222,11 @@ class _AuthScreenState extends State<AuthScreen> {
           );
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(
-              builder: (_) => getHomeScreenForRole(widget.selectedRole),
+              builder: (ctx) => getAuthorizedHomeScreen(
+                user: state.user,
+                requestedRole: widget.selectedRole,
+                context: ctx,
+              ),
             ),
             (route) => false,
           );

@@ -141,6 +141,13 @@ class CompleteRegistrationSerializer(serializers.Serializer):
         help_text=_("Palavra-passe de acesso à plataforma (mínimo de 6 caracteres)."),
     )
 
+    tipo_utilizador = serializers.ChoiceField(
+        choices=CustomUser.TipoUtilizador.choices,
+        default=CustomUser.TipoUtilizador.CLIENTE,
+        required=False,
+        help_text=_("Papel funcional pretendido pelo utilizador (CLIENTE, PARCEIRO, ESTAFETA)."),
+    )
+
     # Consentimentos RGPD (RN-004)
     termos_utilizacao = serializers.BooleanField(
         default=True,
@@ -241,8 +248,11 @@ CompletarRegistoSerializer = CompleteRegistrationSerializer
 
 class UtilizadorResumoSerializer(serializers.ModelSerializer):
     """
-    Serializer para devolução dos dados de perfil e segurança do utilizador autenticado (RN-003, RN-006, RN-008).
+    Serializer para devolução dos dados de perfil e segurança do utilizador autenticado (RN-003, RN-006, RN-008, RBAC).
     """
+
+    loja_id = serializers.SerializerMethodField()
+    estafeta_id = serializers.SerializerMethodField()
 
     class Meta:
         model = CustomUser
@@ -252,10 +262,26 @@ class UtilizadorResumoSerializer(serializers.ModelSerializer):
             "nome",
             "email",
             "estado",
+            "tipo_utilizador",
+            "loja_id",
+            "estafeta_id",
             "data_nascimento",
             "data_criacao",
         )
         read_only_fields = fields
+
+    def get_loja_id(self, obj: CustomUser) -> str | None:
+        try:
+            loja = obj.lojas_geridas.first()
+            return str(loja.id) if loja else None
+        except Exception:
+            return None
+
+    def get_estafeta_id(self, obj: CustomUser) -> str | None:
+        try:
+            return str(obj.perfil_estafeta.id) if hasattr(obj, "perfil_estafeta") else None
+        except Exception:
+            return None
 
 
 class EmailOTPRequestSerializer(serializers.Serializer):
@@ -327,6 +353,12 @@ class EmailRegisterSerializer(serializers.Serializer):
         allow_blank=True,
         default="",
         help_text=_("Número de telemóvel de contacto opcional."),
+    )
+    tipo_utilizador = serializers.ChoiceField(
+        choices=CustomUser.TipoUtilizador.choices,
+        default=CustomUser.TipoUtilizador.CLIENTE,
+        required=False,
+        help_text=_("Papel funcional pretendido (CLIENTE, PARCEIRO, ESTAFETA)."),
     )
     termos_utilizacao = serializers.BooleanField(
         default=True,

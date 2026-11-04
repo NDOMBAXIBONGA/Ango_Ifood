@@ -111,6 +111,14 @@ class CustomUser(AbstractUser):
         SUSPENSO = "SUSPENSO", _("Suspenso")
         PENDENTE = "PENDENTE", _("Pendente")
 
+    class TipoUtilizador(models.TextChoices):
+        """Papel operacional do utilizador na plataforma (RBAC)."""
+
+        CLIENTE = "CLIENTE", _("Cliente")
+        PARCEIRO = "PARCEIRO", _("Parceiro / Restaurante")
+        ESTAFETA = "ESTAFETA", _("Estafeta / Entregador")
+        ADMIN = "ADMIN", _("Administrador")
+
     # Remove o campo username herdado do AbstractUser para impor o telemóvel como credencial (RN-001)
     username = None  # type: ignore[assignment]
 
@@ -121,6 +129,16 @@ class CustomUser(AbstractUser):
         editable=False,
         verbose_name=_("ID do Utilizador"),
         help_text=_("RN-003 / RN-008: Identificador único universal (UUID v4) do utilizador."),
+    )
+
+    # Papel funcional / Tipo de Utilizador (RBAC)
+    tipo_utilizador = models.CharField(
+        max_length=20,
+        choices=TipoUtilizador.choices,
+        default=TipoUtilizador.CLIENTE,
+        db_index=True,
+        verbose_name=_("Tipo de Utilizador / Papel"),
+        help_text=_("Perfil funcional e permissões operacionais do utilizador na plataforma."),
     )
 
     # RN-003: Nome completo do utilizador para identificação no perfil e entregas
@@ -194,8 +212,21 @@ class CustomUser(AbstractUser):
         indexes = [
             models.Index(fields=["telemovel"], name="idx_user_telemovel"),
             models.Index(fields=["email"], name="idx_user_email"),
+            models.Index(fields=["tipo_utilizador"], name="idx_user_tipo_utilizador"),
             models.Index(fields=["estado", "data_criacao"], name="idx_user_estado_criacao"),
         ]
+
+    @property
+    def is_cliente(self) -> bool:
+        return self.tipo_utilizador == self.TipoUtilizador.CLIENTE
+
+    @property
+    def is_parceiro(self) -> bool:
+        return self.tipo_utilizador == self.TipoUtilizador.PARCEIRO
+
+    @property
+    def is_estafeta(self) -> bool:
+        return self.tipo_utilizador == self.TipoUtilizador.ESTAFETA
 
     def __str__(self) -> str:
         return f"{self.nome} ({self.telemovel}) [{self.estado}]"
