@@ -29,8 +29,23 @@ def health_check(request):
             db_tables = [r[0] for r in cursor.fetchall()]
             db_ok = True
 
-        # Se as tabelas essenciais de accounts ou token_blacklist não existirem ou se solicitado explicitamente com ?migrate=true
-        if "accounts_custom_user" not in db_tables or "token_blacklist_outstandingtoken" not in db_tables or request.GET.get("migrate") == "true":
+        # Verifica se há migrações pendentes ou se solicitado explicitamente com ?migrate=true
+        has_pending_migrations = False
+        try:
+            from django.db.migrations.executor import MigrationExecutor
+            executor = MigrationExecutor(connection)
+            targets = executor.loader.graph.leaf_nodes()
+            has_pending_migrations = bool(executor.migration_plan(targets))
+        except Exception:
+            pass
+
+        # Se as tabelas essenciais de accounts ou token_blacklist não existirem, houver migrações pendentes ou solicitado com ?migrate=true
+        if (
+            "accounts_custom_user" not in db_tables
+            or "token_blacklist_outstandingtoken" not in db_tables
+            or has_pending_migrations
+            or request.GET.get("migrate") == "true"
+        ):
             import io
             from django.core.management import call_command
             buffer = io.StringIO()

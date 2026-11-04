@@ -1039,59 +1039,71 @@ class EmailPasswordLoginView(APIView):
     throttle_classes = []
 
     def post(self, request: Request) -> Response:
-        serializer = EmailPasswordLoginSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        try:
+            serializer = EmailPasswordLoginSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
 
-        identificador: str = serializer.validated_data["email"].strip()
-        password: str = serializer.validated_data["password"]
+            identificador: str = serializer.validated_data["email"].strip()
+            password: str = serializer.validated_data["password"]
 
-        # Busca o utilizador por e-mail ou por telemóvel
-        user = CustomUser.objects.filter(email__iexact=identificador).first()
-        if not user:
-            user = CustomUser.objects.filter(telemovel=identificador).first()
+            # Busca o utilizador por e-mail ou por telemóvel
+            user = CustomUser.objects.filter(email__iexact=identificador).first()
+            if not user:
+                user = CustomUser.objects.filter(telemovel=identificador).first()
 
-        if not user or not user.check_password(password):
-            return Response(
-                {
-                    "erro": "credenciais_invalidas",
-                    "detalhe": _("E-mail/telemóvel ou palavra-passe incorretos."),
-                },
-                status=status.HTTP_401_UNAUTHORIZED,
+            if not user or not user.check_password(password):
+                return Response(
+                    {
+                        "erro": "credenciais_invalidas",
+                        "detalhe": _("E-mail/telemóvel ou palavra-passe incorretos."),
+                    },
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
+
+            # RN-008: Verificação de suspensão
+            if user.estado == CustomUser.EstadoConta.SUSPENSO:
+                return Response(
+                    {
+                        "erro": "conta_suspensa",
+                        "detalhe": _("RN-008: Conta suspensa por motivos de segurança. Contacte o suporte."),
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            # Se o utilizador estava PENDENTE, ativa a conta
+            if user.estado == CustomUser.EstadoConta.PENDENTE:
+                user.estado = CustomUser.EstadoConta.ATIVO
+                user.is_active = True
+                user.save(update_fields=["estado", "is_active"])
+
+            tokens = gerar_tokens_jwt_para_utilizador(user)
+
+            logger.info(
+                "Utilizador autenticado com sucesso via palavra-passe: %s (id=%s)",
+                user.email or user.telemovel,
+                user.id,
             )
 
-        # RN-008: Verificação de suspensão
-        if user.estado == CustomUser.EstadoConta.SUSPENSO:
             return Response(
                 {
-                    "erro": "conta_suspensa",
-                    "detalhe": _("RN-008: Conta suspensa por motivos de segurança. Contacte o suporte."),
+                    "mensagem": _("Autenticação realizada com sucesso."),
+                    "registo_pendente": False,
+                    "tokens": tokens,
+                    "perfil": UtilizadorResumoSerializer(user).data,
                 },
-                status=status.HTTP_403_FORBIDDEN,
+                status=status.HTTP_200_OK,
             )
-
-        # Se o utilizador estava PENDENTE, ativa a conta
-        if user.estado == CustomUser.EstadoConta.PENDENTE:
-            user.estado = CustomUser.EstadoConta.ATIVO
-            user.is_active = True
-            user.save(update_fields=["estado", "is_active"])
-
-        tokens = gerar_tokens_jwt_para_utilizador(user)
-
-        logger.info(
-            "Utilizador autenticado com sucesso via palavra-passe: %s (id=%s)",
-            user.email or user.telemovel,
-            user.id,
-        )
-
-        return Response(
-            {
-                "mensagem": _("Autenticação realizada com sucesso."),
-                "registo_pendente": False,
-                "tokens": tokens,
-                "perfil": UtilizadorResumoSerializer(user).data,
-            },
-            status=status.HTTP_200_OK,
-        )
+        except serializers.ValidationError as val_err:
+            return Response(val_err.detail, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.exception("Erro interno no processamento de login com palavra-passe: %s", e)
+            return Response(
+                {
+                    "erro": "erro_interno",
+                    "detalhe": _("Erro interno ao processar autenticação. Tente novamente."),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class MoradaViewSet(viewsets.ModelViewSet):
