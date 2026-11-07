@@ -96,42 +96,11 @@ def health_check(request):
         except Exception as te:
             brevo_test_result = {"error": str(te)}
 
-    user_check_result = None
-    check_user_param = request.GET.get("check_user")
-    if check_user_param:
-        try:
-            from apps.accounts.models import CustomUser
-            u = CustomUser.objects.filter(email__iexact=check_user_param.strip()).first()
-            if not u:
-                u = CustomUser.objects.filter(telemovel=check_user_param.strip()).first()
-            if u:
-                user_check_result = {
-                    "exists": True,
-                    "id": str(u.id),
-                    "email": u.email,
-                    "nome": u.nome,
-                    "telemovel": u.telemovel,
-                    "tipo_utilizador": getattr(u, "tipo_utilizador", "N/A"),
-                    "has_usable_password": u.has_usable_password(),
-                    "estado": u.estado,
-                    "is_active": u.is_active,
-                }
-                set_user_pwd = request.GET.get("set_user_password")
-                if set_user_pwd:
-                    u.set_password(set_user_pwd)
-                    u.save(update_fields=["password"])
-                    user_check_result["password_updated"] = True
-            else:
-                user_check_result = {"exists": False}
-        except Exception as ue:
-            user_check_result = {"error": str(ue)}
-
     return JsonResponse(
         {
             "status": "healthy" if db_ok else "degraded",
             "version": "v1.0.6-release",
             "service": "delivery-backend-api",
-            "user_check": user_check_result,
             "database": {
                 "connected": db_ok,
                 "tables_count": len(db_tables),
