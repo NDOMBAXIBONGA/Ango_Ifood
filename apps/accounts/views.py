@@ -230,18 +230,15 @@ class RequestOTPView(APIView):
             },
         )
 
-        # Despacho do e-mail transacional via Brevo se um e-mail foi fornecido ou inferido
+        # Despacho assíncrono do e-mail transacional via Brevo se um e-mail foi fornecido ou inferido
         email_destino = serializer.validated_data.get("email") or (telemovel if "@" in telemovel else None)
         if email_destino:
-            brevo_service = BrevoEmailService()
-            sucesso_brevo = brevo_service.enviar_email_otp(
-                email_destino=email_destino,
-                codigo_otp=codigo_seguro,
-            )
-            if sucesso_brevo:
-                logger.info("Código OTP enviado com sucesso via Brevo para o e-mail: %s", email_destino)
-            else:
-                logger.warning("Falha ao entregar código OTP via Brevo para o e-mail: %s", email_destino)
+            threading.Thread(
+                target=BrevoEmailService().enviar_email_otp,
+                args=(email_destino, codigo_seguro),
+                daemon=True,
+            ).start()
+            logger.info("Disparo assíncrono de OTP via Brevo iniciado para: %s", email_destino)
 
         # Registo em log do envio do desafio OTP
         mensagem_log = (
@@ -1051,11 +1048,30 @@ class EmailPasswordLoginView(APIView):
             if not user:
                 user = CustomUser.objects.filter(telemovel=identificador).first()
 
-            if not user or not user.check_password(password):
+            if not user:
+                return Response(
+                    {
+                        "erro": "utilizador_nao_encontrado",
+                        "detalhe": _("Não foi encontrada nenhuma conta associada a este e-mail. Crie uma nova conta ou verifique o endereço."),
+                    },
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
+
+            # Verifica se o utilizador já tem palavra-passe configurada (contas criadas via Código OTP)
+            if not user.has_usable_password():
+                return Response(
+                    {
+                        "erro": "senha_nao_configurada",
+                        "detalhe": _("Esta conta foi criada via Código OTP e ainda não possui palavra-passe. Aceda pela aba 'Código OTP' para entrar diretamente."),
+                    },
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
+
+            if not user.check_password(password):
                 return Response(
                     {
                         "erro": "credenciais_invalidas",
-                        "detalhe": _("E-mail/telemóvel ou palavra-passe incorretos."),
+                        "detalhe": _("Palavra-passe incorreta. Verifique a senha digitada ou aceda rapidamente via Código OTP."),
                     },
                     status=status.HTTP_401_UNAUTHORIZED,
                 )

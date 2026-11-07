@@ -31,9 +31,9 @@ class AuthRepository {
         _dio = dio ??
             Dio(
               BaseOptions(
-                connectTimeout: const Duration(seconds: 15),
-                receiveTimeout: const Duration(seconds: 15),
-                sendTimeout: const Duration(seconds: 15),
+                connectTimeout: const Duration(seconds: 35),
+                receiveTimeout: const Duration(seconds: 35),
+                sendTimeout: const Duration(seconds: 35),
                 headers: {
                   'Content-Type': 'application/json',
                   'Accept': 'application/json',
@@ -345,6 +345,18 @@ class AuthRepository {
         );
       }
 
+      // 3. Trata HTTP 401: Credenciais Inválidas, Senha não configurada ou Utilizador não encontrado
+      if (statusCode == 401) {
+        final msgErro = detalhe ??
+            responseData['message'] ??
+            responseData['detail'] ??
+            'Credenciais inválidas. Verifique os dados introduzidos.';
+        return InvalidCredentialsException(
+          message: msgErro.toString(),
+          errorCode: erroCode ?? 'credenciais_invalidas',
+        );
+      }
+
       // 3. Trata HTTP 400: OTP Expirado (RN-002)
       if (erroCode == 'otp_expirado') {
         return OtpExpiredException(
@@ -434,6 +446,16 @@ class AuthRepository {
         message: 'O servidor de autenticação encontrou uma instabilidade ($statusCode). Tente novamente.',
         statusCode: statusCode,
       );
+    }
+
+    if (responseData is Map<String, dynamic>) {
+      final msg = responseData['detalhe'] ?? responseData['detail'] ?? responseData['message'];
+      if (msg != null && msg.toString().isNotEmpty) {
+        return AuthServerException(
+          message: msg.toString(),
+          statusCode: statusCode,
+        );
+      }
     }
 
     return AuthServerException(

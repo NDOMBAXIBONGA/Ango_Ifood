@@ -9,6 +9,8 @@ import os
 from typing import Any
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util import Retry
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -25,6 +27,22 @@ class BrevoEmailService:
     DEFAULT_SENDER_NAME = "Delivery Pro"
     DEFAULT_SENDER_EMAIL = "no-reply@deliverypro.ao"
     DEFAULT_TIMEOUT_SECONDS = 15
+
+    # Sessão HTTP reutilizável com Connection Pooling para evitar re-negociação TLS e DNS contínuos
+    _session: requests.Session | None = None
+
+    @classmethod
+    def get_session(cls) -> requests.Session:
+        if cls._session is None:
+            s = requests.Session()
+            adapter = HTTPAdapter(
+                pool_connections=5,
+                pool_maxsize=10,
+                max_retries=Retry(total=2, backoff_factor=0.2, status_forcelist=[500, 502, 503, 504]),
+            )
+            s.mount("https://", adapter)
+            cls._session = s
+        return cls._session
 
     def __init__(self, api_key: str | None = None, api_url: str | None = None) -> None:
         """
@@ -234,6 +252,13 @@ class BrevoEmailService:
             "accept": "application/json",
         }
 
+        text_content = (
+            f"O seu código de confirmação Delivery Pro é: {codigo_otp}\n\n"
+            f"Validade: 5 minutos.\n"
+            f"Se não solicitou este código, por favor ignore esta mensagem.\n"
+            f"Nunca partilhe este código com terceiros."
+        )
+
         payload: dict[str, Any] = {
             "sender": {
                 "name": self.sender_name,
@@ -244,8 +269,19 @@ class BrevoEmailService:
                     "email": sanitized_email,
                 }
             ],
-            "subject": "Seu Código de Confirmação - Delivery Pro",
+            # Código no assunto acelera leitura imediata via notificações móveis push
+            "subject": f"{codigo_otp} é o seu código de confirmação - Delivery Pro",
             "htmlContent": self._gerar_html_template_otp(codigo_otp),
+            # Versão em texto puro maximiza a entregabilidade nos filtros anti-spam do Gmail/Outlook
+            "textContent": text_content,
+            "tags": ["otp", "autenticacao", "transacional"],
+            "headers": {
+                "X-Mailin-tag": "otp",
+                "X-Priority": "1",
+                "Priority": "Urgent",
+                "Importance": "high",
+                "Auto-Submitted": "auto-generated",
+            },
         }
 
         try:
@@ -256,7 +292,9 @@ class BrevoEmailService:
                 self.sender_email,
             )
 
-            response = requests.post(
+            # Utiliza a sessão com pooling para latência mínima e conexões persistentes
+            session = self.get_session()
+            response = session.post(
                 self.api_url,
                 json=payload,
                 headers=headers,

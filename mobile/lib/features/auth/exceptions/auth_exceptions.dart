@@ -27,6 +27,14 @@ class OtpRateLimitException extends AuthException {
   }) : super(statusCode: 429, errorCode: 'limite_envios_excedido');
 }
 
+/// Erro HTTP 401: Credenciais inválidas (palavra-passe incorreta, utilizador não encontrado ou senha não configurada).
+class InvalidCredentialsException extends AuthException {
+  const InvalidCredentialsException({
+    required super.message,
+    super.errorCode = 'credenciais_invalidas',
+  }) : super(statusCode: 401);
+}
+
 /// Erro HTTP 403: Conta associada com estado 'SUSPENSO' (RN-008).
 class AccountSuspendedException extends AuthException {
   const AccountSuspendedException({
