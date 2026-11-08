@@ -35,6 +35,14 @@ jobs:
           java-version: '17'
 
       # ==============================================================================
+      # Passo 2b: Configuração de Cache do Gradle (Aceleração e resiliência de download)
+      # ==============================================================================
+      - name: Configurar Cache do Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
+      # ==============================================================================
       # Passo 3: Instalação e configuração do Flutter SDK (Canal Stable)
       # ==============================================================================
       - name: Instalar e Configurar o Flutter SDK
@@ -84,6 +92,15 @@ jobs:
             fi
           fi
 
+          # Configura espelho resiliente do Gradle Wrapper para evitar 504 Gateway Timeout do GitHub Releases
+          WRAPPER_PROP="android/gradle/wrapper/gradle-wrapper.properties"
+          if [ -f "$WRAPPER_PROP" ]; then
+            echo "A configurar espelho resiliente do Gradle Wrapper (Anti-504 Gateway Timeout)..."
+            sed -i 's|https\\://services.gradle.org/distributions/|https\\://mirrors.cloud.tencent.com/gradle/|g' "$WRAPPER_PROP"
+            echo "Conteúdo de $WRAPPER_PROP:"
+            cat "$WRAPPER_PROP"
+          fi
+
           echo "A descarregar pacotes e dependências (flutter pub get)..."
           flutter pub get
 
@@ -103,6 +120,12 @@ jobs:
         working-directory: mobile
         run: |
           echo "A iniciar compilação da APK Release..."
+          # Garante espelho resiliente do Gradle Wrapper antes de iniciar o assembleRelease (Anti-504)
+          WRAPPER_PROP="android/gradle/wrapper/gradle-wrapper.properties"
+          if [ -f "$WRAPPER_PROP" ]; then
+            sed -i 's|https\\://services.gradle.org/distributions/|https\\://mirrors.cloud.tencent.com/gradle/|g' "$WRAPPER_PROP"
+          fi
+
           # A flag --no-tree-shake-icons impede que o compilador elimine glifos de ícones
           # referenciados dinamicamente, evitando a renderização de caracteres em mandarim/CJK
           flutter build apk --release --no-tree-shake-icons \
