@@ -96,11 +96,32 @@ def health_check(request):
         except Exception as te:
             brevo_test_result = {"error": str(te)}
 
+    brevo_diagnostic = None
+    if request.GET.get("check_brevo") == "true":
+        import requests
+        headers = {
+            "api-key": brevo_svc.api_key,
+            "content-type": "application/json",
+            "accept": "application/json",
+        }
+        try:
+            account_resp = requests.get("https://api.brevo.com/v3/account", headers=headers, timeout=10)
+            senders_resp = requests.get("https://api.brevo.com/v3/senders", headers=headers, timeout=10)
+            events_resp = requests.get("https://api.brevo.com/v3/smtp/statistics/events?limit=10&sort=desc", headers=headers, timeout=10)
+            brevo_diagnostic = {
+                "account": account_resp.json() if account_resp.status_code == 200 else {"status": account_resp.status_code, "text": account_resp.text},
+                "senders": senders_resp.json() if senders_resp.status_code == 200 else {"status": senders_resp.status_code, "text": senders_resp.text},
+                "recent_events": events_resp.json() if events_resp.status_code == 200 else {"status": events_resp.status_code, "text": events_resp.text},
+            }
+        except Exception as be:
+            brevo_diagnostic = {"error": str(be)}
+
     return JsonResponse(
         {
             "status": "healthy" if db_ok else "degraded",
             "version": "v1.0.6-release",
             "service": "delivery-backend-api",
+            "brevo_diagnostic": brevo_diagnostic,
             "database": {
                 "connected": db_ok,
                 "tables_count": len(db_tables),
