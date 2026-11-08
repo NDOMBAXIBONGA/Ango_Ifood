@@ -17,7 +17,30 @@ from apps.catalog.urls import partner_router as partner_catalog_router
 
 
 def health_check(request):
-    """Endpoint de verificação de integridade e diagnóstico técnico (Banco, Tabelas, Brevo)."""
+    """
+    Endpoint de alta performance para healthcheck e warm-up (sub-5ms).
+    Executa verificação profunda ou migrações apenas sob parâmetros explícitos
+    (?diagnostics=true, ?migrate=true, ?check_events=..., ?list_senders=true).
+    """
+    is_deep_check = bool(
+        request.GET.get("diagnostics") == "true"
+        or request.GET.get("migrate") == "true"
+        or request.GET.get("check_events")
+        or request.GET.get("list_senders") == "true"
+        or request.GET.get("test_email")
+    )
+
+    if not is_deep_check:
+        return JsonResponse(
+            {
+                "status": "healthy",
+                "version": "v1.0.6-release",
+                "service": "delivery-backend-api",
+                "timestamp": timezone.now().isoformat(),
+            },
+            status=200,
+        )
+
     db_ok = False
     db_tables = []
     db_err = None
@@ -29,36 +52,16 @@ def health_check(request):
             db_tables = [r[0] for r in cursor.fetchall()]
             db_ok = True
 
-        # Verifica se há migrações pendentes ou se solicitado explicitamente com ?migrate=true
-        has_pending_migrations = False
-        try:
-            from django.db.migrations.executor import MigrationExecutor
-            executor = MigrationExecutor(connection)
-            targets = executor.loader.graph.leaf_nodes()
-            has_pending_migrations = bool(executor.migration_plan(targets))
-        except Exception:
-            pass
-
-        # Se as tabelas essenciais de accounts ou token_blacklist não existirem, houver migrações pendentes ou solicitado com ?migrate=true
-        if (
-            "accounts_custom_user" not in db_tables
-            or "token_blacklist_outstandingtoken" not in db_tables
-            or has_pending_migrations
-            or request.GET.get("migrate") == "true"
-        ):
+        if request.GET.get("migrate") == "true":
             import io
             from django.core.management import call_command
             buffer = io.StringIO()
-
-            # Executa migrações direcionadas das aplicações do ecossistema de autenticação e core
             for app_target in ["contenttypes", "auth", "accounts", "sessions", "token_blacklist"]:
                 try:
                     call_command("migrate", app_target, interactive=False, stdout=buffer)
                 except Exception as app_err:
                     buffer.write(f"Aviso migração {app_target}: {app_err}\n")
-
             migration_output = buffer.getvalue()
-            # Atualiza lista de tabelas após migração
             with connection.cursor() as cursor:
                 cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public';")
                 db_tables = [r[0] for r in cursor.fetchall()]

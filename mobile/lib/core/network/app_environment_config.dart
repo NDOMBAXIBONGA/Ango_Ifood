@@ -258,6 +258,9 @@ class JwtAuthInterceptor extends Interceptor {
           final client = HttpClient(
             context: SecurityContext(withTrustedRoots: true),
           );
+          client.idleTimeout = const Duration(seconds: 35);
+          client.connectionTimeout = const Duration(seconds: 15);
+          client.maxConnectionsPerHost = 10;
           // Aceita cadeias de certificados intermediários da Cloud do Render
           client.badCertificateCallback = (cert, host, port) => true;
           return client;
@@ -290,13 +293,17 @@ Dio createSecureDioClient({
 
   final dio = Dio(options);
 
-  // Configuração nativa de certificados SSL (TLS 1.2 / TLS 1.3 de produção)
+  // Configuração nativa de certificados SSL (TLS 1.2 / TLS 1.3 de produção) com HTTP Keep-Alive
   if (!kIsWeb) {
     dio.httpClientAdapter = IOHttpClientAdapter(
       createHttpClient: () {
         final client = HttpClient(
           context: SecurityContext(withTrustedRoots: true),
         );
+        // Otimização de latência: conexões persistentes (Keep-Alive) e pool de sockets
+        client.idleTimeout = const Duration(seconds: 35);
+        client.connectionTimeout = const Duration(seconds: 15);
+        client.maxConnectionsPerHost = 10;
         // Aceita certificados intermediários para não bloquear rota no Android
         client.badCertificateCallback = (cert, host, port) => true;
         return client;

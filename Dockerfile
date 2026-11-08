@@ -100,9 +100,9 @@ USER appuser
 # Exposição da porta da aplicação
 EXPOSE 8000
 
-# Healthcheck do contentor HTTP
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD curl -f http://localhost:8000/api/v1/catalog/ || exit 1
+# Healthcheck do contentor HTTP ultra-rápido
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8000/healthz/ || exit 1
 
 # Comando de arranque por defeito em produção (Gunicorn com workers ASGI Uvicorn para HTTP e WebSockets)
 CMD ["gunicorn", "config.asgi:application", \
