@@ -103,77 +103,76 @@ class BrevoEmailService:
             line-height: 1.6;
         }}
         .email-wrapper {{
-            max-width: 580px;
-            margin: 40px auto;
+            max-width: 540px;
+            margin: 30px auto;
             background-color: #FFFFFF;
-            border-radius: 16px;
+            border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
             border: 1px solid #E2E8F0;
         }}
         .header {{
-            background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
-            padding: 32px 24px;
+            background-color: #0F172A;
+            padding: 28px 24px;
             text-align: center;
         }}
         .header h1 {{
             margin: 0;
             color: #FFFFFF;
-            font-size: 24px;
+            font-size: 22px;
             font-weight: 800;
-            letter-spacing: 1px;
+            letter-spacing: 2px;
             text-transform: uppercase;
         }}
         .header p {{
             margin: 6px 0 0 0;
-            color: #FEE2E2;
+            color: #94A3B8;
             font-size: 13px;
             font-weight: 500;
         }}
         .content {{
-            padding: 36px 32px;
+            padding: 32px 28px;
             text-align: center;
         }}
         .content h2 {{
             margin: 0 0 12px 0;
-            font-size: 20px;
+            font-size: 19px;
             font-weight: 700;
             color: #0F172A;
         }}
         .content p {{
-            margin: 0 0 24px 0;
-            font-size: 15px;
+            margin: 0 0 20px 0;
+            font-size: 14px;
             color: #475569;
         }}
         .otp-container {{
-            background-color: #FEF2F2;
-            border: 2px dashed #FCA5A5;
-            border-radius: 12px;
-            padding: 20px;
-            margin: 28px 0;
+            background-color: #F8FAFC;
+            border: 2px solid #E2E8F0;
+            border-radius: 10px;
+            padding: 18px 24px;
+            margin: 24px 0;
             display: inline-block;
             min-width: 220px;
         }}
         .otp-code {{
-            font-size: 36px;
+            font-size: 34px;
             font-weight: 800;
-            letter-spacing: 10px;
-            color: #DC2626;
-            font-family: 'Courier New', Courier, monospace;
+            letter-spacing: 8px;
+            color: #0F172A;
+            font-family: Consolas, 'Courier New', monospace;
             margin: 0;
         }}
         .alert-box {{
-            background-color: #FFFBEB;
-            border-left: 4px solid #F59E0B;
-            padding: 14px 18px;
-            border-radius: 8px;
+            background-color: #F1F5F9;
+            border-left: 4px solid #64748B;
+            padding: 12px 16px;
+            border-radius: 6px;
             text-align: left;
             margin-top: 24px;
         }}
         .alert-box p {{
             margin: 0;
             font-size: 13px;
-            color: #92400E;
+            color: #334155;
             line-height: 1.5;
         }}
         .footer {{

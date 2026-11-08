@@ -27,18 +27,20 @@ class AuthLoading extends AuthState {
   List<Object?> get props => [loadingMessage];
 }
 
-/// Estado emitido quando o código OTP é enviado com sucesso por SMS (RN-002).
+/// Estado emitido quando o código OTP é enviado com sucesso por SMS ou E-mail (RN-002).
 class OtpSendSuccess extends AuthState {
   final String phone;
   final DateTime expiraEm;
   final int validadeMinutos;
   final int enviosRestantesNaHora;
+  final String? otpHint;
 
   const OtpSendSuccess({
     required this.phone,
     required this.expiraEm,
     required this.validadeMinutos,
     required this.enviosRestantesNaHora,
+    this.otpHint,
   });
 
   @override
@@ -47,6 +49,7 @@ class OtpSendSuccess extends AuthState {
         expiraEm,
         validadeMinutos,
         enviosRestantesNaHora,
+        otpHint,
       ];
 }
 

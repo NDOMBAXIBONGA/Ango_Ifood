@@ -17,11 +17,13 @@ import 'registration_form_screen.dart';
 class EmailOtpVerificationScreen extends StatefulWidget {
   final String email;
   final PlatformRole selectedRole;
+  final String? otpHint;
 
   const EmailOtpVerificationScreen({
     super.key,
     required this.email,
     this.selectedRole = PlatformRole.cliente,
+    this.otpHint,
   });
 
   @override
@@ -125,6 +127,17 @@ class _EmailOtpVerificationScreenState extends State<EmailOtpVerificationScreen>
               otp: otp,
             ),
           );
+    }
+  }
+
+  void _fillOtpCode(String code) {
+    final clean = code.replaceAll(RegExp(r'\D'), '');
+    for (int i = 0; i < clean.length && i < _pinLength; i++) {
+      _controllers[i].text = clean[i];
+    }
+    setState(() {});
+    if (clean.length == _pinLength) {
+      _checkAndSubmitOtp();
     }
   }
 
@@ -342,6 +355,45 @@ class _EmailOtpVerificationScreenState extends State<EmailOtpVerificationScreen>
                             }),
                           ),
 
+                          if (widget.otpHint != null && widget.otpHint!.isNotEmpty) ...[
+                            const SizedBox(height: 16),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF0FDF4),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: const Color(0xFFBBF7D0)),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.flash_on_rounded, color: Color(0xFF16A34A), size: 20),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Código rápido: ${widget.otpHint}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF166534),
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => _fillOtpCode(widget.otpHint!),
+                                    style: TextButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      backgroundColor: const Color(0xFF16A34A),
+                                      foregroundColor: Colors.white,
+                                      visualDensity: VisualDensity.compact,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                    ),
+                                    child: const Text('Preencher', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+
                           const SizedBox(height: 32),
 
                           // Contador Visual Regressivo (05:00)
@@ -422,6 +474,59 @@ class _EmailOtpVerificationScreenState extends State<EmailOtpVerificationScreen>
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
+                          ),
+
+                          const SizedBox(height: 20),
+
+                          // Caixa de Orientação e Ajuda de Entrega de E-mail (Spam / Promoções)
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.mark_email_unread_outlined, size: 20, color: Color(0xFF64748B)),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: RichText(
+                                    text: TextSpan(
+                                      style: theme.textTheme.bodySmall?.copyWith(
+                                        color: const Color(0xFF475569),
+                                        height: 1.45,
+                                        fontSize: 12,
+                                      ),
+                                      children: const [
+                                        TextSpan(
+                                          text: 'Não encontrou o e-mail? ',
+                                          style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+                                        ),
+                                        TextSpan(
+                                          text: 'Verifique a pasta de ',
+                                        ),
+                                        TextSpan(
+                                          text: 'Spam / Lixo Eletrónico',
+                                          style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFFDC2626)),
+                                        ),
+                                        TextSpan(
+                                          text: ' ou o separador ',
+                                        ),
+                                        TextSpan(
+                                          text: 'Promoções',
+                                          style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+                                        ),
+                                        TextSpan(
+                                          text: ' da sua aplicação de correio.',
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
 
                           const SizedBox(height: 16),

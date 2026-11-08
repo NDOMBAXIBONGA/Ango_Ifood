@@ -195,12 +195,14 @@ class _AuthScreenState extends State<AuthScreen> {
                   ? EmailOtpVerificationScreen(
                       email: state.phone,
                       selectedRole: widget.selectedRole,
+                      otpHint: state.otpHint,
                     )
                   : OtpVerificationScreen(
                       phone: state.phone,
                       expiraEm: state.expiraEm,
                       validadeMinutos: state.validadeMinutos,
                       selectedRole: widget.selectedRole,
+                      otpHint: state.otpHint,
                     ),
             ),
           );

@@ -332,6 +332,10 @@ DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="jobdealmeida016@gmail.co
 BREVO_SENDER_EMAIL = env("BREVO_SENDER_EMAIL", default="jobdealmeida016@gmail.com")
 BREVO_API_KEY = env("BREVO_API_KEY", default="")
 
+# Expõe código OTP nas respostas da API para testes móveis e desenvolvimento
+EXPOSE_OTP_HINT = env.bool("EXPOSE_OTP_HINT", default=True)
+
+
 
 
 SIMPLE_JWT = {
@@ -467,5 +471,9 @@ FRAUD_MAX_ACCOUNTS_PER_CARD = env.int("FRAUD_MAX_ACCOUNTS_PER_CARD", default=3)
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="jobdealmeida016@gmail.com")
 BREVO_SENDER_EMAIL = env("BREVO_SENDER_EMAIL", default="jobdealmeida016@gmail.com")
 BREVO_API_KEY = env("BREVO_API_KEY", default="")
+
+# Expõe código OTP nas respostas da API para testes móveis e desenvolvimento
+EXPOSE_OTP_HINT = env.bool("EXPOSE_OTP_HINT", default=True)
+
 
 

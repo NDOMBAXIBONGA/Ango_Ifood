@@ -249,15 +249,19 @@ class RequestOTPView(APIView):
         logger.info(mensagem_log)
         print(mensagem_log)
 
+        resp_payload = {
+            "mensagem": _("RN-002: Código de verificação OTP gerado e enviado com sucesso."),
+            "telemovel": telemovel,
+            "expira_em": registo_otp.expira_em.isoformat(),
+            "validade_minutos": OTP_EXPIRACAO_MINUTOS,
+            "tentativas_permitidas": OTP_MAX_TENTATIVAS,
+            "envios_restantes_na_hora": max(0, OTP_MAX_ENVIOS_HORA - nova_contagem_envios),
+        }
+        if getattr(settings, "EXPOSE_OTP_HINT", True):
+            resp_payload["otp_hint"] = codigo_seguro
+
         return Response(
-            {
-                "mensagem": _("RN-002: Código de verificação OTP gerado e enviado com sucesso."),
-                "telemovel": telemovel,
-                "expira_em": registo_otp.expira_em.isoformat(),
-                "validade_minutos": OTP_EXPIRACAO_MINUTOS,
-                "tentativas_permitidas": OTP_MAX_TENTATIVAS,
-                "envios_restantes_na_hora": max(0, OTP_MAX_ENVIOS_HORA - nova_contagem_envios),
-            },
+            resp_payload,
             status=status.HTTP_200_OK,
         )
 
@@ -669,16 +673,17 @@ class EmailRequestOTPView(APIView):
                 expira_em.isoformat(),
             )
 
-            return Response(
-                {
-                    "sucesso": True,
-                    "mensagem": _("Código de confirmação enviado para o seu e-mail com sucesso."),
-                    "email": email,
-                    "expira_em": expira_em.isoformat(),
-                    "validade_minutos": 5,
-                },
-                status=status.HTTP_200_OK,
-            )
+            resp_data = {
+                "sucesso": True,
+                "mensagem": _("Código de confirmação enviado para o seu e-mail com sucesso."),
+                "email": email,
+                "expira_em": expira_em.isoformat(),
+                "validade_minutos": 5,
+            }
+            if getattr(settings, "EXPOSE_OTP_HINT", True):
+                resp_data["otp_hint"] = codigo_seguro
+
+            return Response(resp_data, status=status.HTTP_200_OK)
         except Exception as e:
             logger.error("Erro interno no processamento de pedido de OTP por e-mail: %s", e, exc_info=True)
             # Auto-recuperação resiliente caso a tabela da base de dados ainda não tenha sido migrada

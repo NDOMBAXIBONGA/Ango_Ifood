@@ -115,6 +115,7 @@ class OtpRequestResult extends Equatable {
   final int validadeMinutos;
   final int tentativasPermitidas;
   final int enviosRestantesNaHora;
+  final String? otpHint;
 
   const OtpRequestResult({
     required this.mensagem,
@@ -123,18 +124,20 @@ class OtpRequestResult extends Equatable {
     required this.validadeMinutos,
     required this.tentativasPermitidas,
     required this.enviosRestantesNaHora,
+    this.otpHint,
   });
 
   factory OtpRequestResult.fromJson(Map<String, dynamic> json) {
     return OtpRequestResult(
       mensagem: json['mensagem'] as String? ?? 'Código OTP enviado.',
-      telemovel: json['telemovel'] as String? ?? '',
+      telemovel: json['telemovel'] as String? ?? json['email'] as String? ?? '',
       expiraEm: json['expira_em'] != null
           ? DateTime.parse(json['expira_em'] as String)
           : DateTime.now().add(const Duration(minutes: 5)),
       validadeMinutos: json['validade_minutos'] as int? ?? 5,
       tentativasPermitidas: json['tentativas_permitidas'] as int? ?? 5,
       enviosRestantesNaHora: json['envios_restantes_na_hora'] as int? ?? 2,
+      otpHint: json['otp_hint'] as String?,
     );
   }
 
@@ -146,6 +149,7 @@ class OtpRequestResult extends Equatable {
         validadeMinutos,
         tentativasPermitidas,
         enviosRestantesNaHora,
+        otpHint,
       ];
 }
 

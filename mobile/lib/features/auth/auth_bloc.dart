@@ -98,6 +98,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           expiraEm: result.expiraEm,
           validadeMinutos: result.validadeMinutos,
           enviosRestantesNaHora: result.enviosRestantesNaHora,
+          otpHint: result.otpHint,
         ),
       );
     } on OtpRateLimitException catch (e) {
@@ -171,6 +172,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           expiraEm: result.expiraEm,
           validadeMinutos: result.validadeMinutos,
           enviosRestantesNaHora: result.enviosRestantesNaHora,
+          otpHint: result.otpHint,
         ),
       );
     } on OtpRateLimitException catch (e) {
