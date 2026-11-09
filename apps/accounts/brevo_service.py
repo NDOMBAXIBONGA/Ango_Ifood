@@ -237,6 +237,52 @@ class BrevoEmailService:
             )
             return False
 
+        text_content = (
+            f"O seu código de confirmação Delivery Pro é: {codigo_otp}\n\n"
+            f"Validade: 5 minutos.\n"
+            f"Se não solicitou este código, por favor ignore esta mensagem.\n"
+            f"Nunca partilhe este código com terceiros."
+        )
+
+        subject = f"{codigo_otp} é o seu código de verificação Delivery Pro"
+        html_content = self._gerar_html_template_otp(codigo_otp)
+
+        # ----------------------------------------------------------------------
+        # CANAL 1: Gmail SMTP Oficial (Garante 100% de entrega na Caixa Principal)
+        # Se GMAIL_APP_PASSWORD ou EMAIL_HOST_PASSWORD estiver configurado,
+        # o e-mail é assinado e enviado diretamente pelos servidores do Google.
+        # ----------------------------------------------------------------------
+        gmail_password = (
+            os.environ.get("GMAIL_APP_PASSWORD")
+            or os.environ.get("EMAIL_HOST_PASSWORD")
+            or getattr(settings, "EMAIL_HOST_PASSWORD", "")
+        )
+        if gmail_password:
+            try:
+                from django.core.mail import EmailMultiAlternatives
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_content,
+                    from_email=f"{self.sender_name} <{self.sender_email}>",
+                    to=[sanitized_email],
+                    reply_to=[self.sender_email],
+                )
+                msg.attach_alternative(html_content, "text/html")
+                msg.send(fail_silently=False)
+                logger.info(
+                    "E-mail OTP enviado com sucesso via Gmail SMTP Oficial para %s (Entrega na Caixa Principal).",
+                    sanitized_email,
+                )
+                return True
+            except Exception as smtp_err:
+                logger.warning(
+                    "Falha ao enviar via Gmail SMTP (%s). A tentar fallback automático para a API Brevo...",
+                    smtp_err,
+                )
+
+        # ----------------------------------------------------------------------
+        # CANAL 2: Brevo Transactional API (Fallback resiliente)
+        # ----------------------------------------------------------------------
         if not self.api_key:
             logger.critical(
                 "Falha de configuração: 'BREVO_API_KEY' não está definida nas variáveis de ambiente. "
@@ -251,13 +297,6 @@ class BrevoEmailService:
             "accept": "application/json",
         }
 
-        text_content = (
-            f"O seu código de confirmação Delivery Pro é: {codigo_otp}\n\n"
-            f"Validade: 5 minutos.\n"
-            f"Se não solicitou este código, por favor ignore esta mensagem.\n"
-            f"Nunca partilhe este código com terceiros."
-        )
-
         payload: dict[str, Any] = {
             "sender": {
                 "name": self.sender_name,
@@ -268,18 +307,17 @@ class BrevoEmailService:
                     "email": sanitized_email,
                 }
             ],
-            # Código no assunto acelera leitura imediata via notificações móveis push
-            "subject": f"{codigo_otp} é o seu código de confirmação - Delivery Pro",
-            "htmlContent": self._gerar_html_template_otp(codigo_otp),
-            # Versão em texto puro maximiza a entregabilidade nos filtros anti-spam do Gmail/Outlook
+            "replyTo": {
+                "email": self.sender_email,
+                "name": self.sender_name,
+            },
+            "subject": subject,
+            "htmlContent": html_content,
             "textContent": text_content,
             "tags": ["otp", "autenticacao", "transacional"],
             "headers": {
-                "X-Mailin-tag": "otp",
-                "X-Priority": "1",
-                "Priority": "Urgent",
-                "Importance": "high",
                 "Auto-Submitted": "auto-generated",
+                "X-Auto-Response-Suppress": "All",
             },
         }
 

@@ -304,45 +304,6 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                     }),
                   ),
 
-                  if (widget.otpHint != null && widget.otpHint!.isNotEmpty) ...[
-                    const SizedBox(height: 16.0),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF0FDF4),
-                        borderRadius: BorderRadius.circular(10.0),
-                        border: Border.all(color: const Color(0xFFBBF7D0)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.flash_on_rounded, color: Color(0xFF16A34A), size: 20.0),
-                          const SizedBox(width: 8.0),
-                          Expanded(
-                            child: Text(
-                              'Código rápido: ${widget.otpHint}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF166534),
-                                fontSize: 13.0,
-                              ),
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: () => _fillOtpCode(widget.otpHint!),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
-                              backgroundColor: const Color(0xFF16A34A),
-                              foregroundColor: Colors.white,
-                              visualDensity: VisualDensity.compact,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6.0)),
-                            ),
-                            child: const Text('Preencher', style: TextStyle(fontSize: 12.0, fontWeight: FontWeight.w700)),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-
                   const SizedBox(height: 32.0),
 
                   // Widget de Timer Regressivo de 5 Minutos (StreamBuilder)

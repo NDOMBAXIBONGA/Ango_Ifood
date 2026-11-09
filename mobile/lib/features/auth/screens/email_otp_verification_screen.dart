@@ -355,45 +355,6 @@ class _EmailOtpVerificationScreenState extends State<EmailOtpVerificationScreen>
                             }),
                           ),
 
-                          if (widget.otpHint != null && widget.otpHint!.isNotEmpty) ...[
-                            const SizedBox(height: 16),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF0FDF4),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: const Color(0xFFBBF7D0)),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.flash_on_rounded, color: Color(0xFF16A34A), size: 20),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      'Código rápido: ${widget.otpHint}',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        color: Color(0xFF166534),
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ),
-                                  TextButton(
-                                    onPressed: () => _fillOtpCode(widget.otpHint!),
-                                    style: TextButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                      backgroundColor: const Color(0xFF16A34A),
-                                      foregroundColor: Colors.white,
-                                      visualDensity: VisualDensity.compact,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                    ),
-                                    child: const Text('Preencher', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-
                           const SizedBox(height: 32),
 
                           // Contador Visual Regressivo (05:00)

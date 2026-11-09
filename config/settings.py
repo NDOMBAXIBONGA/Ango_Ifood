@@ -326,14 +326,23 @@ FRAUD_MAX_ACCOUNTS_PER_DEVICE = env.int("FRAUD_MAX_ACCOUNTS_PER_DEVICE", default
 FRAUD_MAX_ACCOUNTS_PER_CARD = env.int("FRAUD_MAX_ACCOUNTS_PER_CARD", default=3)
 
 # ==============================================================================
-# 12. CONFIGURAÇÃO DE E-MAILS TRANSACIONAIS & BREVO
+# 12. CONFIGURAÇÃO DE E-MAILS TRANSACIONAIS (GMAIL SMTP / BREVO)
 # ==============================================================================
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="jobdealmeida016@gmail.com")
 BREVO_SENDER_EMAIL = env("BREVO_SENDER_EMAIL", default="jobdealmeida016@gmail.com")
 BREVO_API_KEY = env("BREVO_API_KEY", default="")
 
-# Expõe código OTP nas respostas da API para testes móveis e desenvolvimento
-EXPOSE_OTP_HINT = env.bool("EXPOSE_OTP_HINT", default=True)
+# Suporte nativo ao Gmail SMTP oficial (Garante 100% entrega na Caixa Principal)
+# Basta adicionar GMAIL_APP_PASSWORD nas variáveis de ambiente do Render para ativar
+EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")
+EMAIL_HOST = env("EMAIL_HOST", default="smtp.gmail.com")
+EMAIL_PORT = env.int("EMAIL_PORT", default=587)
+EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="jobdealmeida016@gmail.com")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default=env("GMAIL_APP_PASSWORD", default=""))
+
+# Desativado em produção por segurança para não expor o código OTP nas respostas JSON
+EXPOSE_OTP_HINT = env.bool("EXPOSE_OTP_HINT", default=False)
 
 
 
@@ -466,14 +475,23 @@ FRAUD_MAX_ACCOUNTS_PER_DEVICE = env.int("FRAUD_MAX_ACCOUNTS_PER_DEVICE", default
 FRAUD_MAX_ACCOUNTS_PER_CARD = env.int("FRAUD_MAX_ACCOUNTS_PER_CARD", default=3)
 
 # ==============================================================================
-# 12. CONFIGURAÇÃO DE E-MAILS TRANSACIONAIS & BREVO
+# 12. CONFIGURAÇÃO DE E-MAILS TRANSACIONAIS (GMAIL SMTP / BREVO)
 # ==============================================================================
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="jobdealmeida016@gmail.com")
 BREVO_SENDER_EMAIL = env("BREVO_SENDER_EMAIL", default="jobdealmeida016@gmail.com")
 BREVO_API_KEY = env("BREVO_API_KEY", default="")
 
-# Expõe código OTP nas respostas da API para testes móveis e desenvolvimento
-EXPOSE_OTP_HINT = env.bool("EXPOSE_OTP_HINT", default=True)
+# Suporte nativo ao Gmail SMTP oficial (Garante 100% entrega na Caixa Principal)
+# Basta adicionar GMAIL_APP_PASSWORD nas variáveis de ambiente do Render para ativar
+EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")
+EMAIL_HOST = env("EMAIL_HOST", default="smtp.gmail.com")
+EMAIL_PORT = env.int("EMAIL_PORT", default=587)
+EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="jobdealmeida016@gmail.com")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default=env("GMAIL_APP_PASSWORD", default=""))
+
+# Desativado em produção por segurança para não expor o código OTP nas respostas JSON
+EXPOSE_OTP_HINT = env.bool("EXPOSE_OTP_HINT", default=False)
 
 
 

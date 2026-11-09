@@ -258,7 +258,7 @@ class RequestOTPView(APIView):
             "tentativas_permitidas": OTP_MAX_TENTATIVAS,
             "envios_restantes_na_hora": max(0, OTP_MAX_ENVIOS_HORA - nova_contagem_envios),
         }
-        if getattr(settings, "EXPOSE_OTP_HINT", True):
+        if getattr(settings, "EXPOSE_OTP_HINT", False):
             resp_payload["otp_hint"] = codigo_seguro
 
         return Response(
@@ -685,7 +685,7 @@ class EmailRequestOTPView(APIView):
                 "expira_em": expira_em.isoformat(),
                 "validade_minutos": 5,
             }
-            if getattr(settings, "EXPOSE_OTP_HINT", True):
+            if getattr(settings, "EXPOSE_OTP_HINT", False):
                 resp_data["otp_hint"] = codigo_seguro
 
             return Response(resp_data, status=status.HTTP_200_OK)
