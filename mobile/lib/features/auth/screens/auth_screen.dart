@@ -38,6 +38,7 @@ class _AuthScreenState extends State<AuthScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final FocusNode _emailFocusNode = FocusNode();
+  final FocusNode _passwordFocusNode = FocusNode();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
   bool _isEmailValid = false;
@@ -62,6 +63,7 @@ class _AuthScreenState extends State<AuthScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _emailFocusNode.dispose();
+    _passwordFocusNode.dispose();
     super.dispose();
   }
 
@@ -206,6 +208,31 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
             ),
           );
+        } else if (state is AccountAlreadyExists) {
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.info_outline, color: Colors.white, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(state.message)),
+                  ],
+                ),
+                backgroundColor: const Color(0xFF0284C7),
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 4),
+              ),
+            );
+          setState(() {
+            _usePasswordMode = true;
+          });
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              _passwordFocusNode.requestFocus();
+            }
+          });
         } else if (state is OtpVerificationFailure) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -528,6 +555,7 @@ class _AuthScreenState extends State<AuthScreen> {
                           const SizedBox(height: 8),
                           TextFormField(
                             controller: _passwordController,
+                            focusNode: _passwordFocusNode,
                             obscureText: _obscurePassword,
                             textInputAction: TextInputAction.done,
                             onFieldSubmitted: (_) => _submitPasswordLogin(),
@@ -571,6 +599,63 @@ class _AuthScreenState extends State<AuthScreen> {
                                 borderSide: BorderSide(
                                   color: activeColor,
                                   width: 2.0,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: () {
+                                final email = _emailController.text.trim();
+                                showDialog<void>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    title: const Row(
+                                      children: [
+                                        Icon(Icons.lock_reset_rounded, color: Color(0xFF0284C7)),
+                                        SizedBox(width: 8),
+                                        Text('Recuperar Senha', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                    content: Text(
+                                      email.isNotEmpty
+                                          ? 'Deseja iniciar a recuperação de acesso para o e-mail "$email"?'
+                                          : 'Por favor, introduza o seu endereço de e-mail no campo acima para prosseguir com a recuperação da palavra-passe.',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.of(ctx).pop(),
+                                        child: const Text('Voltar'),
+                                      ),
+                                      if (email.isNotEmpty)
+                                        FilledButton(
+                                          onPressed: () {
+                                            Navigator.of(ctx).pop();
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                content: Text('A preparar envio de instruções para o seu e-mail...'),
+                                                backgroundColor: Color(0xFF0284C7),
+                                                behavior: SnackBarBehavior.floating,
+                                              ),
+                                            );
+                                          },
+                                          child: const Text('Continuar'),
+                                        ),
+                                    ],
+                                  ),
+                                );
+                              },
+                              style: TextButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                foregroundColor: activeColor,
+                              ),
+                              child: const Text(
+                                'Esqueceu-se da palavra-passe?',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),

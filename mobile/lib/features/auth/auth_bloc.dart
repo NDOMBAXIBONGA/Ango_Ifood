@@ -101,6 +101,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           otpHint: result.otpHint,
         ),
       );
+    } on AccountAlreadyExistsException catch (e) {
+      emit(
+        AccountAlreadyExists(
+          email: e.email.isNotEmpty ? e.email : event.phone,
+          message: e.message,
+        ),
+      );
     } on OtpRateLimitException catch (e) {
       emit(
         OtpVerificationFailure(
@@ -173,6 +180,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           validadeMinutos: result.validadeMinutos,
           enviosRestantesNaHora: result.enviosRestantesNaHora,
           otpHint: result.otpHint,
+        ),
+      );
+    } on AccountAlreadyExistsException catch (e) {
+      emit(
+        AccountAlreadyExists(
+          email: e.email.isNotEmpty ? e.email : event.email,
+          message: e.message,
         ),
       );
     } on OtpRateLimitException catch (e) {
@@ -363,6 +377,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     } on OtpExpiredException catch (e) {
       emit(
         OtpVerificationFailure(
+          message: e.message,
+        ),
+      );
+    } on AccountAlreadyExistsException catch (e) {
+      emit(
+        AccountAlreadyExists(
+          email: e.email.isNotEmpty ? e.email : event.phone,
           message: e.message,
         ),
       );

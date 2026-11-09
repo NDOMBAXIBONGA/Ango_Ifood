@@ -78,6 +78,16 @@ class RegistrationValidationException extends AuthException {
   }) : super(statusCode: 400, errorCode: 'validacao_formulario');
 }
 
+/// Erro HTTP 409: Conta já registada no sistema ao solicitar OTP (RN-001 / RN-003).
+class AccountAlreadyExistsException extends AuthException {
+  final String email;
+
+  const AccountAlreadyExistsException({
+    required super.message,
+    required this.email,
+  }) : super(statusCode: 409, errorCode: 'conta_ja_existe');
+}
+
 /// Erro de conectividade ou rede (timeout, offline, DNS).
 class AuthNetworkException extends AuthException {
   const AuthNetworkException({

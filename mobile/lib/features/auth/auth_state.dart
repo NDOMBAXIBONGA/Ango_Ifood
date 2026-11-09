@@ -163,6 +163,20 @@ class OtpVerifiedSuccess extends AuthState {
   List<Object?> get props => [email, message];
 }
 
+/// Estado emitido quando o utilizador tenta pedir código OTP mas a conta já existe na plataforma.
+class AccountAlreadyExists extends AuthState {
+  final String email;
+  final String message;
+
+  const AccountAlreadyExists({
+    required this.email,
+    required this.message,
+  });
+
+  @override
+  List<Object?> get props => [email, message];
+}
+
 /// Alias para suporte semântico em interfaces
 typedef ConnectionFailure = AuthNetworkFailure;
 typedef AuthNetworkError = AuthNetworkFailure;

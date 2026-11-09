@@ -327,7 +327,16 @@ class AuthRepository {
       final String? erroCode = responseData['erro'] as String?;
       final String? detalhe = responseData['detalhe'] as String?;
 
-      // 1. Trata HTTP 429: Limite de envios ou bloqueio ativo (RN-002)
+      // 1. Trata HTTP 409 ou conta_ja_existe: Utilizador já registado no sistema
+      if (statusCode == 409 || erroCode == 'conta_ja_existe' || responseData['conta_ja_existe'] == true) {
+        final emailStr = responseData['email']?.toString() ?? '';
+        return AccountAlreadyExistsException(
+          message: detalhe ?? 'Já existe uma conta registada com este e-mail. Por favor, introduza a sua palavra-passe.',
+          email: emailStr,
+        );
+      }
+
+      // 2. Trata HTTP 429: Limite de envios ou bloqueio ativo (RN-002)
       if (statusCode == 429 || erroCode == 'limite_envios_excedido' || erroCode == 'telemovel_bloqueado') {
         final bloqueadoAteStr = responseData['bloqueado_ate'] as String?;
         final retrySeconds = responseData['retry_after_seconds'] as int?;

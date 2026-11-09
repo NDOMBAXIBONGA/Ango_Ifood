@@ -4,7 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../auth/auth_bloc.dart';
 import '../../auth/auth_event.dart';
 import '../../auth/auth_state.dart';
-import '../../splash/screens/splash_screen.dart';
+import '../../auth/screens/role_selection_onboarding_screen.dart';
 import '../bloc/partner_bloc.dart';
 import '../models/partner_models.dart';
 
@@ -350,7 +350,7 @@ class PartnerStoreProfileScreen extends StatelessWidget {
                 context.read<AuthBloc>().add(const LogoutRequested());
                 Navigator.of(context).pushAndRemoveUntil(
                   MaterialPageRoute<void>(
-                    builder: (_) => const SplashScreen(),
+                    builder: (_) => const RoleSelectionOnboardingScreen(),
                   ),
                   (route) => false,
                 );

@@ -463,14 +463,18 @@ class CompleteRegistrationView(APIView):
             serializer.is_valid(raise_exception=True)
 
             telemovel: str | None = serializer.validated_data.get("telemovel")
-            nome: str = serializer.validated_data["nome"]
-            email: str = serializer.validated_data["email"]
+            nome: str = serializer.validated_data["nome"].strip()
+            email: str = serializer.validated_data["email"].strip().lower()
             data_nascimento = serializer.validated_data["data_nascimento"]
             password: str | None = serializer.validated_data.get("password") or None
 
-            # Se telemovel tiver formato de email ou for vazio, normaliza para None
-            if telemovel and "@" in str(telemovel):
-                telemovel = None
+            # Normaliza telemóvel: Se for string vazia, contiver '@' ou for inválido, define como None
+            if telemovel:
+                telemovel_str = str(telemovel).strip()
+                if "@" in telemovel_str or not telemovel_str or telemovel_str.lower() in ("none", "null"):
+                    telemovel = None
+                else:
+                    telemovel = telemovel_str
 
             # Procura se já existe um utilizador por telemóvel (se fornecido) ou por e-mail
             utilizador_existente = None
@@ -534,6 +538,34 @@ class CompleteRegistrationView(APIView):
                     estado=CustomUser.EstadoConta.ATIVO,
                     is_active=True,
                 )
+
+            # Auto-provisionamento de Loja ou Perfil Logístico conforme o papel funcional
+            if tipo_solicitado == CustomUser.TipoUtilizador.PARCEIRO:
+                try:
+                    from apps.catalog.models import Loja
+                    if not user.lojas_geridas.exists():
+                        nif_gerado = f"NIF-{user.id.hex[:8].upper()}"
+                        Loja.objects.create(
+                            proprietario=user,
+                            nome=f"Loja de {user.nome}",
+                            nif=nif_gerado,
+                            morada_texto="Luanda, Angola",
+                            raio_entrega_km=8.0,
+                        )
+                except Exception as loja_err:
+                    logger.warning("Aviso ao auto-provisionar loja parceira: %s", loja_err)
+
+            if tipo_solicitado == CustomUser.TipoUtilizador.ESTAFETA:
+                try:
+                    from apps.logistics.models import Estafeta
+                    if not hasattr(user, "perfil_estafeta"):
+                        Estafeta.objects.create(
+                            utilizador=user,
+                            tipo_veiculo=Estafeta.TipoVeiculo.MOTA,
+                            status_onboarding=Estafeta.StatusOnboarding.APROVADO,
+                        )
+                except Exception as estafeta_err:
+                    logger.warning("Aviso ao auto-provisionar perfil de estafeta: %s", estafeta_err)
 
             # Ativa os perfis de consentimento padrão (RN-004)
             termos_utilizacao = serializer.validated_data.get("termos_utilizacao", True)
@@ -610,7 +642,22 @@ class EmailRequestOTPView(APIView):
         try:
             serializer = EmailOTPRequestSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
-            email: str = serializer.validated_data["email"]
+            email: str = serializer.validated_data["email"].strip().lower()
+
+            # Verificação prévia de existência de conta (RN-001 / RN-003):
+            # Notifica imediatamente o utilizador se a conta já existe, direcionando para login com palavra-passe
+            user_existente = CustomUser.objects.filter(email__iexact=email).first()
+            if user_existente is not None:
+                logger.info("Tentativa de pedido de OTP para e-mail com conta já ativa: %s", email)
+                return Response(
+                    {
+                        "erro": "conta_ja_existe",
+                        "detalhe": _("Já existe uma conta registada com este e-mail. Por favor, introduza a sua palavra-passe para aceder."),
+                        "conta_ja_existe": True,
+                        "email": email,
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
 
             agora = timezone.now()
             uma_hora_atras = agora - timedelta(hours=1)
@@ -816,11 +863,28 @@ class EmailVerifyOTPView(APIView):
 
         logger.info("E-mail verificado com sucesso via OTP: %s", email)
 
+        # Se o utilizador já possuir conta registada e ativa, autentica e devolve tokens imediatamente
+        utilizador = CustomUser.objects.filter(email__iexact=email).first()
+        if utilizador is not None and utilizador.estado != CustomUser.EstadoConta.SUSPENSO and utilizador.is_active:
+            tokens = gerar_tokens_jwt_para_utilizador(utilizador)
+            return Response(
+                {
+                    "sucesso": True,
+                    "mensagem": _("Autenticação realizada com sucesso."),
+                    "registo_pendente": False,
+                    "tokens": tokens,
+                    "perfil": UtilizadorResumoSerializer(utilizador).data,
+                    "is_verificado": True,
+                },
+                status=status.HTTP_200_OK,
+            )
+
         return Response(
             {
                 "sucesso": True,
                 "mensagem": _("E-mail verificado com sucesso."),
                 "email": email,
+                "registo_pendente": True,
                 "is_verificado": True,
             },
             status=status.HTTP_200_OK,
@@ -884,7 +948,36 @@ class EmailRegisterView(APIView):
             data_nascimento=data_nascimento,
             tipo_utilizador=tipo_solicitado,
             estado=CustomUser.EstadoConta.ATIVO,
+            is_active=True,
         )
+
+        # Auto-provisionamento de Loja ou Perfil Logístico conforme o papel funcional
+        if tipo_solicitado == CustomUser.TipoUtilizador.PARCEIRO:
+            try:
+                from apps.catalog.models import Loja
+                if not user.lojas_geridas.exists():
+                    nif_gerado = f"NIF-{user.id.hex[:8].upper()}"
+                    Loja.objects.create(
+                        proprietario=user,
+                        nome=f"Loja de {user.nome}",
+                        nif=nif_gerado,
+                        morada_texto="Luanda, Angola",
+                        raio_entrega_km=8.0,
+                    )
+            except Exception as loja_err:
+                logger.warning("Aviso ao auto-provisionar loja parceira: %s", loja_err)
+
+        if tipo_solicitado == CustomUser.TipoUtilizador.ESTAFETA:
+            try:
+                from apps.logistics.models import Estafeta
+                if not hasattr(user, "perfil_estafeta"):
+                    Estafeta.objects.create(
+                        utilizador=user,
+                        tipo_veiculo=Estafeta.TipoVeiculo.MOTA,
+                        status_onboarding=Estafeta.StatusOnboarding.APROVADO,
+                    )
+            except Exception as estafeta_err:
+                logger.warning("Aviso ao auto-provisionar perfil de estafeta: %s", estafeta_err)
 
         # Gravação dos consentimentos obrigatórios
         PerfilConsentimento.objects.update_or_create(
@@ -1101,6 +1194,32 @@ class EmailPasswordLoginView(APIView):
                 user.estado = CustomUser.EstadoConta.ATIVO
                 user.is_active = True
                 user.save(update_fields=["estado", "is_active"])
+
+            # Auto-provisionamento resiliente de perfil de Loja ou Estafeta se ainda não existirem
+            if user.tipo_utilizador == CustomUser.TipoUtilizador.PARCEIRO and not user.lojas_geridas.exists():
+                try:
+                    from apps.catalog.models import Loja
+                    nif_gerado = f"NIF-{user.id.hex[:8].upper()}"
+                    Loja.objects.create(
+                        proprietario=user,
+                        nome=f"Loja de {user.nome}",
+                        nif=nif_gerado,
+                        morada_texto="Luanda, Angola",
+                        raio_entrega_km=8.0,
+                    )
+                except Exception as l_err:
+                    logger.warning("Aviso ao auto-provisionar loja parceira no login: %s", l_err)
+
+            if user.tipo_utilizador == CustomUser.TipoUtilizador.ESTAFETA and not hasattr(user, "perfil_estafeta"):
+                try:
+                    from apps.logistics.models import Estafeta
+                    Estafeta.objects.create(
+                        utilizador=user,
+                        tipo_veiculo=Estafeta.TipoVeiculo.MOTA,
+                        status_onboarding=Estafeta.StatusOnboarding.APROVADO,
+                    )
+                except Exception as e_err:
+                    logger.warning("Aviso ao auto-provisionar perfil de estafeta no login: %s", e_err)
 
             tokens = gerar_tokens_jwt_para_utilizador(user)
 
