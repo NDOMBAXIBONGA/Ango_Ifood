@@ -21,7 +21,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.accounts.models import CustomUser
-from apps.catalog.models import Categoria, Loja
+from apps.catalog.models import CategoriaItem, ParceiroLoja
 from apps.finance.models import EventoPedido, LivroRazaoLedger
 from apps.orders.models import Pedido
 from apps.support.models import TicketDisputa

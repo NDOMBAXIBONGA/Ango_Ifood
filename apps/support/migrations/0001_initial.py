@@ -78,3 +78,4 @@ class Migration(migrations.Migration):
             index=models.Index(fields=['tipo_incidente', 'prioridade'], name='idx_disputa_tp_prio'),
         ),
     ]
+

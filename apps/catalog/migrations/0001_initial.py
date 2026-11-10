@@ -155,3 +155,4 @@ class Migration(migrations.Migration):
             index=models.Index(fields=['categoria', 'is_disponivel'], name='idx_item_cat_disp'),
         ),
     ]
+

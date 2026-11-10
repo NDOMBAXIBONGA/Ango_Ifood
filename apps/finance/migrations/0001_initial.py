@@ -70,3 +70,4 @@ class Migration(migrations.Migration):
             index=models.Index(fields=['conta_destino', 'timestamp'], name='idx_fin_led_dst_ts'),
         ),
     ]
+

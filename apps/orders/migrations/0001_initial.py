@@ -92,3 +92,4 @@ class Migration(migrations.Migration):
             index=models.Index(fields=['pedido'], name='idx_linhapedido_pedido'),
         ),
     ]
+

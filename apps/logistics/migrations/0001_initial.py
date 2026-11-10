@@ -75,3 +75,4 @@ class Migration(migrations.Migration):
             index=models.Index(fields=['estafeta', 'estado_entrega'], name='idx_entrega_estafeta_estado'),
         ),
     ]
+

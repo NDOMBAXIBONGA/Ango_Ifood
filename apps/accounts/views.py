@@ -542,14 +542,16 @@ class CompleteRegistrationView(APIView):
             # Auto-provisionamento de Loja ou Perfil Logístico conforme o papel funcional
             if tipo_solicitado == CustomUser.TipoUtilizador.PARCEIRO:
                 try:
-                    from apps.catalog.models import Loja
+                    from django.contrib.gis.geos import Point
+                    from apps.catalog.models import ParceiroLoja
                     if not user.lojas_geridas.exists():
                         nif_gerado = f"NIF-{user.id.hex[:8].upper()}"
-                        Loja.objects.create(
+                        ParceiroLoja.objects.create(
                             proprietario=user,
                             nome=f"Loja de {user.nome}",
                             nif=nif_gerado,
                             morada_texto="Luanda, Angola",
+                            geolocalizacao=Point(13.2343, -8.8368, srid=4326),
                             raio_entrega_km=8.0,
                         )
                 except Exception as loja_err:
@@ -958,14 +960,16 @@ class EmailRegisterView(APIView):
         # Auto-provisionamento de Loja ou Perfil Logístico conforme o papel funcional
         if tipo_solicitado == CustomUser.TipoUtilizador.PARCEIRO:
             try:
-                from apps.catalog.models import Loja
+                from django.contrib.gis.geos import Point
+                from apps.catalog.models import ParceiroLoja
                 if not user.lojas_geridas.exists():
                     nif_gerado = f"NIF-{user.id.hex[:8].upper()}"
-                    Loja.objects.create(
+                    ParceiroLoja.objects.create(
                         proprietario=user,
                         nome=f"Loja de {user.nome}",
                         nif=nif_gerado,
                         morada_texto="Luanda, Angola",
+                        geolocalizacao=Point(13.2343, -8.8368, srid=4326),
                         raio_entrega_km=8.0,
                     )
             except Exception as loja_err:
@@ -1202,13 +1206,15 @@ class EmailPasswordLoginView(APIView):
             # Auto-provisionamento resiliente de perfil de Loja ou Estafeta se ainda não existirem
             if user.tipo_utilizador == CustomUser.TipoUtilizador.PARCEIRO and not user.lojas_geridas.exists():
                 try:
-                    from apps.catalog.models import Loja
+                    from django.contrib.gis.geos import Point
+                    from apps.catalog.models import ParceiroLoja
                     nif_gerado = f"NIF-{user.id.hex[:8].upper()}"
-                    Loja.objects.create(
+                    ParceiroLoja.objects.create(
                         proprietario=user,
                         nome=f"Loja de {user.nome}",
                         nif=nif_gerado,
                         morada_texto="Luanda, Angola",
+                        geolocalizacao=Point(13.2343, -8.8368, srid=4326),
                         raio_entrega_km=8.0,
                     )
                 except Exception as l_err:

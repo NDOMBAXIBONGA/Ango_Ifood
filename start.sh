@@ -56,3 +56,4 @@ echo "--> [OK] Base de dados 100% atualizada! A iniciar Daphne ASGI na porta ${P
 echo "======================================================================"
 
 exec daphne -b 0.0.0.0 -p ${PORT:-8000} config.asgi:application
+

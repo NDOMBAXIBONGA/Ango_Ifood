@@ -38,3 +38,4 @@ class Migration(migrations.Migration):
             index=models.Index(fields=['codigo', 'validade_inicio', 'validade_fim'], name='idx_cupao_codigo_validade'),
         ),
     ]
+
