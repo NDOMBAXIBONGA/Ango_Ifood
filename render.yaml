@@ -35,7 +35,8 @@ services:
     runtime: python
     plan: starter
     buildCommand: ./render_build.sh
-    startCommand: daphne -b 0.0.0.0 -p $PORT config.asgi:application
+    preDeployCommand: python manage.py migrate --noinput
+    startCommand: bash ./start.sh
     envVars:
       # Ligação Dinâmica à Base de Dados PostgreSQL
       - key: DATABASE_URL

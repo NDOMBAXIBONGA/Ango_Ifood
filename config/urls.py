@@ -56,11 +56,24 @@ def health_check(request):
             import io
             from django.core.management import call_command
             buffer = io.StringIO()
-            for app_target in ["contenttypes", "auth", "accounts", "sessions", "token_blacklist"]:
+            try:
+                call_command("makemigrations", interactive=False, stdout=buffer)
+            except Exception as mm_err:
+                buffer.write(f"Aviso makemigrations: {mm_err}\n")
+
+            todas_apps = [
+                "contenttypes", "auth", "accounts", "sessions", "token_blacklist",
+                "catalog", "orders", "logistics", "finance", "promotions", "support"
+            ]
+            for app_target in todas_apps:
                 try:
                     call_command("migrate", app_target, interactive=False, stdout=buffer)
                 except Exception as app_err:
                     buffer.write(f"Aviso migração {app_target}: {app_err}\n")
+            try:
+                call_command("migrate", interactive=False, stdout=buffer)
+            except Exception as final_err:
+                buffer.write(f"Aviso migrate global: {final_err}\n")
             migration_output = buffer.getvalue()
             with connection.cursor() as cursor:
                 cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public';")

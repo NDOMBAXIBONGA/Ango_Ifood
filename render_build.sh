@@ -5,55 +5,29 @@
 # Stack: Django 5 + GeoDjango (PostGIS) + DRF + Channels (Daphne) + WhiteNoise
 # ==============================================================================
 
-# Passo 1: Aborta a execução instantaneamente caso qualquer comando falhe
 set -o errexit
 set -o pipefail
 set -o nounset
 
 echo "======================================================================"
-echo "--> [1/5] A iniciar pipeline de build no Render..."
+echo "--> [1/4] A iniciar pipeline de build no Render..."
 echo "======================================================================"
 
-# Passo 2: Atualização do pip e instalação das dependências do projeto
-echo "--> [2/5] A atualizar o pip e a instalar dependências do requirements.txt..."
+# 1. Atualização do pip e instalação das dependências do projeto
+echo "--> [2/4] A atualizar o pip e a instalar dependências do requirements.txt..."
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 
-# Passo 5: Habilitação preliminar da extensão PostGIS no PostgreSQL
-# Garante que tipos geométricos (PointField, PolygonField) existam antes do migrate
-echo "--> [3/5] A verificar e inicializar extensão espacial PostGIS..."
-python -c "
-import os
-import sys
-import django
-
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
-django.setup()
-
-from django.db import connection
-
-try:
-    with connection.cursor() as cursor:
-        print('--> A executar CREATE EXTENSION IF NOT EXISTS postgis...')
-        cursor.execute('CREATE EXTENSION IF NOT EXISTS postgis;')
-        cursor.execute('SELECT PostGIS_Full_Version();')
-        versao = cursor.fetchone()
-        print(f'--> PostGIS verificado e ativo: {versao[0]}')
-except Exception as erro:
-    print(f'--> Aviso na ativação de PostGIS via cursor: {erro}', file=sys.stderr)
-"
-
-# Passo 4: Execução atómica das migrações do banco de dados
-echo "--> [4/5] A aplicar migrações na base de dados PostgreSQL..."
-python manage.py makemigrations accounts --noinput || true
+# 2. Tentativa preliminar de migrações na fase de build (caso o banco esteja acessível)
+echo "--> [3/4] A executar verificação preliminar de migrações..."
+python manage.py makemigrations accounts catalog orders logistics finance promotions support --noinput || true
 python manage.py makemigrations --noinput || true
-python manage.py migrate --noinput
+python manage.py migrate --noinput || echo "--> [Nota] Banco de dados inacessível na rede de build. As migrações serão aplicadas no arranque via start.sh / preDeployCommand."
 
-# Passo 3: Recolha de todos os ficheiros estáticos para CDN/WhiteNoise
-echo "--> [5/5] A recolher ficheiros estáticos (collectstatic)..."
+# 3. Recolha de todos os ficheiros estáticos para CDN/WhiteNoise
+echo "--> [4/4] A recolher ficheiros estáticos (collectstatic)..."
 python manage.py collectstatic --noinput --clear
 
 echo "======================================================================"
 echo "--> Build concluído com sucesso no Render! Pronto para iniciar."
 echo "======================================================================"
-
