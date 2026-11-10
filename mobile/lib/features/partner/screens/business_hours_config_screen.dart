@@ -5,11 +5,12 @@ import '../models/partner_models.dart';
 
 /// Ecrã de Configuração do Calendário Operacional Semanal da Loja (RN-012).
 ///
-/// Interface com layout tabular para os 7 dias da semana (Segunda a Domingo):
-/// - Seletores de hora de abertura e fecho via `showTimePicker`;
-/// - Deteção de turnos noturnos que atravessam a meia-noite;
-/// - Comutador de dia aberto/encerrado;
-/// - Gravação via `PartnerBloc` com validações rigorosas.
+/// Arquitetura UX/UI Mobile-First:
+/// - Cartões dedicados para cada um dos 7 dias da semana (Segunda a Domingo);
+/// - Seletores de hora de abertura e fecho de toque amplo via `showTimePicker` (formato 24h);
+/// - Identificação visual de Turnos Noturnos que atravessam a meia-noite;
+/// - Ação rápida para replicar horários de um dia para toda a semana;
+/// - Barra de ação inferior reativa quando há alterações pendentes.
 class BusinessHoursConfigScreen extends StatefulWidget {
   const BusinessHoursConfigScreen({super.key});
 
@@ -143,6 +144,7 @@ class _BusinessHoursConfigScreenState extends State<BusinessHoursConfigScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final diasAtivosCount = _slots.where((s) => s.isAtivo).length;
 
     return BlocConsumer<PartnerBloc, PartnerState>(
       listener: (context, state) {
@@ -158,7 +160,7 @@ class _BusinessHoursConfigScreenState extends State<BusinessHoursConfigScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(state.successMessage!),
-              backgroundColor: const Color(0xFF2E7D32),
+              backgroundColor: const Color(0xFF16A34A),
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -170,8 +172,18 @@ class _BusinessHoursConfigScreenState extends State<BusinessHoursConfigScreen> {
         }
 
         return Scaffold(
+          backgroundColor: const Color(0xFFF8FAFC),
           appBar: AppBar(
-            title: const Text('Horário de Funcionamento (RN-012)'),
+            backgroundColor: Colors.white,
+            elevation: 0,
+            title: const Text(
+              'Horários de Operação',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+                color: Color(0xFF0F172A),
+              ),
+            ),
             actions: [
               if (state.isUpdatingHours)
                 const Padding(
@@ -184,302 +196,359 @@ class _BusinessHoursConfigScreenState extends State<BusinessHoursConfigScreen> {
                     ),
                   ),
                 )
-              else
+              else if (_temAlteracoesPendentes)
                 Padding(
-                  padding: const EdgeInsets.only(right: 16),
-                  child: FilledButton.icon(
-                    icon: const Icon(Icons.save_outlined),
-                    label: const Text('Guardar Horários'),
+                  padding: const EdgeInsets.only(right: 12),
+                  child: TextButton.icon(
+                    icon: const Icon(Icons.check_circle_rounded, size: 18, color: Color(0xFF1E88E5)),
+                    label: const Text(
+                      'Guardar',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1E88E5),
+                      ),
+                    ),
                     onPressed: _salvarHorarios,
                   ),
                 ),
             ],
           ),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Cartão Informativo das Regras
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: colorScheme.primaryContainer.withOpacity(0.4),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: colorScheme.primary.withOpacity(0.2)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline, color: colorScheme.primary),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'RN-012: Define os turnos semanais da tua loja. Pedidos efetuados fora deste '
-                          'calendário são bloqueados automaticamente pelo motor de checkout. '
-                          'Horários que ultrapassam a meia-noite (ex.: 18:00 às 02:00) são suportados.',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.onPrimaryContainer,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+          body: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+            children: [
+              // Card Informativo & KPI de Cobertura Semanal
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.02),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 24),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.calendar_month_rounded,
+                        color: Color(0xFF1E88E5),
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '$diasAtivosCount de 7 dias operacionais',
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          const Text(
+                            'Pedidos fora destes turnos são bloqueados automaticamente.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
 
-                // Tabela Semanal de Horários
-                Container(
+              // Lista dos 7 Dias da Semana em Cartões Mobile-First
+              ...List.generate(7, (index) {
+                final slot = _slots[index];
+                return _DayScheduleCard(
+                  slot: slot,
+                  onToggle: (ativo) => _toggleDiaAtivo(index, ativo),
+                  onSelectAbertura: () => _selecionarHora(
+                    context: context,
+                    diaIndex: index,
+                    isAbertura: true,
+                  ),
+                  onSelectFecho: () => _selecionarHora(
+                    context: context,
+                    diaIndex: index,
+                    isAbertura: false,
+                  ),
+                  onCopyAll: () => _copiarParaTodosOsDias(index),
+                );
+              }),
+            ],
+          ),
+
+          // Barra Fixa Inferior com Destaque de Salvamento Pendente
+          bottomSheet: _temAlteracoesPendentes
+              ? Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                   decoration: BoxDecoration(
-                    color: colorScheme.surface,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: colorScheme.outlineVariant),
+                    color: Colors.white,
                     boxShadow: [
                       BoxShadow(
-                        color: colorScheme.shadow.withOpacity(0.04),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 16,
+                        offset: const Offset(0, -4),
                       ),
                     ],
                   ),
-                  child: Column(
-                    children: [
-                      // Cabeçalho da Tabela
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                        decoration: BoxDecoration(
-                          color: colorScheme.surfaceVariant.withOpacity(0.5),
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  child: SafeArea(
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.info_outline_rounded,
+                          color: Color(0xFFEA580C),
+                          size: 20,
                         ),
-                        child: Row(
-                          children: [
-                            const Expanded(
-                              flex: 3,
-                              child: Text(
-                                'Dia da Semana',
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Text(
+                            'Existem alterações pendentes.',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF334155),
                             ),
-                            const Expanded(
-                              flex: 2,
-                              child: Text(
-                                'Abertura',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            const Expanded(
-                              flex: 2,
-                              child: Text(
-                                'Fecho',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            const Expanded(
-                              flex: 3,
-                              child: Text(
-                                'Estado / Ações',
-                                textAlign: TextAlign.right,
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
-                      const Divider(height: 1),
-
-                      // Linhas dos 7 Dias da Semana
-                      ListView.separated(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _slots.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (ctx, index) {
-                          final slot = _slots[index];
-                          final isAtivo = slot.isAtivo;
-                          final cruzaMeiaNoite = slot.cruzaMeiaNoite;
-
-                          return Container(
-                            color: isAtivo ? Colors.transparent : colorScheme.surfaceVariant.withOpacity(0.2),
+                        FilledButton(
+                          onPressed: state.isUpdatingHours ? null : _salvarHorarios,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF1E88E5),
                             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                            child: Row(
-                              children: [
-                                // 1. Dia da Semana
-                                Expanded(
-                                  flex: 3,
-                                  child: Row(
-                                    children: [
-                                      Switch.adaptive(
-                                        value: isAtivo,
-                                        activeColor: const Color(0xFF2E7D32),
-                                        onChanged: (val) => _toggleDiaAtivo(index, val),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              slot.nomeDia,
-                                              style: theme.textTheme.bodyMedium?.copyWith(
-                                                fontWeight: FontWeight.bold,
-                                                color: isAtivo
-                                                    ? colorScheme.onSurface
-                                                    : colorScheme.outline,
-                                              ),
-                                            ),
-                                            if (cruzaMeiaNoite && isAtivo)
-                                              Container(
-                                                margin: const EdgeInsets.only(top: 2),
-                                                padding: const EdgeInsets.symmetric(
-                                                  horizontal: 6,
-                                                  vertical: 1,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: const Color(0xFFFFF3E0),
-                                                  borderRadius: BorderRadius.circular(6),
-                                                  border: Border.all(
-                                                    color: const Color(0xFFFFB74D),
-                                                  ),
-                                                ),
-                                                child: const Text(
-                                                  'Turno Noturno',
-                                                  style: TextStyle(
-                                                    fontSize: 10,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: Color(0xFFE65100),
-                                                  ),
-                                                ),
-                                              ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-
-                                // 2. Hora de Abertura (Botão com TimePicker)
-                                Expanded(
-                                  flex: 2,
-                                  child: _TimePickerButton(
-                                    time: slot.horaAbertura,
-                                    isEnabled: isAtivo,
-                                    onTap: () => _selecionarHora(
-                                      context: context,
-                                      diaIndex: index,
-                                      isAbertura: true,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-
-                                // 3. Hora de Fecho (Botão com TimePicker)
-                                Expanded(
-                                  flex: 2,
-                                  child: _TimePickerButton(
-                                    time: slot.horaFecho,
-                                    isEnabled: isAtivo,
-                                    onTap: () => _selecionarHora(
-                                      context: context,
-                                      diaIndex: index,
-                                      isAbertura: false,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-
-                                // 4. Ações: Copiar para toda a semana
-                                Expanded(
-                                  flex: 3,
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.end,
-                                    children: [
-                                      Text(
-                                        isAtivo ? 'Aberto' : 'Encerrado',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: isAtivo
-                                              ? const Color(0xFF2E7D32)
-                                              : colorScheme.outline,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      IconButton(
-                                        icon: const Icon(Icons.copy_all, size: 20),
-                                        tooltip: 'Aplicar horário a todos os dias',
-                                        onPressed: isAtivo
-                                            ? () => _copiarParaTodosOsDias(index)
-                                            : null,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                          );
-                        },
-                      ),
-                    ],
+                          ),
+                          child: state.isUpdatingHours
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation(Colors.white),
+                                  ),
+                                )
+                              : const Text(
+                                  'Guardar Horários',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ),
+                )
+              : null,
         );
       },
     );
   }
 }
 
-/// Botão customizado que apresenta a hora formatada e abre o `showTimePicker`.
-class _TimePickerButton extends StatelessWidget {
-  final TimeOfDay time;
-  final bool isEnabled;
-  final VoidCallback onTap;
+/// Cartão de Horário para um Dia Específico da Semana
+class _DayScheduleCard extends StatelessWidget {
+  final BusinessHourSlot slot;
+  final ValueChanged<bool> onToggle;
+  final VoidCallback onSelectAbertura;
+  final VoidCallback onSelectFecho;
+  final VoidCallback onCopyAll;
 
-  const _TimePickerButton({
-    required this.time,
-    required this.isEnabled,
-    required this.onTap,
+  const _DayScheduleCard({
+    required this.slot,
+    required this.onToggle,
+    required this.onSelectAbertura,
+    required this.onSelectFecho,
+    required this.onCopyAll,
   });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final horaFormatada =
-        '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+    final isAtivo = slot.isAtivo;
+    final cruzaMeiaNoite = slot.cruzaMeiaNoite;
 
-    return InkWell(
-      onTap: isEnabled ? onTap : null,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: isEnabled ? colorScheme.surface : colorScheme.surfaceVariant.withOpacity(0.5),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isEnabled ? colorScheme.outlineVariant : Colors.transparent,
-          ),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: isAtivo ? Colors.white : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isAtivo ? const Color(0xFFE2E8F0) : const Color(0xFFCBD5E1),
+          width: isAtivo ? 1.2 : 1.0,
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+        boxShadow: isAtivo
+            ? [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.02),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : null,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
           children: [
-            Icon(
-              Icons.access_time,
-              size: 16,
-              color: isEnabled ? colorScheme.primary : colorScheme.outline,
+            // Linha Superior: Nome do Dia + Chip Status + Switch
+            Row(
+              children: [
+                Text(
+                  slot.nomeDia,
+                  style: TextStyle(
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.bold,
+                    color: isAtivo ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+                  ),
+                ),
+                const SizedBox(width: 8),
+
+                // Chip Aberto / Encerrado
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isAtivo ? const Color(0xFFDCFCE7) : const Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    isAtivo ? 'Aberto' : 'Encerrado',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: isAtivo ? const Color(0xFF16A34A) : const Color(0xFF64748B),
+                    ),
+                  ),
+                ),
+
+                const Spacer(),
+
+                // Menu de Ações (Copiar Horário)
+                if (isAtivo)
+                  PopupMenuButton<String>(
+                    tooltip: 'Opções',
+                    icon: const Icon(Icons.more_horiz, size: 20, color: Color(0xFF64748B)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    onSelected: (val) {
+                      if (val == 'copy') onCopyAll();
+                    },
+                    itemBuilder: (ctx) => [
+                      PopupMenuItem(
+                        value: 'copy',
+                        child: Row(
+                          children: [
+                            const Icon(Icons.copy_rounded, size: 18, color: Color(0xFF1E88E5)),
+                            const SizedBox(width: 8),
+                            Text('Replicar para a semana inteira'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+
+                Switch.adaptive(
+                  value: isAtivo,
+                  activeColor: const Color(0xFF16A34A),
+                  onChanged: onToggle,
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Text(
-              horaFormatada,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: isEnabled ? colorScheme.onSurface : colorScheme.outline,
+
+            // Linha Inferior: Seletores de Hora (Apenas quando aberto)
+            if (isAtivo) ...[
+              const SizedBox(height: 12),
+              const Divider(height: 1, color: Color(0xFFF1F5F9)),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  // Botão Hora de Abertura
+                  Expanded(
+                    child: _TimeButton(
+                      label: 'Abertura',
+                      timeText: slot.aberturaFormatada,
+                      icon: Icons.wb_sunny_outlined,
+                      iconColor: const Color(0xFFEA580C),
+                      onTap: onSelectAbertura,
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 10),
+                    child: Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 16,
+                      color: Color(0xFF94A3B8),
+                    ),
+                  ),
+                  // Botão Hora de Fecho
+                  Expanded(
+                    child: _TimeButton(
+                      label: 'Fecho',
+                      timeText: slot.fechoFormatada,
+                      icon: Icons.nightlight_round_outlined,
+                      iconColor: const Color(0xFF6366F1),
+                      onTap: onSelectFecho,
+                    ),
+                  ),
+                ],
               ),
-            ),
+
+              // Alerta Turno Noturno
+              if (cruzaMeiaNoite) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF7ED),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFFED7AA)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.dark_mode_rounded, size: 14, color: Color(0xFFEA580C)),
+                      SizedBox(width: 6),
+                      Text(
+                        'Turno Noturno: encerra na madrugada seguinte (+1 dia)',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFFC2410C),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ] else ...[
+              const SizedBox(height: 4),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Estabelecimento não recebe pedidos neste dia.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF94A3B8),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -487,3 +556,72 @@ class _TimePickerButton extends StatelessWidget {
   }
 }
 
+/// Botão de Seleção de Horário
+class _TimeButton extends StatelessWidget {
+  final String label;
+  final String timeText;
+  final IconData icon;
+  final Color iconColor;
+  final VoidCallback onTap;
+
+  const _TimeButton({
+    required this.label,
+    required this.timeText,
+    required this.icon,
+    required this.iconColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFCBD5E1)),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 18, color: iconColor),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                    Text(
+                      timeText,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.access_time_rounded,
+                size: 14,
+                color: Color(0xFF94A3B8),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

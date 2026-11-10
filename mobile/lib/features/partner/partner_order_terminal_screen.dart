@@ -405,38 +405,123 @@ class _PartnerOrderTerminalScreenState extends State<PartnerOrderTerminalScreen>
         },
         builder: (context, state) {
           return Scaffold(
-            backgroundColor: colorScheme.surfaceContainerLowest,
+            backgroundColor: const Color(0xFFF8FAFC),
             appBar: AppBar(
-              title: const Text('Terminal de Cozinha & Balcão', style: TextStyle(fontWeight: FontWeight.w800)),
+              backgroundColor: Colors.white,
+              elevation: 0,
+              title: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Gestor de Pedidos & Cozinha',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 18,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  Text(
+                    'Terminal KDS em tempo real (RN-075)',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
               actions: [
                 if (state.isAudioAlertActive)
                   Padding(
-                    padding: const EdgeInsets.only(right: 16),
-                    child: Chip(
-                      avatar: const Icon(Icons.volume_up, color: Colors.white, size: 18),
-                      label: const Text('ALARME ATIVO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                      backgroundColor: colorScheme.error,
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDC2626),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.volume_up, color: Colors.white, size: 16),
+                          SizedBox(width: 4),
+                          Text(
+                            'ALARME ATIVO',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
+                IconButton(
+                  tooltip: 'Simular Pedido de Teste',
+                  icon: const Icon(Icons.playlist_add_rounded, color: Color(0xFF1E88E5)),
+                  onPressed: _simularEntradaPedidoTeste,
+                ),
               ],
             ),
             body: state.pedidosAtivos.isEmpty
                 ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.dinner_dining_outlined, size: 80, color: colorScheme.outlineVariant),
-                        const SizedBox(height: 16),
-                        Text('Nenhum pedido pendente de aceitação', style: theme.textTheme.titleMedium),
-                        const SizedBox(height: 8),
-                        Text('Novos pedidos no estado AGUARDA_PARCEIRO soarão automaticamente.',
-                            style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant)),
-                        const SizedBox(height: 24),
-                        FilledButton.tonal(
-                          onPressed: _simularEntradaPedidoTeste,
-                          child: const Text('Simular Chegada de Novo Pedido'),
-                        ),
-                      ],
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 36),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 88,
+                            height: 88,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF6FF),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: const Color(0xFFBFDBFE), width: 1.5),
+                            ),
+                            child: const Icon(
+                              Icons.soup_kitchen_rounded,
+                              size: 44,
+                              color: Color(0xFF1E88E5),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          const Text(
+                            'Balcão & Cozinha Prontos',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Não há pedidos pendentes de aceitação neste momento.\nAssim que um cliente submeter um pedido, o alerta sonoro tocará automaticamente.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              color: Color(0xFF64748B),
+                              height: 1.4,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          OutlinedButton.icon(
+                            onPressed: _simularEntradaPedidoTeste,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF1E88E5),
+                              side: const BorderSide(color: Color(0xFF93C5FD)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            icon: const Icon(Icons.add_alert_rounded, size: 18),
+                            label: const Text(
+                              'Simular Entrada de Pedido',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   )
                 : ListView.builder(
@@ -444,13 +529,162 @@ class _PartnerOrderTerminalScreenState extends State<PartnerOrderTerminalScreen>
                     itemCount: state.pedidosAtivos.length,
                     itemBuilder: (context, index) {
                       final pedido = state.pedidosAtivos[index];
-                      return Card(
-                        child: ListTile(
-                          title: Text('Pedido #${pedido.numeroPedidoExibicao} - ${pedido.nomeCliente}'),
-                          subtitle: Text('${pedido.itens.length} itens • Subtotal: ${pedido.subtotalCentimos ~/ 100} Kz'),
-                          trailing: FilledButton(
-                            onPressed: () => _abrirModalDestaquePedido(context, pedido),
-                            child: const Text('Ver Detalhes'),
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.04),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Cabeçalho do Card
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF0F172A),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      '#${pedido.numeroPedidoExibicao}',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 14,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          pedido.nomeCliente,
+                                          style: const TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF0F172A),
+                                          ),
+                                        ),
+                                        Text(
+                                          '${pedido.itens.length} ${pedido.itens.length == 1 ? "artigo" : "artigos"} • Subtotal: ${pedido.subtotalCentimos ~/ 100} Kz',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Color(0xFF64748B),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFEF3C7),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: const Color(0xFFFDE68A)),
+                                    ),
+                                    child: const Row(
+                                      children: [
+                                        Icon(Icons.timer_outlined, size: 14, color: Color(0xFFB45309)),
+                                        SizedBox(width: 4),
+                                        Text(
+                                          'Aguardando',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFFB45309),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                              const SizedBox(height: 12),
+
+                              // Itens em Destaque
+                              ...pedido.itens.map((it) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 6),
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '${it.quantidade}x ',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF1E88E5),
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                        Expanded(
+                                          child: Text(
+                                            it.nome,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 13,
+                                              color: Color(0xFF334155),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )),
+
+                              const SizedBox(height: 12),
+
+                              // Botões de Ação Imediata
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton(
+                                      onPressed: () => _abrirModalDestaquePedido(context, pedido),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: const Color(0xFF0F172A),
+                                        side: const BorderSide(color: Color(0xFFCBD5E1)),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                      ),
+                                      child: const Text('Ver Detalhes'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    flex: 2,
+                                    child: FilledButton.icon(
+                                      onPressed: () => _abrirModalDestaquePedido(context, pedido),
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor: const Color(0xFF16A34A),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                      ),
+                                      icon: const Icon(Icons.check_circle_rounded, size: 18),
+                                      label: const Text(
+                                        'Aceitar Pedido',
+                                        style: TextStyle(fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
                       );

@@ -31,22 +31,22 @@ class PartnerDashboardControlWidget extends StatelessWidget {
 
         return Container(
           width: double.infinity,
-          margin: const EdgeInsets.all(16),
-          padding: const EdgeInsets.all(20),
+          margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             color: colorScheme.surface,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isPausada ? const Color(0xFFFFB74D) : colorScheme.outlineVariant,
-              width: isPausada ? 2.0 : 1.0,
+              color: isPausada ? const Color(0xFFFFB74D) : const Color(0xFFE2E8F0),
+              width: isPausada ? 1.5 : 1.0,
             ),
             boxShadow: [
               BoxShadow(
                 color: isPausada
                     ? const Color(0xFFE65100).withOpacity(0.08)
-                    : colorScheme.shadow.withOpacity(0.04),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
+                    : Colors.black.withOpacity(0.02),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
               ),
             ],
           ),

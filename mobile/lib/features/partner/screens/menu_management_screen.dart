@@ -4,15 +4,32 @@ import '../bloc/partner_bloc.dart';
 import '../models/partner_models.dart';
 import '../widgets/item_editor_form_dialog.dart';
 
-/// Ecrã de Gestão Interna de Catálogo e Menu do Parceiro Comercial (RN-014, RN-015).
+/// Ecrã de Gestão de Catálogo e Menu do Parceiro Comercial (RN-014, RN-015).
 ///
-/// Apresenta:
-/// - Estrutura hierárquica por abas verticais para Categorias de Itens (otimizada para Tablet/Portal);
-/// - Lista de produtos com miniatura, nome, preço em Kz e tags de alergénios (RN-014);
-/// - Switch lateral "Disponível em Stock" com opacidade atenuada imediata e invalidação na API (RN-015);
-/// - Ações rápidas de Adicionar, Editar e Remover Produtos.
-class MenuManagementScreen extends StatelessWidget {
+/// Arquitetura UX/UI Mobile-First:
+/// - Seletor horizontal de categorias com chips fluidos e contadores de itens;
+/// - Barra de pesquisa rápida e filtros de disponibilidade (Todos / Disponíveis / Esgotados);
+/// - Cartões de produto detalhados com imagem, preço formatado em Kwanzas (Kz),
+///   tags de alergénios com cores normalizadas e comutador instantâneo de stock;
+/// - Botão flutuante (FAB) moderno para criação rápida de novos produtos;
+/// - Diálogo intuitivo para gestão e criação de novas categorias.
+class MenuManagementScreen extends StatefulWidget {
   const MenuManagementScreen({super.key});
+
+  @override
+  State<MenuManagementScreen> createState() => _MenuManagementScreenState();
+}
+
+class _MenuManagementScreenState extends State<MenuManagementScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  _StockFilter _stockFilter = _StockFilter.todos;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +50,7 @@ class MenuManagementScreen extends StatelessWidget {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(state.successMessage!),
-              backgroundColor: const Color(0xFF2E7D32),
+              backgroundColor: const Color(0xFF16A34A),
               behavior: SnackBarBehavior.floating,
               duration: const Duration(seconds: 2),
             ),
@@ -47,215 +64,210 @@ class MenuManagementScreen extends StatelessWidget {
 
         final categories = state.categories;
         final selectedCategoryId = state.selectedCategoryId;
-        final items = state.filteredItems;
+
+        // Aplica filtragem por categoria, pesquisa textual e disponibilidade de stock
+        final itemsFiltrados = state.filteredItems.where((item) {
+          // Filtro por termo de pesquisa
+          if (_searchQuery.isNotEmpty) {
+            final query = _searchQuery.toLowerCase();
+            final matchNome = item.nome.toLowerCase().contains(query);
+            final matchDesc = item.descricao.toLowerCase().contains(query);
+            if (!matchNome && !matchDesc) return false;
+          }
+
+          // Filtro por estado de stock
+          if (_stockFilter == _StockFilter.disponiveis && !item.isDisponivel) {
+            return false;
+          }
+          if (_stockFilter == _StockFilter.esgotados && item.isDisponivel) {
+            return false;
+          }
+
+          return true;
+        }).toList();
 
         return Scaffold(
-          body: Row(
+          backgroundColor: const Color(0xFFF8FAFC),
+          body: Column(
             children: [
-              // 1. ABAS VERTICAIS DE CATEGORIAS (Tablet / Portal Layout - RN-014)
+              // 1. Barra de Pesquisa e Filtros Rápidos
               Container(
-                width: 250,
-                decoration: BoxDecoration(
-                  color: colorScheme.surface,
-                  border: Border(
-                    right: BorderSide(color: colorScheme.outlineVariant, width: 1),
-                  ),
-                ),
+                color: Colors.white,
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Título do Menu Lateral
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 20, 16, 12),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Categorias',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+                    // Campo de Busca Moderno
+                    Container(
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: TextField(
+                        controller: _searchController,
+                        onChanged: (val) {
+                          setState(() {
+                            _searchQuery = val.trim();
+                          });
+                        },
+                        style: const TextStyle(fontSize: 14),
+                        decoration: InputDecoration(
+                          hintText: 'Pesquisar prato, bebida ou ingrediente...',
+                          hintStyle: TextStyle(
+                            fontSize: 13.5,
+                            color: Colors.grey.shade500,
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.add_circle_outline, size: 22),
-                            tooltip: 'Criar Nova Categoria',
-                            onPressed: () => _exibirDialogoCriarCategoria(context),
+                          prefixIcon: Icon(
+                            Icons.search_rounded,
+                            size: 20,
+                            color: Colors.grey.shade600,
                           ),
-                        ],
+                          suffixIcon: _searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 18),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() {
+                                      _searchQuery = '';
+                                    });
+                                  },
+                                )
+                              : null,
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
                       ),
                     ),
-                    const Divider(height: 1),
+                    const SizedBox(height: 10),
 
-                    // Lista de Categorias Verticais
-                    Expanded(
-                      child: ListView(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        children: [
-                          // Opção "Todos os Produtos"
-                          _CategoryTabTile(
-                            title: 'Todos os Produtos',
-                            itemCount: state.items.length,
-                            isSelected: selectedCategoryId == null || selectedCategoryId.isEmpty,
-                            icon: Icons.all_inbox_rounded,
-                            onTap: () {
-                              context.read<PartnerBloc>().add(const SelectCategoryRequested(null));
-                            },
+                    // Linha de Filtro de Stock (Todos / Disponíveis / Esgotados)
+                    Row(
+                      children: [
+                        _buildStockFilterChip('Todos', _StockFilter.todos),
+                        const SizedBox(width: 8),
+                        _buildStockFilterChip('Disponíveis', _StockFilter.disponiveis,
+                            dotColor: const Color(0xFF16A34A)),
+                        const SizedBox(width: 8),
+                        _buildStockFilterChip('Esgotados', _StockFilter.esgotados,
+                            dotColor: const Color(0xFFEA580C)),
+                        const Spacer(),
+                        Text(
+                          '${itemsFiltrados.length} ${itemsFiltrados.length == 1 ? "artigo" : "artigos"}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey.shade600,
                           ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
 
-                          // Categorias Cadastradas
-                          ...categories.map((cat) {
-                            final count = state.items.where((i) => i.categoriaId == cat.id).length;
-                            final isSelected = selectedCategoryId == cat.id;
+              // 2. Barra Horizontal Deslizante de Categorias (Chips)
+              Container(
+                height: 52,
+                color: Colors.white,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  children: [
+                    // Chip "Todos os Artigos"
+                    _buildCategoryPill(
+                      title: 'Todos',
+                      count: state.items.length,
+                      isSelected: selectedCategoryId == null || selectedCategoryId.isEmpty,
+                      icon: Icons.all_inbox_rounded,
+                      onTap: () {
+                        context.read<PartnerBloc>().add(const SelectCategoryRequested(null));
+                      },
+                    ),
 
-                            return _CategoryTabTile(
-                              title: cat.nome,
-                              itemCount: count,
-                              isSelected: isSelected,
-                              icon: Icons.restaurant_menu_rounded,
-                              onTap: () {
-                                context.read<PartnerBloc>().add(SelectCategoryRequested(cat.id));
-                              },
-                            );
-                          }),
-                        ],
+                    // Categorias Cadastradas
+                    ...categories.map((cat) {
+                      final count = state.items.where((i) => i.categoriaId == cat.id).length;
+                      final isSelected = selectedCategoryId == cat.id;
+
+                      return _buildCategoryPill(
+                        title: cat.nome,
+                        count: count,
+                        isSelected: isSelected,
+                        icon: Icons.restaurant_menu_rounded,
+                        onTap: () {
+                          context.read<PartnerBloc>().add(SelectCategoryRequested(cat.id));
+                        },
+                      );
+                    }),
+
+                    // Botão "+ Nova Categoria"
+                    Padding(
+                      padding: const EdgeInsets.only(left: 6),
+                      child: ActionChip(
+                        avatar: const Icon(Icons.add, size: 16, color: Color(0xFF1E88E5)),
+                        label: const Text(
+                          'Nova Categoria',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1E88E5),
+                          ),
+                        ),
+                        backgroundColor: const Color(0xFFEFF6FF),
+                        side: const BorderSide(color: Color(0xFFBFDBFE)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        onPressed: () => _exibirDialogoCriarCategoria(context),
                       ),
                     ),
                   ],
                 ),
               ),
 
-              // 2. PAINEL DE CONTEÚDO DOS ITENS DO MENU
-              Expanded(
-                child: Container(
-                  color: colorScheme.surfaceVariant.withOpacity(0.3),
-                  child: Column(
-                    children: [
-                      // Barra Superior da Categoria com Ação de Adicionar
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                        color: colorScheme.surface,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _getNomeCategoriaSelecionada(state),
-                                  style: theme.textTheme.headlineSmall?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Text(
-                                  '${items.length} ${items.length == 1 ? "produto configurado" : "produtos configurados"}',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            FilledButton.icon(
-                              icon: const Icon(Icons.add),
-                              label: const Text('Novo Produto'),
-                              onPressed: () {
-                                ItemEditorFormDialog.show(
-                                  context: context,
-                                  categories: categories,
-                                  initialCategoryId: selectedCategoryId,
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Divider(height: 1),
+              const Divider(height: 1, thickness: 1, color: Color(0xFFE2E8F0)),
 
-                      // Lista / Grelha de Cards de Produtos
-                      Expanded(
-                        child: items.isEmpty
-                            ? _buildEmptyState(context, colorScheme, theme, categories, selectedCategoryId)
-                            : ListView.separated(
-                                padding: const EdgeInsets.all(24),
-                                itemCount: items.length,
-                                separatorBuilder: (_, __) => const SizedBox(height: 16),
-                                itemBuilder: (ctx, index) {
-                                  final item = items[index];
-                                  return _MenuItemCard(
-                                    item: item,
-                                    categories: categories,
-                                    onToggleAvailability: (novoValor) {
-                                      context.read<PartnerBloc>().add(
-                                            ToggleItemAvailabilityRequested(
-                                              itemId: item.id,
-                                              isDisponivel: novoValor,
-                                            ),
-                                          );
-                                    },
-                                    onEdit: () {
-                                      ItemEditorFormDialog.show(
-                                        context: context,
-                                        item: item,
-                                        categories: categories,
-                                        initialCategoryId: item.categoriaId,
-                                      );
-                                    },
-                                    onDelete: () {
-                                      _confirmarRemocaoItem(context, item);
-                                    },
+              // 3. Lista de Produtos Mobile-First (Sem Overflow)
+              Expanded(
+                child: itemsFiltrados.isEmpty
+                    ? _buildEmptyState(context, categories, selectedCategoryId)
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 88),
+                        itemCount: itemsFiltrados.length,
+                        itemBuilder: (ctx, index) {
+                          final item = itemsFiltrados[index];
+                          return _ProductCard(
+                            item: item,
+                            categories: categories,
+                            onToggleAvailability: (novoValor) {
+                              context.read<PartnerBloc>().add(
+                                    ToggleItemAvailabilityRequested(
+                                      itemId: item.id,
+                                      isDisponivel: novoValor,
+                                    ),
                                   );
-                                },
-                              ),
+                            },
+                            onEdit: () {
+                              ItemEditorFormDialog.show(
+                                context: context,
+                                item: item,
+                                categories: categories,
+                                initialCategoryId: item.categoriaId,
+                              );
+                            },
+                            onDelete: () {
+                              _confirmarRemocaoItem(context, item);
+                            },
+                          );
+                        },
                       ),
-                    ],
-                  ),
-                ),
               ),
             ],
           ),
-        );
-      },
-    );
-  }
 
-  static String _getNomeCategoriaSelecionada(PartnerState state) {
-    if (state.selectedCategoryId == null || state.selectedCategoryId!.isEmpty) {
-      return 'Todos os Produtos';
-    }
-    final cat = state.categories.where((c) => c.id == state.selectedCategoryId);
-    if (cat.isNotEmpty) return cat.first.nome;
-    return 'Catálogo do Parceiro';
-  }
-
-  static Widget _buildEmptyState(
-    BuildContext context,
-    ColorScheme colorScheme,
-    ThemeData theme,
-    List<MenuCategory> categories,
-    String? selectedCategoryId,
-  ) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.restaurant_outlined, size: 64, color: colorScheme.outline),
-          const SizedBox(height: 16),
-          Text(
-            'Nenhum produto cadastrado nesta categoria',
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Adiciona pratos e bebidas ao teu menu para começares a vender.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: colorScheme.outline,
-            ),
-          ),
-          const SizedBox(height: 20),
-          FilledButton.tonalIcon(
-            icon: const Icon(Icons.add),
-            label: const Text('Adicionar Primeiro Produto'),
+          // Botão Flutuante de Ação Rápida: Novo Produto
+          floatingActionButton: FloatingActionButton.extended(
             onPressed: () {
               ItemEditorFormDialog.show(
                 context: context,
@@ -263,144 +275,298 @@ class MenuManagementScreen extends StatelessWidget {
                 initialCategoryId: selectedCategoryId,
               );
             },
+            backgroundColor: const Color(0xFF1E88E5),
+            foregroundColor: Colors.white,
+            elevation: 3,
+            icon: const Icon(Icons.add_rounded, size: 22),
+            label: const Text(
+              'Novo Artigo',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
           ),
-        ],
+        );
+      },
+    );
+  }
+
+  Widget _buildStockFilterChip(String label, _StockFilter filter, {Color? dotColor}) {
+    final isSelected = _stockFilter == filter;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _stockFilter = filter;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (dotColor != null) ...[
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: dotColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 5),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                color: isSelected ? Colors.white : const Color(0xFF475569),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  static void _confirmarRemocaoItem(BuildContext context, MenuItemModel item) {
-    showDialog<void>(
-      context: context,
-      builder: (dialogCtx) => AlertDialog(
-        title: const Text('Remover Produto'),
-        content: Text('Tens a certeza de que desejas remover "${item.nome}" do teu menu?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogCtx).pop(),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
-            onPressed: () {
-              context.read<PartnerBloc>().add(DeleteMenuItemRequested(item.id));
-              Navigator.of(dialogCtx).pop();
-            },
-            child: const Text('Remover'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static void _exibirDialogoCriarCategoria(BuildContext context) {
-    final controller = TextEditingController();
-    showDialog<void>(
-      context: context,
-      builder: (dialogCtx) => AlertDialog(
-        title: const Text('Nova Categoria de Menu (RN-014)'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'Nome da Categoria',
-            hintText: 'Ex.: Sobremesas Gourmet',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogCtx).pop(),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final nome = controller.text.trim();
-              if (nome.isNotEmpty) {
-                // Em produção invocaria o evento de criar categoria
-                Navigator.of(dialogCtx).pop();
-              }
-            },
-            child: const Text('Guardar'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Item de aba vertical de categoria (estilo Navigation Drawer/Rail).
-class _CategoryTabTile extends StatelessWidget {
-  final String title;
-  final int itemCount;
-  final bool isSelected;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _CategoryTabTile({
-    required this.title,
-    required this.itemCount,
-    required this.isSelected,
-    required this.icon,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: isSelected ? colorScheme.primaryContainer : Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: ListTile(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        leading: Icon(
-          icon,
-          color: isSelected ? colorScheme.onPrimaryContainer : colorScheme.onSurfaceVariant,
-          size: 22,
-        ),
-        title: Text(
-          title,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            color: isSelected ? colorScheme.onPrimaryContainer : colorScheme.onSurface,
-          ),
-        ),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? colorScheme.primary.withOpacity(0.15)
-                : colorScheme.surfaceVariant,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(
-            '$itemCount',
-            style: theme.textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: isSelected ? colorScheme.onPrimaryContainer : colorScheme.onSurfaceVariant,
+  Widget _buildCategoryPill({
+    required String title,
+    required int count,
+    required bool isSelected,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: isSelected ? const Color(0xFF1E88E5) : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isSelected ? const Color(0xFF1E88E5) : const Color(0xFFE2E8F0),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 15,
+                  color: isSelected ? Colors.white : const Color(0xFF64748B),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                    color: isSelected ? Colors.white : const Color(0xFF334155),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? Colors.white.withOpacity(0.25)
+                        : const Color(0xFFCBD5E1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '$count',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.bold,
+                      color: isSelected ? Colors.white : const Color(0xFF1E293B),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
-        onTap: onTap,
       ),
+    );
+  }
+
+  Widget _buildEmptyState(
+    BuildContext context,
+    List<MenuCategory> categories,
+    String? selectedCategoryId,
+  ) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: const Icon(
+                Icons.restaurant_rounded,
+                size: 38,
+                color: Color(0xFF94A3B8),
+              ),
+            ),
+            const SizedBox(height: 18),
+            const Text(
+              'Nenhum artigo encontrado',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF0F172A),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _searchQuery.isNotEmpty
+                  ? 'Nenhum resultado corresponde à sua pesquisa "$_searchQuery".'
+                  : 'Comece a construir o catálogo do restaurante adicionando pratos ou bebidas.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 13.5,
+                color: Color(0xFF64748B),
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: () {
+                ItemEditorFormDialog.show(
+                  context: context,
+                  categories: categories,
+                  initialCategoryId: selectedCategoryId,
+                );
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF1E88E5),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text('Adicionar Primeiro Artigo'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _exibirDialogoCriarCategoria(BuildContext context) {
+    final textController = TextEditingController();
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Nova Categoria', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Indique o nome da categoria para organizar o cardápio (ex.: Hambúrgueres, Bebidas, Sobremesas).',
+                style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: textController,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: 'Nome da Categoria',
+                  hintText: 'Ex.: Entradas Especiais',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF1E88E5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () {
+                final nome = textController.text.trim();
+                if (nome.isNotEmpty) {
+                  context.read<PartnerBloc>().add(CreateCategoryRequested(nome));
+                  Navigator.of(ctx).pop();
+                }
+              },
+              child: const Text('Criar Categoria'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _confirmarRemocaoItem(BuildContext context, MenuItemModel item) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Remover Artigo?', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: Text(
+            'Tem a certeza que deseja eliminar "${item.nome}" do menu? Esta ação não pode ser desfeita.',
+            style: const TextStyle(fontSize: 13.5, color: Color(0xFF475569)),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFDC2626),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                context.read<PartnerBloc>().add(DeleteItemRequested(item.id));
+              },
+              child: const Text('Sim, Eliminar'),
+            ),
+          ],
+        );
+      },
     );
   }
 }
 
-/// Card de exibição do produto do menu com suporte a atenuação visual quando indisponível (RN-015).
-class _MenuItemCard extends StatelessWidget {
+enum _StockFilter { todos, disponiveis, esgotados }
+
+/// Cartão de Produto Otimizado para Ecrãs Móveis (Mobile-First)
+class _ProductCard extends StatelessWidget {
   final MenuItemModel item;
   final List<MenuCategory> categories;
   final ValueChanged<bool> onToggleAvailability;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
-  const _MenuItemCard({
+  const _ProductCard({
     required this.item,
     required this.categories,
     required this.onToggleAvailability,
@@ -410,138 +576,137 @@ class _MenuItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final isDisponivel = item.isDisponivel;
 
-    // Quando indisponível, atenua visualmente a opacidade do card para acinzentado (RN-015)
     return AnimatedOpacity(
-      opacity: isDisponivel ? 1.0 : 0.55,
-      duration: const Duration(milliseconds: 250),
+      duration: const Duration(milliseconds: 200),
+      opacity: isDisponivel ? 1.0 : 0.65,
       child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: colorScheme.surface,
-          borderRadius: BorderRadius.circular(18),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isDisponivel ? colorScheme.outlineVariant : const Color(0xFFE0E0E0),
-            width: 1,
+            color: isDisponivel ? const Color(0xFFE2E8F0) : const Color(0xFFCBD5E1),
           ),
-          boxShadow: isDisponivel
-              ? [
-                  BoxShadow(
-                    color: colorScheme.shadow.withOpacity(0.04),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ]
-              : null,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. Miniatura da Imagem do Produto
-              ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: Container(
-                  width: 100,
-                  height: 100,
-                  color: colorScheme.surfaceVariant,
-                  child: item.imagemUrl != null && item.imagemUrl!.isNotEmpty
-                      ? ColorFiltered(
-                          colorFilter: isDisponivel
-                              ? const ColorFilter.mode(Colors.transparent, BlendMode.multiply)
-                              : const ColorFilter.mode(Colors.grey, BlendMode.saturation),
-                          child: Image.network(
-                            item.imagemUrl!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Center(
-                              child: Icon(Icons.broken_image, size: 32),
+              // Miniatura da Foto com Tag "Esgotado"
+              Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      width: 78,
+                      height: 78,
+                      color: const Color(0xFFF1F5F9),
+                      child: item.imagemUrl.isNotEmpty
+                          ? Image.network(
+                              item.imagemUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => _buildPlaceholderIcon(),
+                            )
+                          : _buildPlaceholderIcon(),
+                    ),
+                  ),
+                  if (!isDisponivel)
+                    Positioned.fill(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.55),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'ESGOTADO',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
                             ),
                           ),
-                        )
-                      : const Center(
-                          child: Icon(Icons.fastfood, size: 36, color: Colors.grey),
                         ),
-                ),
+                      ),
+                    ),
+                ],
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
 
-              // 2. Detalhes: Nome, Preço, Descrição e Tags de Alergénios (RN-014)
+              // Informações Textuais (Nome, Preço em Kz, Alergénios)
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            item.nome,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              decoration: isDisponivel ? null : TextDecoration.lineThrough,
-                            ),
-                          ),
-                        ),
-                        // Preço formatado em unidades inteiras de Kwanza (RN-016, RN-059)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: colorScheme.primaryContainer,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            CurrencyFormatter.formatKwanza(item.preco),
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              color: colorScheme.onPrimaryContainer,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
+                    Text(
+                      item.nome,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     if (item.descricao.isNotEmpty) ...[
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 2),
                       Text(
                         item.descricao,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
                       ),
                     ],
+                    const SizedBox(height: 6),
 
-                    // Tags Visuais de Alergénios Declarados (RN-014)
+                    // Preço Formatado em Kwanzas (RN-059)
+                    Text(
+                      CurrencyFormatter.formatKwanza(item.preco),
+                      style: const TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF1E88E5),
+                      ),
+                    ),
+
+                    // Alergénios Declarados (RN-014)
                     if (item.alergenos.isNotEmpty) ...[
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 6),
                       Wrap(
-                        spacing: 6,
+                        spacing: 4,
                         runSpacing: 4,
-                        children: item.alergenos.map((alergenoId) {
-                          final allergen = AllergenType.fromId(alergenoId);
-                          final label = allergen?.label ?? alergenoId;
-                          final color = allergen?.color ?? const Color(0xFF6C757D);
-
+                        children: item.alergenos.take(3).map((alerg) {
                           return Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: color.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: color.withOpacity(0.4)),
+                              color: alerg.color.withOpacity(0.14),
+                              borderRadius: BorderRadius.circular(6),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(allergen?.icon ?? Icons.warning_amber, size: 12, color: color),
-                                const SizedBox(width: 4),
+                                Icon(alerg.icon, size: 10, color: alerg.color),
+                                const SizedBox(width: 3),
                                 Text(
-                                  label,
+                                  alerg.label,
                                   style: TextStyle(
-                                    fontSize: 11,
+                                    fontSize: 10,
                                     fontWeight: FontWeight.bold,
-                                    color: color,
+                                    color: alerg.color,
                                   ),
                                 ),
                               ],
@@ -553,44 +718,43 @@ class _MenuItemCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 16),
 
-              // 3. Switch Lateral "Disponível em Stock" + Botões de Ação (RN-015)
+              // Comutador de Stock & Menu de Ações
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        isDisponivel ? 'Disponível em Stock' : 'Indisponível (RN-015)',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: isDisponivel ? const Color(0xFF2E7D32) : const Color(0xFFC62828),
-                          fontWeight: FontWeight.bold,
+                  Switch.adaptive(
+                    value: isDisponivel,
+                    activeColor: const Color(0xFF16A34A),
+                    onChanged: onToggleAvailability,
+                  ),
+                  PopupMenuButton<String>(
+                    icon: Icon(Icons.more_vert_rounded, size: 20, color: Colors.grey.shade600),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    onSelected: (val) {
+                      if (val == 'edit') onEdit();
+                      if (val == 'delete') onDelete();
+                    },
+                    itemBuilder: (ctx) => [
+                      const PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit_outlined, size: 18),
+                            SizedBox(width: 8),
+                            Text('Editar Artigo'),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Switch.adaptive(
-                        value: isDisponivel,
-                        activeColor: const Color(0xFF2E7D32),
-                        onChanged: onToggleAvailability,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton.outlined(
-                        icon: const Icon(Icons.edit_outlined, size: 18),
-                        tooltip: 'Editar Produto',
-                        onPressed: onEdit,
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton.outlined(
-                        icon: Icon(Icons.delete_outline, size: 18, color: colorScheme.error),
-                        tooltip: 'Remover Produto',
-                        onPressed: onDelete,
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red),
+                            SizedBox(width: 8),
+                            Text('Eliminar', style: TextStyle(color: Colors.red)),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -602,5 +766,14 @@ class _MenuItemCard extends StatelessWidget {
       ),
     );
   }
-}
 
+  Widget _buildPlaceholderIcon() {
+    return const Center(
+      child: Icon(
+        Icons.fastfood_rounded,
+        size: 32,
+        color: Color(0xFFCBD5E1),
+      ),
+    );
+  }
+}

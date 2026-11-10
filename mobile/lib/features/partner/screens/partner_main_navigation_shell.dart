@@ -74,33 +74,60 @@ class _PartnerMainNavigationShellState
             const PartnerStoreProfileScreen(),
           ],
         ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _currentIndex,
-          onDestinationSelected: _onTabSelected,
-          elevation: 4,
-          indicatorColor: colorScheme.primaryContainer,
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.kitchen_outlined),
-              selectedIcon: Icon(Icons.kitchen_rounded),
-              label: 'Pedidos KDS',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.restaurant_menu_outlined),
-              selectedIcon: Icon(Icons.restaurant_menu_rounded),
-              label: 'Cardápio',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.access_time_outlined),
-              selectedIcon: Icon(Icons.access_time_filled),
-              label: 'Horários',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.storefront_outlined),
-              selectedIcon: Icon(Icons.storefront_rounded),
-              label: 'Minha Loja',
-            ),
-          ],
+        bottomNavigationBar: NavigationBarTheme(
+          data: NavigationBarThemeData(
+            indicatorColor: const Color(0xFFEFF6FF),
+            labelTextStyle: MaterialStateProperty.resolveWith((states) {
+              if (states.contains(MaterialState.selected)) {
+                return const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1E88E5),
+                );
+              }
+              return const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF64748B),
+              );
+            }),
+            iconTheme: MaterialStateProperty.resolveWith((states) {
+              if (states.contains(MaterialState.selected)) {
+                return const IconThemeData(color: Color(0xFF1E88E5), size: 24);
+              }
+              return const IconThemeData(color: Color(0xFF64748B), size: 24);
+            }),
+          ),
+          child: NavigationBar(
+            selectedIndex: _currentIndex,
+            onDestinationSelected: _onTabSelected,
+            backgroundColor: Colors.white,
+            elevation: 8,
+            surfaceTintColor: Colors.transparent,
+            shadowColor: Colors.black.withOpacity(0.08),
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.soup_kitchen_outlined),
+                selectedIcon: Icon(Icons.soup_kitchen_rounded),
+                label: 'Pedidos KDS',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.restaurant_menu_outlined),
+                selectedIcon: Icon(Icons.restaurant_menu_rounded),
+                label: 'Cardápio',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.calendar_month_outlined),
+                selectedIcon: Icon(Icons.calendar_month_rounded),
+                label: 'Horários',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.storefront_outlined),
+                selectedIcon: Icon(Icons.storefront_rounded),
+                label: 'Minha Loja',
+              ),
+            ],
+          ),
         ),
       ),
     );
