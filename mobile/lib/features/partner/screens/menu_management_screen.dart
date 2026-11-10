@@ -545,7 +545,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
               ),
               onPressed: () {
                 Navigator.of(ctx).pop();
-                context.read<PartnerBloc>().add(DeleteItemRequested(item.id));
+                context.read<PartnerBloc>().add(DeleteMenuItemRequested(item.id));
               },
               child: const Text('Sim, Eliminar'),
             ),
@@ -611,9 +611,9 @@ class _ProductCard extends StatelessWidget {
                       width: 78,
                       height: 78,
                       color: const Color(0xFFF1F5F9),
-                      child: item.imagemUrl.isNotEmpty
+                      child: (item.imagemUrl != null && item.imagemUrl!.isNotEmpty)
                           ? Image.network(
-                              item.imagemUrl,
+                              item.imagemUrl!,
                               fit: BoxFit.cover,
                               errorBuilder: (_, __, ___) => _buildPlaceholderIcon(),
                             )
@@ -684,12 +684,12 @@ class _ProductCard extends StatelessWidget {
                     ),
 
                     // Alergénios Declarados (RN-014)
-                    if (item.alergenos.isNotEmpty) ...[
+                    if (item.allergenTypes.isNotEmpty) ...[
                       const SizedBox(height: 6),
                       Wrap(
                         spacing: 4,
                         runSpacing: 4,
-                        children: item.alergenos.take(3).map((alerg) {
+                        children: item.allergenTypes.take(3).map((alerg) {
                           return Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(

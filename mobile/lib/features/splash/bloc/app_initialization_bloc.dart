@@ -185,48 +185,5 @@ class AppInitializationBloc
     await Future.delayed(const Duration(milliseconds: 250));
     emit(const AppInitializationSuccess(hasPersistedToken: true));
   }
-
-  /// Corrotina assíncrona de pings repetidos a /api/v1/health/ para acordar contentores adormecidos
-  Future<bool> _wakeUpRenderLoop(Emitter<AppInitializationState> emit) async {
-    final healthUrl = AppEnvironmentConfig.buildUrl('/api/v1/health/');
-    final stopwatch = Stopwatch()..start();
-    int attempt = 0;
-
-    developer.log('🚀 A iniciar loop de despertar do Render...', name: 'AppInitializationBloc');
-
-    while (stopwatch.elapsedMilliseconds < 50000) {
-      attempt++;
-      final elapsedSec = (stopwatch.elapsedMilliseconds / 1000).toStringAsFixed(0);
-
-      emit(AppInitializationInProgress(
-        statusMessage: 'A acordar servidor no Render (${elapsedSec}s decorridos)...',
-      ));
-
-      try {
-        final pingResponse = await _dio.get(
-          healthUrl,
-          options: Options(
-            sendTimeout: const Duration(seconds: 6),
-            receiveTimeout: const Duration(seconds: 6),
-            validateStatus: (status) => status != null && status < 500,
-          ),
-        );
-
-        if (pingResponse.statusCode != null && pingResponse.statusCode! < 500) {
-          developer.log(
-            '✅ Servidor Render acordou após ${elapsedSec}s e $attempt tentativas!',
-            name: 'AppInitializationBloc',
-          );
-          return true;
-        }
-      } catch (_) {
-        // Contentor ainda a inicializar
-      }
-
-      await Future.delayed(const Duration(seconds: 2));
-    }
-
-    return false;
-  }
 }
 

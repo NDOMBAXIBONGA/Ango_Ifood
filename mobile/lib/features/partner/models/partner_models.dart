@@ -243,6 +243,20 @@ class MenuItemModel extends Equatable {
     );
   }
 
+  /// Converte a lista de identificadores textuais de alergénios nos enums tipificados oficiais
+  List<AllergenType> get allergenTypes {
+    final result = <AllergenType>[];
+    for (final a in alergenos) {
+      for (final val in AllergenType.values) {
+        if (val.id.toLowerCase() == a.toLowerCase() || val.name.toLowerCase() == a.toLowerCase()) {
+          result.add(val);
+          break;
+        }
+      }
+    }
+    return result;
+  }
+
   factory MenuItemModel.fromJson(Map<String, dynamic> json) {
     final rawAlergenos = json['alergenos'];
     List<String> listaAlergenos = [];
@@ -321,6 +335,14 @@ class BusinessHourSlot extends Equatable {
         return 'Desconhecido';
     }
   }
+
+  /// Retorna a hora de abertura formatada em string HH:mm
+  String get aberturaFormatada =>
+      '${horaAbertura.hour.toString().padLeft(2, '0')}:${horaAbertura.minute.toString().padLeft(2, '0')}';
+
+  /// Retorna a hora de fecho formatada em string HH:mm
+  String get fechoFormatada =>
+      '${horaFecho.hour.toString().padLeft(2, '0')}:${horaFecho.minute.toString().padLeft(2, '0')}';
 
   bool get cruzaMeiaNoite {
     final minAbertura = horaAbertura.hour * 60 + horaAbertura.minute;

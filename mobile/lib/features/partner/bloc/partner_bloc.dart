@@ -82,6 +82,16 @@ class DeleteMenuItemRequested extends PartnerEvent {
   List<Object?> get props => [itemId];
 }
 
+/// Cria uma nova categoria de catálogo de produtos.
+class CreateCategoryRequested extends PartnerEvent {
+  final String nome;
+
+  const CreateCategoryRequested(this.nome);
+
+  @override
+  List<Object?> get props => [nome];
+}
+
 /// Grava a configuração semanal de horários da loja (RN-012).
 class SaveBusinessHoursRequested extends PartnerEvent {
   final List<BusinessHourSlot> hours;
@@ -312,6 +322,7 @@ class PartnerBloc extends Bloc<PartnerEvent, PartnerState> {
     on<ToggleItemAvailabilityRequested>(_onToggleItemAvailability);
     on<SaveMenuItemRequested>(_onSaveMenuItem);
     on<DeleteMenuItemRequested>(_onDeleteMenuItem);
+    on<CreateCategoryRequested>(_onCreateCategory);
     on<SaveBusinessHoursRequested>(_onSaveBusinessHours);
     on<PauseTimerTicked>(_onTimerTicked);
   }
@@ -552,6 +563,24 @@ class PartnerBloc extends Bloc<PartnerEvent, PartnerState> {
     } catch (e) {
       emit(state.copyWith(items: anteriores, errorMessage: 'Erro ao remover produto.'));
     }
+  }
+
+  void _onCreateCategory(
+    CreateCategoryRequested event,
+    Emitter<PartnerState> emit,
+  ) {
+    final novaCat = MenuCategory(
+      id: 'cat-${DateTime.now().millisecondsSinceEpoch}',
+      nome: event.nome,
+      ordemExibicao: state.categories.length + 1,
+      totalItens: 0,
+    );
+    final novasCategorias = [...state.categories, novaCat];
+    emit(state.copyWith(
+      categories: novasCategorias,
+      selectedCategoryId: novaCat.id,
+      successMessage: 'Categoria "${event.nome}" criada com sucesso!',
+    ));
   }
 
   Future<void> _onSaveBusinessHours(
