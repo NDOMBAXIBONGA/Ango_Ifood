@@ -65,6 +65,176 @@ from apps.catalog.tasks import (
 )
 
 
+def obter_ou_inicializar_vitrine_loja(loja: ParceiroLoja) -> dict[str, Any]:
+    """
+    Obtém ou inicializa a configuração completa da Vitrine Digital (CMS) da loja:
+    1. Página Inicial (Home): Identidade visual, foto/vídeo de destaque, resumo do conceito e CTAs;
+    2. Sobre Nós (A Nossa História): Trajetória, origem dos pratos, filosofia da equipa, biografia do Chef e galeria;
+    3. Reservas: Configuração de agendamento de mesas online (capacidade, zonas, horários);
+    4. Localização e Contacto: Morada exata, referência, telefone, WhatsApp, link GPS e redes sociais.
+    Armazenado de forma persistente e transacional em `loja.dados_bancarios["vitrine_cms"]`.
+    """
+    dados = loja.dados_bancarios if isinstance(loja.dados_bancarios, dict) else {}
+    lat = float(loja.geolocalizacao.y) if loja.geolocalizacao else -8.8368
+    lng = float(loja.geolocalizacao.x) if loja.geolocalizacao else 13.2343
+    contacto_padrao = loja.contacto or "+244 923 000 000"
+    morada_padrao = loja.morada_texto or "Avenida 4 de Fevereiro, Marginal de Luanda, Angola"
+
+    default_vitrine: dict[str, Any] = {
+        "identidade_home": {
+            "slogan": f"Sabores Autênticos & Alta Gastronomia em {loja.nome}",
+            "resumo_conceito": (
+                f"Bem-vindo ao {loja.nome}. Combinamos ingredientes frescos selecionados diariamente "
+                "com receitas tradicionais angolanas e técnicas contemporâneas de brasa e forno, "
+                "oferecendo uma experiência gastronómica memorável tanto no nosso salão como em entregas rápidas."
+            ),
+            "hero_imagem_url": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200",
+            "hero_video_url": "https://assets.mixkit.co/videos/preview/mixkit-frying-meat-in-a-pan-with-spices-41876-large.mp4",
+            "logo_url": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400",
+            "cor_destaque_hex": "#E11D48",
+            "aceita_reservas": True,
+            "aceita_pedidos": True,
+            "pratos_destaque": [
+                {
+                    "titulo": "Mufete Tradicional da Ilha",
+                    "subtitulo": "Cacusso na brasa, feijão de óleo de palma, banana-pão e mandioca",
+                    "preco": 650000,
+                    "midia_url": "https://images.unsplash.com/photo-1544025162-d76694265947?w=800",
+                    "tipo_midia": "imagem",
+                },
+                {
+                    "titulo": "Hambúrguer Artesanal Luanda Duplo",
+                    "subtitulo": "360g de carne maturada na grelha, cheddar duplo e pão brioche",
+                    "preco": 350000,
+                    "midia_url": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800",
+                    "tipo_midia": "imagem",
+                },
+                {
+                    "titulo": "Pizza Familiar Suprema no Forno a Lenha",
+                    "subtitulo": "Massa de fermentação lenta 48h e ingredientes premium",
+                    "preco": 550000,
+                    "midia_url": "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800",
+                    "tipo_midia": "imagem",
+                },
+            ],
+        },
+        "sobre_nos": {
+            "titulo_historia": f"A Nossa História — Tradição e Paixão desde a Fundação",
+            "historia_restaurante": (
+                f"Fundado no coração de Luanda, o {loja.nome} nasceu do sonho de criar um espaço onde a "
+                "hospitalidade angolana se encontra com o rigor da gastronomia moderna. Ao longo dos anos, "
+                "tornámo-nos ponto de encontro para famílias, reuniões de negócios e amantes da boa mesa."
+            ),
+            "origem_pratos": (
+                "Trabalhamos diretamente com produtores agrícolas locais e pescadores artesanais da Ilha de Luanda "
+                "e do Mussulo. Cada prato respeita o tempo natural de marinada e confeção em carvão vegetal."
+            ),
+            "filosofia_equipa": (
+                "A nossa equipa acredita que cada refeição deve celebrar a cultura e o convívio. "
+                "Do rigor na higiene alimentar à simpatia no atendimento, cozinhamos com alma e dedicação."
+            ),
+            "chef_nome": "Chef Mateus Ndombaxi",
+            "chef_titulo": "Chef Executivo & Curador Gastronómico",
+            "chef_biografia": (
+                "Com mais de 15 anos de experiência em alta cozinha lusófona e africana, o Chef Mateus Ndombaxi "
+                "lidera a cozinha com foco no equilíbrio entre aromas tradicionais angolanos (como o jindungo, "
+                "a múcua e o óleo de palma artesanal) e apresentações contemporâneas."
+            ),
+            "chef_foto_url": "https://images.unsplash.com/photo-1577219491135-ce391730fb2c?w=600",
+            "galeria_midia": [
+                {
+                    "tipo": "imagem",
+                    "url": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800",
+                    "legenda": "Salão Principal Climatizado",
+                },
+                {
+                    "tipo": "imagem",
+                    "url": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800",
+                    "legenda": "Preparação Artesanal na Cozinha",
+                },
+                {
+                    "tipo": "video",
+                    "url": "https://assets.mixkit.co/videos/preview/mixkit-frying-meat-in-a-pan-with-spices-41876-large.mp4",
+                    "legenda": "Vídeo: Grelhados na Brasa ao Vivo",
+                },
+                {
+                    "tipo": "imagem",
+                    "url": "https://images.unsplash.com/photo-1544025162-d76694265947?w=800",
+                    "legenda": "Especialidades da Casa",
+                },
+            ],
+        },
+        "config_reservas": {
+            "capacidade_maxima_pessoas": 20,
+            "zonas_disponiveis": [
+                "Salão Principal Climatizado",
+                "Esplanada / Terraço Panorâmico",
+                "Sala VIP Privada (Eventos & Reuniões)",
+            ],
+            "horarios_disponiveis": [
+                "12:00",
+                "12:30",
+                "13:00",
+                "13:30",
+                "14:00",
+                "19:00",
+                "19:30",
+                "20:00",
+                "20:30",
+                "21:00",
+                "21:30",
+                "22:00",
+            ],
+            "politica_reserva": (
+                "Tolerância de 15 minutos após o horário agendado. Para grupos superiores a 10 pessoas "
+                "ou eventos especiais, a nossa equipa entrará em contacto para preparar a sua mesa."
+            ),
+        },
+        "localizacao_contacto": {
+            "morada_completa": morada_padrao,
+            "ponto_referencia": "Próximo à Marginal de Luanda / Estacionamento Privativo disponível",
+            "telefone_principal": contacto_padrao,
+            "whatsapp": contacto_padrao,
+            "email_contacto": "reservas@restaurante-luanda.ao",
+            "instagram": "@restaurante.luanda.oficial",
+            "website_url": "https://ango-ifood.onrender.com",
+            "gps_link_externo": f"https://www.google.com/maps/search/?api=1&query={lat},{lng}",
+            "latitude": lat,
+            "longitude": lng,
+        },
+    }
+
+    needs_save = False
+    if "vitrine_cms" not in dados or not isinstance(dados.get("vitrine_cms"), dict):
+        dados["vitrine_cms"] = default_vitrine
+        needs_save = True
+    else:
+        vitrine_atual = dados["vitrine_cms"]
+        for sec_key, sec_default in default_vitrine.items():
+            if sec_key not in vitrine_atual or not isinstance(vitrine_atual.get(sec_key), dict):
+                vitrine_atual[sec_key] = sec_default
+                needs_save = True
+            else:
+                for k, v in sec_default.items():
+                    if k not in vitrine_atual[sec_key]:
+                        vitrine_atual[sec_key][k] = v
+                        needs_save = True
+
+    if "reservas_mesa" not in dados or not isinstance(dados.get("reservas_mesa"), list):
+        dados["reservas_mesa"] = []
+        needs_save = True
+
+    if "mensagens_clientes" not in dados or not isinstance(dados.get("mensagens_clientes"), list):
+        dados["mensagens_clientes"] = []
+        needs_save = True
+
+    if needs_save:
+        loja.dados_bancarios = dados
+        loja.save(update_fields=["dados_bancarios"])
+
+    return dados["vitrine_cms"]
+
+
 # ==============================================================================
 # 1. DESCOBERTA GEOESPACIAL DE LOJAS (StoreDiscoveryViewSet - RN-025 a RN-030)
 # ==============================================================================
@@ -370,14 +540,162 @@ class StoreDiscoveryViewSet(viewsets.ReadOnlyModelViewSet):
                 }
             )
 
+        vitrine = obter_ou_inicializar_vitrine_loja(loja)
+        horarios_qs = loja.horarios.all().order_by("dia_semana", "hora_abertura")
+        horarios_data = HorarioFuncionamentoSerializer(horarios_qs, many=True).data
+
         return Response(
             {
                 "loja_id": str(loja.id),
                 "nome_loja": loja.nome,
+                "morada_texto": loja.morada_texto,
+                "contacto": loja.contacto,
+                "score_reputacao": str(loja.score_reputacao),
                 "is_aberta": loja.is_loja_aberta(timezone.now()),
+                "vitrine": vitrine,
+                "horarios": horarios_data,
                 "categorias": payload_categorias,
             },
             status=status.HTTP_200_OK,
+        )
+
+    @action(
+        detail=True,
+        methods=["get", "post"],
+        url_path="reservations",
+        permission_classes=[permissions.AllowAny],
+    )
+    def reservations(self, request: Request, pk: str | None = None) -> Response:
+        """
+        Endpoint (`GET/POST /api/v1/catalog/stores/<id>/reservations/`) para os clientes
+        agendarem uma mesa online selecionando data, horário, número de pessoas e zona.
+        """
+        import uuid as uuid_lib
+
+        loja = get_object_or_404(
+            ParceiroLoja.objects.exclude(estado=ParceiroLoja.EstadoLoja.SUSPENSO),
+            pk=pk,
+        )
+        vitrine = obter_ou_inicializar_vitrine_loja(loja)
+        dados = dict(loja.dados_bancarios or {})
+        reservas_atuais: list[dict[str, Any]] = list(dados.get("reservas_mesa") or [])
+
+        if request.method == "GET":
+            return Response(
+                {
+                    "loja_id": str(loja.id),
+                    "nome_loja": loja.nome,
+                    "config_reservas": vitrine.get("config_reservas", {}),
+                    "reservas": reservas_atuais[:50],
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        body = request.data if isinstance(request.data, dict) else {}
+        nome_cliente = str(body.get("nome_cliente") or "Cliente Convidado").strip()
+        telefone_cliente = str(body.get("telefone_cliente") or "").strip()
+        email_cliente = str(body.get("email_cliente") or "").strip()
+        data_reserva = str(body.get("data_reserva") or timezone.now().strftime("%Y-%m-%d")).strip()
+        horario = str(body.get("horario") or "20:00").strip()
+        try:
+            numero_pessoas = max(1, min(50, int(body.get("numero_pessoas") or 2)))
+        except (ValueError, TypeError):
+            numero_pessoas = 2
+        zona_preferida = str(body.get("zona_preferida") or "Salão Principal Climatizado").strip()
+        notas_especiais = str(body.get("notas_especiais") or "").strip()
+
+        nova_reserva = {
+            "id": f"RES-{uuid_lib.uuid4().hex[:6].upper()}",
+            "loja_id": str(loja.id),
+            "loja_nome": loja.nome,
+            "nome_cliente": nome_cliente,
+            "telefone_cliente": telefone_cliente,
+            "email_cliente": email_cliente,
+            "data_reserva": data_reserva,
+            "horario": horario,
+            "numero_pessoas": numero_pessoas,
+            "zona_preferida": zona_preferida,
+            "notas_especiais": notas_especiais,
+            "estado": "CONFIRMADA",
+            "criado_em": timezone.now().isoformat(),
+        }
+
+        reservas_atuais.insert(0, nova_reserva)
+        dados["reservas_mesa"] = reservas_atuais[:200]
+        loja.dados_bancarios = dados
+        loja.save(update_fields=["dados_bancarios"])
+
+        return Response(
+            {
+                "mensagem": "Reserva de mesa agendada e confirmada com sucesso!",
+                "reserva": nova_reserva,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(
+        detail=True,
+        methods=["get", "post"],
+        url_path="messages",
+        permission_classes=[permissions.AllowAny],
+    )
+    def messages(self, request: Request, pk: str | None = None) -> Response:
+        """
+        Endpoint (`GET/POST /api/v1/catalog/stores/<id>/messages/`) para o formulário de
+        mensagens e contacto direto na secção 'Localização e Contacto' da loja.
+        """
+        import uuid as uuid_lib
+
+        loja = get_object_or_404(
+            ParceiroLoja.objects.exclude(estado=ParceiroLoja.EstadoLoja.SUSPENSO),
+            pk=pk,
+        )
+        obter_ou_inicializar_vitrine_loja(loja)
+        dados = dict(loja.dados_bancarios or {})
+        mensagens_atuais: list[dict[str, Any]] = list(dados.get("mensagens_clientes") or [])
+
+        if request.method == "GET":
+            return Response(
+                {
+                    "loja_id": str(loja.id),
+                    "mensagens": mensagens_atuais[:50],
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        body = request.data if isinstance(request.data, dict) else {}
+        nome = str(body.get("nome") or "Cliente").strip()
+        contacto = str(body.get("contacto") or "").strip()
+        assunto = str(body.get("assunto") or "Contacto Geral").strip()
+        mensagem = str(body.get("mensagem") or "").strip()
+        if not mensagem:
+            return Response(
+                {"erro": "Por favor, escreva a sua mensagem antes de enviar."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        nova_msg = {
+            "id": f"MSG-{uuid_lib.uuid4().hex[:6].upper()}",
+            "nome": nome,
+            "contacto": contacto,
+            "assunto": assunto,
+            "mensagem": mensagem,
+            "lida": False,
+            "resposta_parceiro": "",
+            "criado_em": timezone.now().isoformat(),
+        }
+
+        mensagens_atuais.insert(0, nova_msg)
+        dados["mensagens_clientes"] = mensagens_atuais[:200]
+        loja.dados_bancarios = dados
+        loja.save(update_fields=["dados_bancarios"])
+
+        return Response(
+            {
+                "mensagem": "A sua mensagem foi enviada diretamente à gerência do restaurante!",
+                "registo": nova_msg,
+            },
+            status=status.HTTP_201_CREATED,
         )
 
 
@@ -760,4 +1078,178 @@ class PartnerStoreHoursView(PartnerCatalogBaseMixin, APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class PartnerStorefrontCMSView(PartnerCatalogBaseMixin, APIView):
+    """
+    Endpoint de Controlo Total da Vitrine & CMS do Parceiro:
+    - `GET /api/v1/partner/store/storefront/` (e `/api/v1/partner/catalog/storefront/`)
+    - `PUT / PATCH / POST /api/v1/partner/store/storefront/`
+    Permite ao Parceiro editar 100% dos textos, imagens, vídeos, história do restaurante,
+    biografia do Chef, configuração de reservas, localização GPS, contactos, e gerir
+    reservas de mesas e mensagens enviadas pelos clientes.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _resolver_loja(self, request: Request) -> ParceiroLoja:
+        from apps.accounts.views import garantir_loja_parceiro_ativa
+
+        loja = self.obter_loja_parceiro(exigir_loja=False)
+        if loja is None:
+            loja = garantir_loja_parceiro_ativa(request.user)
+        if loja is None:
+            loja = ParceiroLoja.objects.first()
+        if loja is None:
+            raise PermissionDenied(_("Nenhuma loja parceira encontrada."))
+        return loja
+
+    def get(self, request: Request) -> Response:
+        loja = self._resolver_loja(request)
+        vitrine = obter_ou_inicializar_vitrine_loja(loja)
+        dados = dict(loja.dados_bancarios or {})
+        horarios_qs = loja.horarios.all().order_by("dia_semana", "hora_abertura")
+        return Response(
+            {
+                "loja_id": str(loja.id),
+                "nome_loja": loja.nome,
+                "morada_texto": loja.morada_texto,
+                "contacto": loja.contacto,
+                "score_reputacao": str(loja.score_reputacao),
+                "is_aberta": loja.is_loja_aberta(timezone.now()),
+                "vitrine": vitrine,
+                "reservas": list(dados.get("reservas_mesa") or []),
+                "mensagens": list(dados.get("mensagens_clientes") or []),
+                "horarios": HorarioFuncionamentoSerializer(horarios_qs, many=True).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @transaction.atomic
+    def post(self, request: Request) -> Response:
+        return self._atualizar_cms(request)
+
+    @transaction.atomic
+    def put(self, request: Request) -> Response:
+        return self._atualizar_cms(request)
+
+    @transaction.atomic
+    def patch(self, request: Request) -> Response:
+        return self._atualizar_cms(request)
+
+    def _atualizar_cms(self, request: Request) -> Response:
+        loja = self._resolver_loja(request)
+        vitrine_atual = obter_ou_inicializar_vitrine_loja(loja)
+        dados = dict(loja.dados_bancarios or {})
+        body = request.data if isinstance(request.data, dict) else {}
+
+        acao = str(body.get("acao") or "").strip().lower()
+
+        # 1. Ação: Atualizar Estado de Reserva de Mesa
+        if acao == "atualizar_reserva":
+            reserva_id = str(body.get("reserva_id") or "").strip()
+            novo_estado = str(body.get("estado") or "CONFIRMADA").strip().upper()
+            reservas = list(dados.get("reservas_mesa") or [])
+            for r in reservas:
+                if isinstance(r, dict) and str(r.get("id")) == reserva_id:
+                    r["estado"] = novo_estado
+                    break
+            dados["reservas_mesa"] = reservas
+            loja.dados_bancarios = dados
+            loja.save(update_fields=["dados_bancarios"])
+            return Response(
+                {
+                    "mensagem": f"Estado da reserva {reserva_id} atualizado para {novo_estado}.",
+                    "reservas": reservas,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        # 2. Ação: Responder / Marcar como lida Mensagem de Cliente
+        if acao == "responder_mensagem":
+            mensagem_id = str(body.get("mensagem_id") or "").strip()
+            resposta_texto = str(body.get("resposta_parceiro") or "").strip()
+            mensagens = list(dados.get("mensagens_clientes") or [])
+            for m in mensagens:
+                if isinstance(m, dict) and str(m.get("id")) == mensagem_id:
+                    m["lida"] = True
+                    if resposta_texto:
+                        m["resposta_parceiro"] = resposta_texto
+                    break
+            dados["mensagens_clientes"] = mensagens
+            loja.dados_bancarios = dados
+            loja.save(update_fields=["dados_bancarios"])
+            return Response(
+                {
+                    "mensagem": "Mensagem atualizada com sucesso.",
+                    "mensagens": mensagens,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        # 3. Atualização Completa ou Parcial das Secções da Vitrine CMS
+        payload_vitrine = body.get("vitrine") if isinstance(body.get("vitrine"), dict) else body
+        for secao in ("identidade_home", "sobre_nos", "config_reservas", "localizacao_contacto"):
+            if isinstance(payload_vitrine.get(secao), dict):
+                vitrine_atual.setdefault(secao, {})
+                vitrine_atual[secao].update(payload_vitrine[secao])
+
+        campos_loja_update = ["dados_bancarios"]
+
+        # Sincroniza nome da loja se enviado
+        novo_nome = body.get("nome_loja") or payload_vitrine.get("nome_loja")
+        if isinstance(novo_nome, str) and novo_nome.strip():
+            loja.nome = novo_nome.strip()
+            campos_loja_update.append("nome")
+
+        # Sincroniza morada, contacto e coordenadas PostGIS a partir de localizacao_contacto
+        loc = vitrine_atual.get("localizacao_contacto", {})
+        if isinstance(loc, dict):
+            morada_nova = loc.get("morada_completa")
+            if isinstance(morada_nova, str) and morada_nova.strip():
+                loja.morada_texto = morada_nova.strip()
+                if "morada_texto" not in campos_loja_update:
+                    campos_loja_update.append("morada_texto")
+
+            tel_novo = loc.get("telefone_principal")
+            if isinstance(tel_novo, str) and tel_novo.strip():
+                loja.contacto = tel_novo.strip()
+                if "contacto" not in campos_loja_update:
+                    campos_loja_update.append("contacto")
+
+            try:
+                lat_val = float(loc.get("latitude", -8.8368))
+                lng_val = float(loc.get("longitude", 13.2343))
+                if -90.0 <= lat_val <= 90.0 and -180.0 <= lng_val <= 180.0:
+                    loja.geolocalizacao = Point(lng_val, lat_val, srid=4326)
+                    if "geolocalizacao" not in campos_loja_update:
+                        campos_loja_update.append("geolocalizacao")
+                    if not loc.get("gps_link_externo"):
+                        loc["gps_link_externo"] = (
+                            f"https://www.google.com/maps/search/?api=1&query={lat_val},{lng_val}"
+                        )
+            except (ValueError, TypeError):
+                pass
+
+        dados["vitrine_cms"] = vitrine_atual
+        loja.dados_bancarios = dados
+        loja.save(update_fields=campos_loja_update)
+
+        invalidar_cache_catalogo_imediato(
+            loja_id=str(loja.id),
+            motivo="storefront_cms_updated",
+        )
+
+        return Response(
+            {
+                "mensagem": "Vitrine da loja atualizada e publicada com sucesso para todos os clientes!",
+                "loja_id": str(loja.id),
+                "nome_loja": loja.nome,
+                "vitrine": vitrine_atual,
+                "reservas": list(dados.get("reservas_mesa") or []),
+                "mensagens": list(dados.get("mensagens_clientes") or []),
+            },
+            status=status.HTTP_200_OK,
+        )
+
 

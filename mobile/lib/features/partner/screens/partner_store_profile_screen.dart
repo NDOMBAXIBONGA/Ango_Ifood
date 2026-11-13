@@ -7,6 +7,7 @@ import '../../auth/auth_state.dart';
 import '../../auth/screens/role_selection_onboarding_screen.dart';
 import '../bloc/partner_bloc.dart';
 import '../models/partner_models.dart';
+import 'partner_storefront_cms_screen.dart';
 
 /// Ecrã de Perfil da Loja, Métricas Financeiras e Definições do Parceiro (`PartnerStoreProfileScreen`).
 ///
@@ -242,7 +243,7 @@ class PartnerStoreProfileScreen extends StatelessWidget {
                   const SizedBox(height: 24),
 
                   // 3. Definições do Estabelecimento
-                  _buildSectionHeader('Definições do Estabelecimento'),
+                  _buildSectionHeader('Gestão da Vitrine & Definições do Estabelecimento'),
                   const SizedBox(height: 10),
                   Container(
                     decoration: BoxDecoration(
@@ -252,6 +253,22 @@ class PartnerStoreProfileScreen extends StatelessWidget {
                     ),
                     child: Column(
                       children: [
+                        _buildSettingsRow(
+                          icon: Icons.web_stories_rounded,
+                          iconColor: const Color(0xFFE11D48),
+                          title: 'Editor Completo da Vitrine (CMS Total)',
+                          subtitle:
+                              'Gerir todos os textos, fotos, vídeos, história, chef, reservas e mensagens',
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) =>
+                                    const PartnerStorefrontCmsScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                        const Divider(height: 1, indent: 56, color: Color(0xFFF1F5F9)),
                         _buildSettingsRow(
                           icon: Icons.timer_outlined,
                           iconColor: const Color(0xFF1E88E5),

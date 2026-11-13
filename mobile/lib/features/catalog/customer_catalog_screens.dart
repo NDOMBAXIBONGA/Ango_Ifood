@@ -13,6 +13,7 @@
 import 'package:dio/dio.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/network/app_environment_config.dart';
@@ -315,6 +316,218 @@ class MenuCategoryModel extends Equatable {
   List<Object?> get props => [id, nome, ordemExibicao, itens];
 }
 
+/// Modelo completo da Vitrine Digital (CMS) do Restaurante para as 5 secções do Cliente:
+/// 1. Home (Identidade, Foto/Vídeo Hero, Conceito, CTAs);
+/// 2. Cardápio (Categorias, Ingredientes, Preços);
+/// 3. Sobre Nós (A Nossa História, Origem dos Pratos, Filosofia da Equipa, Biografia do Chef, Galeria);
+/// 4. Reservas (Configuração de Mesas Online, Zonas, Horários);
+/// 5. Localização e Contacto (Morada, Horário de Funcionamento, Telefone, GPS e Mensagens).
+@immutable
+class StorefrontVitrineModel extends Equatable {
+  final String slogan;
+  final String resumoConceito;
+  final String heroImagemUrl;
+  final String heroVideoUrl;
+  final String logoUrl;
+  final String corDestaqueHex;
+  final bool aceitaReservas;
+  final bool aceitaPedidos;
+  final List<Map<String, dynamic>> pratosDestaque;
+
+  final String tituloHistoria;
+  final String historiaRestaurante;
+  final String origemPratos;
+  final String filosofiaEquipa;
+  final String chefNome;
+  final String chefTitulo;
+  final String chefBiografia;
+  final String chefFotoUrl;
+  final List<Map<String, dynamic>> galeriaMidia;
+
+  final int capacidadeMaximaPessoas;
+  final List<String> zonasDisponiveis;
+  final List<String> horariosDisponiveis;
+  final String politicaReserva;
+
+  final String moradaCompleta;
+  final String pontoReferencia;
+  final String telefonePrincipal;
+  final String whatsapp;
+  final String emailContacto;
+  final String instagram;
+  final String websiteUrl;
+  final String gpsLinkExterno;
+  final double latitude;
+  final double longitude;
+  final List<Map<String, dynamic>> horariosSemanal;
+
+  const StorefrontVitrineModel({
+    this.slogan = 'Sabores Autênticos & Alta Gastronomia',
+    this.resumoConceito =
+        'Ingredientes frescos selecionados diariamente, receitas tradicionais e técnicas contemporâneas para uma experiência memorável.',
+    this.heroImagemUrl =
+        'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200',
+    this.heroVideoUrl =
+        'https://assets.mixkit.co/videos/preview/mixkit-frying-meat-in-a-pan-with-spices-41876-large.mp4',
+    this.logoUrl =
+        'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400',
+    this.corDestaqueHex = '#E11D48',
+    this.aceitaReservas = true,
+    this.aceitaPedidos = true,
+    this.pratosDestaque = const [],
+    this.tituloHistoria = 'A Nossa História — Tradição e Paixão',
+    this.historiaRestaurante =
+        'Fundado em Luanda com a missão de unir hospitalidade de excelência e gastronomia autêntica num ambiente acolhedor.',
+    this.origemPratos =
+        'Trabalhamos diretamente com produtores e pescadores locais para garantir frescura máxima em cada prato.',
+    this.filosofiaEquipa =
+        'Cozinhamos com paixão, rigor na segurança alimentar e respeito pela tradição culinária.',
+    this.chefNome = 'Chef Mateus Ndombaxi',
+    this.chefTitulo = 'Chef Executivo & Curador Gastronómico',
+    this.chefBiografia =
+        'Com mais de 15 anos de experiência em cozinha angolana e internacional, lidera a equipa com criatividade e rigor.',
+    this.chefFotoUrl =
+        'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?w=600',
+    this.galeriaMidia = const [],
+    this.capacidadeMaximaPessoas = 20,
+    this.zonasDisponiveis = const [
+      'Salão Principal Climatizado',
+      'Esplanada / Terraço Panorâmico',
+      'Sala VIP Privada',
+    ],
+    this.horariosDisponiveis = const [
+      '12:00',
+      '13:00',
+      '14:00',
+      '19:00',
+      '20:00',
+      '21:00',
+      '22:00',
+    ],
+    this.politicaReserva =
+        'Tolerância de 15 minutos após o horário agendado. Para grupos grandes, preparamos a sua mesa com antecedência.',
+    this.moradaCompleta = 'Luanda, Angola',
+    this.pontoReferencia = 'Próximo à Marginal de Luanda',
+    this.telefonePrincipal = '+244 923 000 000',
+    this.whatsapp = '+244 923 000 000',
+    this.emailContacto = 'reservas@restaurante-luanda.ao',
+    this.instagram = '@restaurante.luanda',
+    this.websiteUrl = 'https://ango-ifood.onrender.com',
+    this.gpsLinkExterno = 'https://www.google.com/maps/search/?api=1&query=-8.8368,13.2343',
+    this.latitude = -8.8368,
+    this.longitude = 13.2343,
+    this.horariosSemanal = const [],
+  });
+
+  factory StorefrontVitrineModel.fromJson(
+    Map<String, dynamic>? json, {
+    List<dynamic>? rawHorarios,
+    String fallbackMorada = 'Luanda, Angola',
+  }) {
+    if (json == null) {
+      return StorefrontVitrineModel(moradaCompleta: fallbackMorada);
+    }
+    final home = json['identidade_home'] is Map<String, dynamic>
+        ? json['identidade_home'] as Map<String, dynamic>
+        : <String, dynamic>{};
+    final sobre = json['sobre_nos'] is Map<String, dynamic>
+        ? json['sobre_nos'] as Map<String, dynamic>
+        : <String, dynamic>{};
+    final res = json['config_reservas'] is Map<String, dynamic>
+        ? json['config_reservas'] as Map<String, dynamic>
+        : <String, dynamic>{};
+    final loc = json['localizacao_contacto'] is Map<String, dynamic>
+        ? json['localizacao_contacto'] as Map<String, dynamic>
+        : <String, dynamic>{};
+
+    final rawDestaques = (home['pratos_destaque'] as List<dynamic>?) ?? const [];
+    final rawGaleria = (sobre['galeria_midia'] as List<dynamic>?) ?? const [];
+    final rawZonas = (res['zonas_disponiveis'] as List<dynamic>?) ?? const [];
+    final rawSlots = (res['horarios_disponiveis'] as List<dynamic>?) ?? const [];
+
+    return StorefrontVitrineModel(
+      slogan: (home['slogan'] ?? 'Sabores Autênticos & Alta Gastronomia')
+          .toString(),
+      resumoConceito: (home['resumo_conceito'] ??
+              'Ingredientes frescos selecionados diariamente e receitas autênticas.')
+          .toString(),
+      heroImagemUrl: (home['hero_imagem_url'] ??
+              'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200')
+          .toString(),
+      heroVideoUrl: (home['hero_video_url'] ?? '').toString(),
+      logoUrl: (home['logo_url'] ??
+              'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400')
+          .toString(),
+      corDestaqueHex: (home['cor_destaque_hex'] ?? '#E11D48').toString(),
+      aceitaReservas: (home['aceita_reservas'] as bool?) ?? true,
+      aceitaPedidos: (home['aceita_pedidos'] as bool?) ?? true,
+      pratosDestaque:
+          rawDestaques.whereType<Map<String, dynamic>>().toList(),
+      tituloHistoria: (sobre['titulo_historia'] ??
+              'A Nossa História — Tradição e Paixão')
+          .toString(),
+      historiaRestaurante: (sobre['historia_restaurante'] ?? '').toString(),
+      origemPratos: (sobre['origem_pratos'] ?? '').toString(),
+      filosofiaEquipa: (sobre['filosofia_equipa'] ?? '').toString(),
+      chefNome: (sobre['chef_nome'] ?? 'Chef Executivo').toString(),
+      chefTitulo:
+          (sobre['chef_titulo'] ?? 'Curador Gastronómico').toString(),
+      chefBiografia: (sobre['chef_biografia'] ?? '').toString(),
+      chefFotoUrl: (sobre['chef_foto_url'] ??
+              'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?w=600')
+          .toString(),
+      galeriaMidia: rawGaleria.whereType<Map<String, dynamic>>().toList(),
+      capacidadeMaximaPessoas:
+          (res['capacidade_maxima_pessoas'] as num?)?.toInt() ?? 20,
+      zonasDisponiveis: rawZonas.isNotEmpty
+          ? rawZonas.map((e) => e.toString()).toList()
+          : const [
+              'Salão Principal Climatizado',
+              'Esplanada / Terraço Panorâmico',
+              'Sala VIP Privada',
+            ],
+      horariosDisponiveis: rawSlots.isNotEmpty
+          ? rawSlots.map((e) => e.toString()).toList()
+          : const ['12:00', '13:00', '14:00', '19:00', '20:00', '21:00'],
+      politicaReserva: (res['politica_reserva'] ??
+              'Tolerância de 15 minutos após o horário agendado.')
+          .toString(),
+      moradaCompleta:
+          (loc['morada_completa'] ?? fallbackMorada).toString(),
+      pontoReferencia: (loc['ponto_referencia'] ?? '').toString(),
+      telefonePrincipal:
+          (loc['telefone_principal'] ?? '+244 923 000 000').toString(),
+      whatsapp: (loc['whatsapp'] ?? '+244 923 000 000').toString(),
+      emailContacto:
+          (loc['email_contacto'] ?? 'contacto@restaurante.ao').toString(),
+      instagram: (loc['instagram'] ?? '@restaurante.luanda').toString(),
+      websiteUrl: (loc['website_url'] ?? '').toString(),
+      gpsLinkExterno: (loc['gps_link_externo'] ?? '').toString(),
+      latitude: (loc['latitude'] as num?)?.toDouble() ?? -8.8368,
+      longitude: (loc['longitude'] as num?)?.toDouble() ?? 13.2343,
+      horariosSemanal: (rawHorarios ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .toList(),
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+        slogan,
+        resumoConceito,
+        heroImagemUrl,
+        heroVideoUrl,
+        logoUrl,
+        aceitaReservas,
+        aceitaPedidos,
+        tituloHistoria,
+        historiaRestaurante,
+        chefNome,
+        moradaCompleta,
+        telefonePrincipal,
+      ];
+}
+
 /// Formata valores monetários inteiros (unidades mínimas — RN-059) para exibição ao cliente.
 String formatarMoedaUnidadesMinimas(int valorInteiro, {String simbolo = 'Kz'}) {
   final valorReal = valorInteiro / 100.0;
@@ -383,18 +596,70 @@ class CatalogRepository {
   /// RN-014 / RN-015: Carrega as categorias e itens do menu de uma loja específica
   /// a partir do endpoint `GET /api/v1/catalog/stores/<storeId>/menu/`.
   Future<List<MenuCategoryModel>> fetchStoreMenu(String storeId) async {
+    final exp = await fetchStoreExperience(storeId);
+    return exp.categories;
+  }
+
+  /// Carrega simultaneamente as categorias do Cardápio e a Vitrine Digital (CMS)
+  /// completa da loja (`Home`, `Sobre Nós`, `Reservas`, `Localização e Contacto`).
+  Future<({List<MenuCategoryModel> categories, StorefrontVitrineModel vitrine})>
+      fetchStoreExperience(String storeId) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/api/v1/catalog/stores/$storeId/menu/',
     );
 
     final data = response.data;
-    if (data == null) return const [];
+    if (data == null) {
+      return (
+        categories: const <MenuCategoryModel>[],
+        vitrine: const StorefrontVitrineModel(),
+      );
+    }
 
     final rawCategories = (data['categorias'] as List<dynamic>?) ?? const [];
-    return rawCategories
+    final categories = rawCategories
         .whereType<Map<String, dynamic>>()
         .map(MenuCategoryModel.fromJson)
         .toList();
+
+    final vitrineMap = data['vitrine'] is Map<String, dynamic>
+        ? data['vitrine'] as Map<String, dynamic>
+        : null;
+    final rawHorarios = data['horarios'] as List<dynamic>?;
+    final fallbackMorada = (data['morada_texto'] ?? 'Luanda, Angola').toString();
+
+    return (
+      categories: categories,
+      vitrine: StorefrontVitrineModel.fromJson(
+        vitrineMap,
+        rawHorarios: rawHorarios,
+        fallbackMorada: fallbackMorada,
+      ),
+    );
+  }
+
+  /// Envia um pedido de Reserva de Mesa Online para a loja (`POST /api/v1/catalog/stores/<id>/reservations/`).
+  Future<Map<String, dynamic>> submitTableReservation({
+    required String storeId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/catalog/stores/$storeId/reservations/',
+      data: payload,
+    );
+    return response.data ?? <String, dynamic>{};
+  }
+
+  /// Envia uma mensagem de contacto do cliente para a gerência da loja (`POST /api/v1/catalog/stores/<id>/messages/`).
+  Future<Map<String, dynamic>> submitStoreContactMessage({
+    required String storeId,
+    required Map<String, dynamic> payload,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/catalog/stores/$storeId/messages/',
+      data: payload,
+    );
+    return response.data ?? <String, dynamic>{};
   }
 }
 
@@ -630,11 +895,13 @@ final class StoreMenuLoading extends StoreMenuState {
 
 final class StoreMenuLoaded extends StoreMenuState {
   final List<MenuCategoryModel> categories;
+  final StorefrontVitrineModel vitrine;
   final Map<String, int> cartQuantities;
   final int cartSubtotalCentimos;
 
   const StoreMenuLoaded({
     required this.categories,
+    this.vitrine = const StorefrontVitrineModel(),
     this.cartQuantities = const {},
     this.cartSubtotalCentimos = 0,
   });
@@ -643,7 +910,12 @@ final class StoreMenuLoaded extends StoreMenuState {
       cartQuantities.values.fold(0, (acc, qty) => acc + qty);
 
   @override
-  List<Object?> get props => [categories, cartQuantities, cartSubtotalCentimos];
+  List<Object?> get props => [
+        categories,
+        vitrine,
+        cartQuantities,
+        cartSubtotalCentimos,
+      ];
 }
 
 final class StoreMenuError extends StoreMenuState {
@@ -671,8 +943,13 @@ class StoreMenuBloc extends Bloc<StoreMenuEvent, StoreMenuState> {
   ) async {
     emit(const StoreMenuLoading());
     try {
-      final categories = await _repository.fetchStoreMenu(event.storeId);
-      emit(StoreMenuLoaded(categories: categories));
+      final exp = await _repository.fetchStoreExperience(event.storeId);
+      emit(
+        StoreMenuLoaded(
+          categories: exp.categories,
+          vitrine: exp.vitrine,
+        ),
+      );
     } catch (e) {
       emit(
         StoreMenuError(
@@ -699,6 +976,7 @@ class StoreMenuBloc extends Bloc<StoreMenuEvent, StoreMenuState> {
     emit(
       StoreMenuLoaded(
         categories: currentState.categories,
+        vitrine: currentState.vitrine,
         cartQuantities: updatedQuantities,
         cartSubtotalCentimos:
             currentState.cartSubtotalCentimos + event.item.preco,
@@ -1426,10 +1704,15 @@ class _StoreDiscoveryCard extends StatelessWidget {
 }
 
 // ============================================================================
-// 6. ECRÃ 2: StoreMenuScreen (SliverAppBar, TabBar Horizontal e Itens RN-014/RN-015)
+// 6. ECRÃ 2: StoreMenuScreen — Experiência Completa da Loja em 5 Secções:
+//    1. Página Inicial (Home)
+//    2. Cardápio (Menu)
+//    3. Sobre Nós (A Nossa História & Chef)
+//    4. Reservas (Agendamento de Mesa Online)
+//    5. Localização e Contacto (Morada, Horários, GPS e Formulário de Mensagens)
 // ============================================================================
 
-class StoreMenuScreen extends StatelessWidget {
+class StoreMenuScreen extends StatefulWidget {
   final StoreSummaryModel store;
 
   const StoreMenuScreen({
@@ -1438,9 +1721,63 @@ class StoreMenuScreen extends StatelessWidget {
   });
 
   @override
+  State<StoreMenuScreen> createState() => _StoreMenuScreenState();
+}
+
+class _StoreMenuScreenState extends State<StoreMenuScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _sectionTabController;
+  String? _selectedMenuCategoryId;
+  String _menuSearchQuery = '';
+  final TextEditingController _menuSearchCtrl = TextEditingController();
+
+  // Estado do Formulário de Reserva de Mesa (Secção 4)
+  DateTime _reservationDate = DateTime.now().add(const Duration(days: 1));
+  String _reservationTime = '20:00';
+  int _reservationGuests = 2;
+  String _reservationZone = 'Salão Principal Climatizado';
+  final TextEditingController _resNameCtrl = TextEditingController();
+  final TextEditingController _resPhoneCtrl = TextEditingController();
+  final TextEditingController _resNotesCtrl = TextEditingController();
+  bool _isSubmittingReservation = false;
+  Map<String, dynamic>? _confirmedReservation;
+
+  // Estado do Formulário de Mensagens Diretas (Secção 5)
+  final TextEditingController _msgNameCtrl = TextEditingController();
+  final TextEditingController _msgContactCtrl = TextEditingController();
+  final TextEditingController _msgSubjectCtrl = TextEditingController();
+  final TextEditingController _msgBodyCtrl = TextEditingController();
+  bool _isSendingMessage = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _sectionTabController = TabController(length: 5, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _sectionTabController.dispose();
+    _menuSearchCtrl.dispose();
+    _resNameCtrl.dispose();
+    _resPhoneCtrl.dispose();
+    _resNotesCtrl.dispose();
+    _msgNameCtrl.dispose();
+    _msgContactCtrl.dispose();
+    _msgSubjectCtrl.dispose();
+    _msgBodyCtrl.dispose();
+    super.dispose();
+  }
+
+  void _navigateToSection(int tabIndex) {
+    _sectionTabController.animateTo(tabIndex);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final store = widget.store;
 
     return AnimatedBuilder(
       animation: CartService.instance,
@@ -1472,7 +1809,7 @@ class StoreMenuScreen extends StatelessWidget {
                           onPressed: () => context
                               .read<StoreMenuBloc>()
                               .add(LoadStoreMenuEvent(storeId: store.id)),
-                          child: const Text('Recarregar Menu'),
+                          child: const Text('Recarregar Loja'),
                         ),
                       ],
                     ),
@@ -1483,163 +1820,1794 @@ class StoreMenuScreen extends StatelessWidget {
 
             final loadedState = state as StoreMenuLoaded;
             final categories = loadedState.categories;
+            final vitrine = loadedState.vitrine;
+            final heroBannerUrl = vitrine.heroImagemUrl.isNotEmpty
+                ? vitrine.heroImagemUrl
+                : store.imagemUrl;
 
-            return DefaultTabController(
-              length: categories.isEmpty ? 1 : categories.length,
-              child: Scaffold(
-                body: NestedScrollView(
-                  headerSliverBuilder: (context, innerBoxIsScrolled) {
-                    return [
-                      // Cabeçalho Expansível da Loja Selecionada (SliverAppBar)
-                      SliverAppBar(
-                        expandedHeight: 220,
-                        pinned: true,
-                        stretch: true,
-                        flexibleSpace: FlexibleSpaceBar(
-                          title: Text(
-                            store.nome,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              shadows: [
-                                Shadow(
-                                  blurRadius: 8,
-                                  color: Colors.black54,
-                                ),
-                              ],
-                            ),
-                          ),
-                          background: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              Image.network(
-                                store.imagemUrl,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
-                                  color: colorScheme.primaryContainer,
+            return Scaffold(
+              body: NestedScrollView(
+                headerSliverBuilder: (context, innerBoxIsScrolled) {
+                  return [
+                    SliverAppBar(
+                      expandedHeight: 245,
+                      pinned: true,
+                      stretch: true,
+                      actions: [
+                        if (vitrine.heroVideoUrl.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: ActionChip(
+                              avatar: const Icon(
+                                Icons.play_circle_fill_rounded,
+                                color: Colors.redAccent,
+                                size: 18,
+                              ),
+                              label: const Text(
+                                'Vídeo da Casa',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
                                 ),
                               ),
-                              const DecoratedBox(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    colors: [
-                                      Colors.black26,
-                                      Colors.transparent,
-                                      Colors.black87,
-                                    ],
-                                  ),
+                              onPressed: () => _showMediaViewerModal(
+                                context,
+                                title: 'Vídeo em Destaque — ${store.nome}',
+                                mediaUrl: vitrine.heroVideoUrl,
+                                fallbackImageUrl: heroBannerUrl,
+                                isVideo: true,
+                                subtitle: vitrine.slogan,
+                              ),
+                            ),
+                          ),
+                      ],
+                      flexibleSpace: FlexibleSpaceBar(
+                        titlePadding: const EdgeInsets.fromLTRB(56, 0, 16, 56),
+                        title: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                store.nome,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 17,
+                                  color: Colors.white,
+                                  shadows: [
+                                    Shadow(
+                                      blurRadius: 10,
+                                      color: Colors.black87,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: store.isAberta
+                                    ? const Color(0xFF16A34A)
+                                    : Colors.redAccent,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                store.isAberta ? 'Aberto' : 'Fechado',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        background: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Image.network(
+                              heroBannerUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                color: colorScheme.primaryContainer,
+                              ),
+                            ),
+                            const DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.black38,
+                                    Colors.transparent,
+                                    Colors.black87,
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      bottom: PreferredSize(
+                        preferredSize: const Size.fromHeight(50),
+                        child: Container(
+                          color: colorScheme.surface,
+                          child: TabBar(
+                            controller: _sectionTabController,
+                            isScrollable: true,
+                            tabAlignment: TabAlignment.start,
+                            labelColor: colorScheme.primary,
+                            unselectedLabelColor: colorScheme.onSurfaceVariant,
+                            indicatorColor: colorScheme.primary,
+                            indicatorWeight: 3,
+                            labelStyle: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                            tabs: const [
+                              Tab(
+                                icon: Icon(Icons.home_rounded, size: 18),
+                                text: 'Página Inicial',
+                              ),
+                              Tab(
+                                icon: Icon(Icons.restaurant_menu_rounded, size: 18),
+                                text: 'Cardápio',
+                              ),
+                              Tab(
+                                icon: Icon(Icons.auto_stories_rounded, size: 18),
+                                text: 'Sobre Nós',
+                              ),
+                              Tab(
+                                icon: Icon(Icons.event_seat_rounded, size: 18),
+                                text: 'Reservas',
+                              ),
+                              Tab(
+                                icon: Icon(Icons.location_on_rounded, size: 18),
+                                text: 'Localização & Contato',
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ];
+                },
+                body: TabBarView(
+                  controller: _sectionTabController,
+                  children: [
+                    // 1. PÁGINA INICIAL (HOME)
+                    _buildHomeTab(
+                      context,
+                      store: store,
+                      vitrine: vitrine,
+                      categories: categories,
+                    ),
+
+                    // 2. CARDÁPIO (MENU)
+                    _buildMenuTab(
+                      context,
+                      store: store,
+                      categories: categories,
+                      isThisStoreCart: isThisStoreCart,
+                      cart: cart,
+                    ),
+
+                    // 3. SOBRE NÓS (A NOSSA HISTÓRIA & CHEF)
+                    _buildAboutUsTab(
+                      context,
+                      store: store,
+                      vitrine: vitrine,
+                    ),
+
+                    // 4. RESERVAS (AGENDAMENTO DE MESA ONLINE)
+                    _buildReservationsTab(
+                      context,
+                      store: store,
+                      vitrine: vitrine,
+                    ),
+
+                    // 5. LOCALIZAÇÃO E CONTATO (MORADA, HORÁRIOS, GPS E MENSAGENS)
+                    _buildLocationAndContactTab(
+                      context,
+                      store: store,
+                      vitrine: vitrine,
+                    ),
+                  ],
+                ),
+              ),
+
+              // Barra inferior de resumo do carrinho (RN-040)
+              bottomNavigationBar: isThisStoreCart
+                  ? SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: FilledButton(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => CheckoutScreen(
+                                  lojaId: store.id,
+                                  lojaNome: store.nome,
+                                  moradaId: cart.moradaId,
+                                  moradaLabel: cart.moradaLabel,
+                                  moradaTexto: cart.moradaTexto,
+                                  itensCarrinho: cart.toCheckoutInputs(),
+                                ),
+                              ),
+                            );
+                          },
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                '${cart.totalItemsCount} item(ns) • Ver Pedido',
+                              ),
+                              Text(
+                                formatarMoedaUnidadesMinimas(
+                                  cart.totalSubtotalCentimos,
+                                ),
+                                style: textTheme.titleMedium?.copyWith(
+                                  color: colorScheme.onPrimary,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        // Lista de Categorias em formato de abas horizontais (TabBar)
-                        bottom: categories.isNotEmpty
-                            ? PreferredSize(
-                                preferredSize: const Size.fromHeight(48),
-                                child: Container(
-                                  color: colorScheme.surface,
-                                  child: TabBar(
-                                    isScrollable: true,
-                                    tabAlignment: TabAlignment.start,
-                                    labelColor: colorScheme.primary,
-                                    unselectedLabelColor:
-                                        colorScheme.onSurfaceVariant,
-                                    indicatorColor: colorScheme.primary,
-                                    tabs: categories
-                                        .map((cat) => Tab(text: cat.nome))
-                                        .toList(),
-                                  ),
-                                ),
-                              )
-                            : null,
                       ),
-                    ];
-                  },
-                  body: categories.isEmpty
-                      ? const Center(
-                          child: Text(
-                              'Esta loja ainda não publicou itens no menu.'),
-                        )
-                      : TabBarView(
-                          children: categories.map((category) {
-                            if (category.itens.isEmpty) {
-                              return const Center(
-                                child: Text('Sem itens nesta categoria.'),
-                              );
-                            }
-                            return ListView.separated(
-                              padding:
-                                  const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                              itemCount: category.itens.length,
-                              separatorBuilder: (_, __) =>
-                                  const Divider(height: 24),
-                              itemBuilder: (context, index) {
-                                final item = category.itens[index];
-                                final quantityInCart = isThisStoreCart
-                                    ? cart.getQuantity(item.id)
-                                    : 0;
-
-                                return _MenuItemTile(
-                                  item: item,
-                                  storeIsOpen: store.isAberta,
-                                  quantityInCart: quantityInCart,
-                                  onAddPressed: () =>
-                                      _handleMenuItemTap(context, store, item),
-                                );
-                              },
-                            );
-                          }).toList(),
-                        ),
-                ),
-
-                // Barra inferior de resumo do carrinho (RN-040)
-                bottomNavigationBar: isThisStoreCart
-                    ? SafeArea(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: FilledButton(
-                            onPressed: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute<void>(
-                                  builder: (_) => CheckoutScreen(
-                                    lojaId: store.id,
-                                    lojaNome: store.nome,
-                                    moradaId: cart.moradaId,
-                                    moradaLabel: cart.moradaLabel,
-                                    moradaTexto: cart.moradaTexto,
-                                    itensCarrinho: cart.toCheckoutInputs(),
-                                  ),
-                                ),
-                              );
-                            },
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  '${cart.totalItemsCount} item(ns) • Ver Pedido',
-                                ),
-                                Text(
-                                  formatarMoedaUnidadesMinimas(
-                                    cart.totalSubtotalCentimos,
-                                  ),
-                                  style: textTheme.titleMedium?.copyWith(
-                                    color: colorScheme.onPrimary,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      )
-                    : null,
-              ),
+                    )
+                  : null,
             );
           },
         );
       },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // SECÇÃO 1: PÁGINA INICIAL (HOME)
+  // --------------------------------------------------------------------------
+  Widget _buildHomeTab(
+    BuildContext context, {
+    required StoreSummaryModel store,
+    required StorefrontVitrineModel vitrine,
+    required List<MenuCategoryModel> categories,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final allItems = categories.expand((c) => c.itens).toList();
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+      children: [
+        // 1. Cartão de Identidade Visual & Conceito do Restaurante
+        Card(
+          elevation: 0,
+          color: colorScheme.primaryContainer.withOpacity(0.35),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: colorScheme.primary.withOpacity(0.2)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Image.network(
+                        vitrine.logoUrl,
+                        width: 58,
+                        height: 58,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          width: 58,
+                          height: 58,
+                          color: colorScheme.primary,
+                          child: const Icon(
+                            Icons.restaurant_rounded,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            vitrine.slogan,
+                            style: textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              color: colorScheme.onSurface,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.star_rounded,
+                                color: Colors.amber,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${store.scoreReputacao.toStringAsFixed(1)} • ${store.etaMinutosEstimado} min • ${store.distanciaKm.toStringAsFixed(1)} km',
+                                style: textTheme.labelMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  vitrine.resumoConceito,
+                  style: textTheme.bodyMedium?.copyWith(
+                    height: 1.45,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Botões Diretos para Pedidos e Reservas
+                Row(
+                  children: [
+                    if (vitrine.aceitaPedidos)
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: () => _navigateToSection(1),
+                          icon: const Icon(Icons.shopping_bag_rounded),
+                          label: const Text('Fazer Pedido'),
+                        ),
+                      ),
+                    if (vitrine.aceitaPedidos && vitrine.aceitaReservas)
+                      const SizedBox(width: 10),
+                    if (vitrine.aceitaReservas)
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _navigateToSection(3),
+                          icon: const Icon(Icons.event_seat_rounded),
+                          label: const Text('Reservar Mesa'),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 20),
+
+        // 2. Fotografia ou Vídeo de Destaque dos Pratos Principais
+        Text(
+          'Vídeo & Destaque Gastronómico',
+          style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 10),
+        InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => _showMediaViewerModal(
+            context,
+            title: 'Experiência Gastronómica — ${store.nome}',
+            mediaUrl: vitrine.heroVideoUrl.isNotEmpty
+                ? vitrine.heroVideoUrl
+                : vitrine.heroImagemUrl,
+            fallbackImageUrl: vitrine.heroImagemUrl,
+            isVideo: vitrine.heroVideoUrl.isNotEmpty,
+            subtitle: vitrine.resumoConceito,
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Image.network(
+                    vitrine.heroImagemUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: colorScheme.surfaceVariant,
+                    ),
+                  ),
+                ),
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withOpacity(0.15),
+                          Colors.black.withOpacity(0.75),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: colorScheme.primary.withOpacity(0.9),
+                    shape: BoxShape.circle,
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black38,
+                        blurRadius: 12,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.play_arrow_rounded,
+                    color: Colors.white,
+                    size: 36,
+                  ),
+                ),
+                Positioned(
+                  left: 16,
+                  right: 16,
+                  bottom: 14,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          'DESTAQUE DA COZINHA',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Conheça os Pratos Principais e a Arte da Nossa Brasa',
+                        style: textTheme.titleSmall?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 22),
+
+        // 3. Pratos Assinatura em Destaque na Home
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Pratos Principais em Destaque',
+              style: textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            TextButton(
+              onPressed: () => _navigateToSection(1),
+              child: const Text('Ver Cardápio Completo →'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (allItems.isNotEmpty)
+          ...allItems.take(4).map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(color: colorScheme.outlineVariant),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: _MenuItemTile(
+                        item: item,
+                        storeIsOpen: store.isAberta,
+                        quantityInCart: CartService.instance.lojaId == store.id
+                            ? CartService.instance.getQuantity(item.id)
+                            : 0,
+                        onAddPressed: () =>
+                            _handleMenuItemTap(context, store, item),
+                      ),
+                    ),
+                  ),
+                ),
+              )
+        else
+          ...vitrine.pratosDestaque.map(
+            (dest) => Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ListTile(
+                leading: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.network(
+                    (dest['midia_url'] ?? '').toString(),
+                    width: 60,
+                    height: 60,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) =>
+                        const Icon(Icons.fastfood_rounded),
+                  ),
+                ),
+                title: Text(
+                  (dest['titulo'] ?? 'Prato Especial').toString(),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: Text((dest['subtitulo'] ?? '').toString()),
+                trailing: Text(
+                  formatarMoedaUnidadesMinimas(
+                    (dest['preco'] as num?)?.toInt() ?? 0,
+                  ),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.primary,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // SECÇÃO 2: CARDÁPIO (MENU)
+  // --------------------------------------------------------------------------
+  Widget _buildMenuTab(
+    BuildContext context, {
+    required StoreSummaryModel store,
+    required List<MenuCategoryModel> categories,
+    required bool isThisStoreCart,
+    required CartService cart,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    if (categories.isEmpty) {
+      return const Center(
+        child: Text('Esta loja ainda não publicou itens no cardápio.'),
+      );
+    }
+
+    final filteredCategories = categories
+        .where(
+          (cat) =>
+              _selectedMenuCategoryId == null ||
+              cat.id == _selectedMenuCategoryId,
+        )
+        .map((cat) {
+          if (_menuSearchQuery.trim().isEmpty) return cat;
+          final q = _menuSearchQuery.trim().toLowerCase();
+          final matchedItems = cat.itens
+              .where(
+                (i) =>
+                    i.nome.toLowerCase().contains(q) ||
+                    i.descricao.toLowerCase().contains(q),
+              )
+              .toList();
+          return MenuCategoryModel(
+            id: cat.id,
+            nome: cat.nome,
+            ordemExibicao: cat.ordemExibicao,
+            itens: matchedItems,
+          );
+        })
+        .where((cat) => cat.itens.isNotEmpty)
+        .toList();
+
+    return Column(
+      children: [
+        // Barra de Pesquisa de Pratos/Ingredientes e Filtro de Categorias
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: TextField(
+            controller: _menuSearchCtrl,
+            onChanged: (v) => setState(() => _menuSearchQuery = v),
+            decoration: InputDecoration(
+              hintText: 'Pesquisar prato, bebida ou ingrediente...',
+              prefixIcon: const Icon(Icons.search_rounded),
+              isDense: true,
+              suffixIcon: _menuSearchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear_rounded),
+                      onPressed: () {
+                        _menuSearchCtrl.clear();
+                        setState(() => _menuSearchQuery = '');
+                      },
+                    )
+                  : null,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 44,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: const Text('Todas as Categorias'),
+                  selected: _selectedMenuCategoryId == null,
+                  onSelected: (_) =>
+                      setState(() => _selectedMenuCategoryId = null),
+                ),
+              ),
+              ...categories.map(
+                (cat) => Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text('${cat.nome} (${cat.itens.length})'),
+                    selected: _selectedMenuCategoryId == cat.id,
+                    onSelected: (sel) => setState(
+                      () => _selectedMenuCategoryId = sel ? cat.id : null,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 12),
+        Expanded(
+          child: filteredCategories.isEmpty
+              ? const Center(
+                  child: Text('Nenhum prato encontrado para esta pesquisa.'),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                  itemCount: filteredCategories.length,
+                  itemBuilder: (context, catIdx) {
+                    final category = filteredCategories[catIdx];
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 4,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                  color: colorScheme.primary,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                category.nome,
+                                style: textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        ...category.itens.map((item) {
+                          final quantityInCart = isThisStoreCart
+                              ? cart.getQuantity(item.id)
+                              : 0;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: _MenuItemTile(
+                              item: item,
+                              storeIsOpen: store.isAberta,
+                              quantityInCart: quantityInCart,
+                              onAddPressed: () =>
+                                  _handleMenuItemTap(context, store, item),
+                            ),
+                          );
+                        }),
+                        const Divider(height: 24),
+                      ],
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // SECÇÃO 3: SOBRE NÓS (A NOSSA HISTÓRIA, ORIGEM, FILOSOFIA & CHEF)
+  // --------------------------------------------------------------------------
+  Widget _buildAboutUsTab(
+    BuildContext context, {
+    required StoreSummaryModel store,
+    required StorefrontVitrineModel vitrine,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+      children: [
+        // 1. A Nossa História
+        Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(color: colorScheme.outlineVariant),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.auto_stories_rounded, color: colorScheme.primary),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        vitrine.tituloHistoria,
+                        style: textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  vitrine.historiaRestaurante,
+                  style: textTheme.bodyMedium?.copyWith(height: 1.5),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // 2. Origem dos Pratos & Filosofia da Equipa
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Card(
+                elevation: 0,
+                color: colorScheme.secondaryContainer.withOpacity(0.4),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.eco_rounded, color: colorScheme.primary),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Origem dos Pratos',
+                        style: textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        vitrine.origemPratos,
+                        style: textTheme.bodySmall?.copyWith(height: 1.4),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Card(
+                elevation: 0,
+                color: colorScheme.tertiaryContainer.withOpacity(0.4),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.groups_rounded, color: colorScheme.primary),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Filosofia da Equipa',
+                        style: textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        vitrine.filosofiaEquipa,
+                        style: textTheme.bodySmall?.copyWith(height: 1.4),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+
+        // 3. Biografia do Chef
+        Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: colorScheme.primary.withOpacity(0.3)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(40),
+                      child: Image.network(
+                        vitrine.chefFotoUrl,
+                        width: 72,
+                        height: 72,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => CircleAvatar(
+                          radius: 36,
+                          backgroundColor: colorScheme.primaryContainer,
+                          child: const Icon(Icons.person_rounded, size: 36),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colorScheme.primaryContainer,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              'BIOGRAFIA DO CHEF',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: colorScheme.onPrimaryContainer,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            vitrine.chefNome,
+                            style: textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          Text(
+                            vitrine.chefTitulo,
+                            style: textTheme.bodySmall?.copyWith(
+                              color: colorScheme.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  vitrine.chefBiografia,
+                  style: textTheme.bodyMedium?.copyWith(height: 1.5),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // 4. Galeria Multimédia (Fotografias & Vídeos)
+        if (vitrine.galeriaMidia.isNotEmpty) ...[
+          const SizedBox(height: 22),
+          Text(
+            'Galeria de Fotos & Vídeos do Espaço',
+            style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 10),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 1.25,
+            ),
+            itemCount: vitrine.galeriaMidia.length,
+            itemBuilder: (context, idx) {
+              final media = vitrine.galeriaMidia[idx];
+              final isVideo =
+                  (media['tipo'] ?? '').toString().toLowerCase() == 'video';
+              final url = (media['url'] ?? '').toString();
+              final legenda = (media['legenda'] ?? 'Galeria').toString();
+
+              return InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => _showMediaViewerModal(
+                  context,
+                  title: legenda,
+                  mediaUrl: url,
+                  fallbackImageUrl: vitrine.heroImagemUrl,
+                  isVideo: isVideo,
+                  subtitle: store.nome,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.network(
+                        isVideo ? vitrine.heroImagemUrl : url,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: colorScheme.surfaceVariant,
+                          child: const Icon(Icons.image_outlined),
+                        ),
+                      ),
+                      if (isVideo)
+                        const Center(
+                          child: CircleAvatar(
+                            backgroundColor: Colors.black54,
+                            child: Icon(
+                              Icons.play_arrow_rounded,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          color: Colors.black54,
+                          child: Text(
+                            legenda,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ],
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // SECÇÃO 4: RESERVAS (AGENDAMENTO DE MESA ONLINE)
+  // --------------------------------------------------------------------------
+  Widget _buildReservationsTab(
+    BuildContext context, {
+    required StoreSummaryModel store,
+    required StorefrontVitrineModel vitrine,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final repository = context.read<CatalogRepository>();
+
+    final formattedDate =
+        '${_reservationDate.day.toString().padLeft(2, '0')}/${_reservationDate.month.toString().padLeft(2, '0')}/${_reservationDate.year}';
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+      children: [
+        if (_confirmedReservation != null) ...[
+          Card(
+            elevation: 0,
+            color: const Color(0xFFDCFCE7),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+              side: const BorderSide(color: Color(0xFF16A34A)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.verified_rounded,
+                        color: Color(0xFF16A34A),
+                        size: 28,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Mesa Reservada! Código: ${_confirmedReservation!['id']}',
+                          style: textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFF14532D),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Data: ${_confirmedReservation!['data_reserva']} às ${_confirmedReservation!['horario']} • '
+                    '${_confirmedReservation!['numero_pessoas']} pessoa(s) • '
+                    '${_confirmedReservation!['zona_preferida']}',
+                    style: const TextStyle(
+                      color: Color(0xFF14532D),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton(
+                    onPressed: () =>
+                        setState(() => _confirmedReservation = null),
+                    child: const Text('Fazer Outra Reserva'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+
+        Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: colorScheme.outlineVariant),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Agendar uma Mesa Online',
+                  style: textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  vitrine.politicaReserva,
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 18),
+
+                // 1. Seletor de Data
+                Text(
+                  '1. Selecione a Data',
+                  style: textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _reservationDate,
+                      firstDate: DateTime.now(),
+                      lastDate: DateTime.now().add(const Duration(days: 60)),
+                    );
+                    if (picked != null) {
+                      setState(() => _reservationDate = picked);
+                    }
+                  },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.calendar_today_rounded),
+                      border: OutlineInputBorder(),
+                    ),
+                    child: Text(
+                      formattedDate,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+
+                // 2. Seletor de Horário
+                Text(
+                  '2. Escolha o Horário',
+                  style: textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: vitrine.horariosDisponiveis.map((slot) {
+                    final selected = _reservationTime == slot;
+                    return ChoiceChip(
+                      label: Text(slot),
+                      selected: selected,
+                      onSelected: (_) =>
+                          setState(() => _reservationTime = slot),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 18),
+
+                // 3. Número de Pessoas
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '3. Número de Pessoas',
+                      style: textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        IconButton.filledTonal(
+                          onPressed: _reservationGuests > 1
+                              ? () => setState(() => _reservationGuests--)
+                              : null,
+                          icon: const Icon(Icons.remove_rounded),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          child: Text(
+                            '$_reservationGuests',
+                            style: textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        IconButton.filledTonal(
+                          onPressed:
+                              _reservationGuests < vitrine.capacidadeMaximaPessoas
+                                  ? () => setState(() => _reservationGuests++)
+                                  : null,
+                          icon: const Icon(Icons.add_rounded),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // 4. Ambiente / Zona Preferida
+                Text(
+                  '4. Ambiente Preferido',
+                  style: textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: vitrine.zonasDisponiveis.map((zona) {
+                    final selected = _reservationZone == zona;
+                    return ChoiceChip(
+                      label: Text(zona),
+                      selected: selected,
+                      onSelected: (_) =>
+                          setState(() => _reservationZone = zona),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 18),
+
+                // 5. Dados do Cliente e Observações
+                TextField(
+                  controller: _resNameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'O seu Nome Completo',
+                    prefixIcon: Icon(Icons.person_outline_rounded),
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _resPhoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'Telemóvel / WhatsApp para Confirmação',
+                    prefixIcon: Icon(Icons.phone_outlined),
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _resNotesCtrl,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Pedidos Especiais (Aniversário, Cadeira de Bebé, Alergias)',
+                    prefixIcon: Icon(Icons.notes_rounded),
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _isSubmittingReservation
+                        ? null
+                        : () async {
+                            setState(() => _isSubmittingReservation = true);
+                            try {
+                              final dateIso =
+                                  '${_reservationDate.year}-${_reservationDate.month.toString().padLeft(2, '0')}-${_reservationDate.day.toString().padLeft(2, '0')}';
+                              final resp =
+                                  await repository.submitTableReservation(
+                                storeId: store.id,
+                                payload: {
+                                  'nome_cliente': _resNameCtrl.text.trim().isEmpty
+                                      ? 'Cliente Delivery Pro'
+                                      : _resNameCtrl.text.trim(),
+                                  'telefone_cliente': _resPhoneCtrl.text.trim(),
+                                  'data_reserva': dateIso,
+                                  'horario': _reservationTime,
+                                  'numero_pessoas': _reservationGuests,
+                                  'zona_preferida': _reservationZone,
+                                  'notas_especiais': _resNotesCtrl.text.trim(),
+                                },
+                              );
+                              if (!context.mounted) return;
+                              setState(() {
+                                _isSubmittingReservation = false;
+                                _confirmedReservation = resp['reserva'] is Map<String, dynamic>
+                                    ? resp['reserva'] as Map<String, dynamic>
+                                    : <String, dynamic>{
+                                        'id': 'RES-OK',
+                                        'data_reserva': dateIso,
+                                        'horario': _reservationTime,
+                                        'numero_pessoas': _reservationGuests,
+                                        'zona_preferida': _reservationZone,
+                                      };
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Reserva confirmada com sucesso!',
+                                  ),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            } catch (e) {
+                              if (!context.mounted) return;
+                              setState(() => _isSubmittingReservation = false);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Erro ao agendar reserva: $e'),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                          },
+                    icon: _isSubmittingReservation
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.check_circle_outline_rounded),
+                    label: Text(
+                      _isSubmittingReservation
+                          ? 'A Confirmar Reserva...'
+                          : 'Confirmar Reserva de Mesa',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // SECÇÃO 5: LOCALIZAÇÃO E CONTATO (MORADA, HORÁRIOS, GPS E MENSAGENS)
+  // --------------------------------------------------------------------------
+  Widget _buildLocationAndContactTab(
+    BuildContext context, {
+    required StoreSummaryModel store,
+    required StorefrontVitrineModel vitrine,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final repository = context.read<CatalogRepository>();
+
+    const diasNomes = [
+      'Segunda-feira',
+      'Terça-feira',
+      'Quarta-feira',
+      'Quinta-feira',
+      'Sexta-feira',
+      'Sábado',
+      'Domingo',
+    ];
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+      children: [
+        // 1. Morada Exata e Link para GPS
+        Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(color: colorScheme.outlineVariant),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: colorScheme.primaryContainer,
+                      child: Icon(
+                        Icons.location_on_rounded,
+                        color: colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Localização Exata & GPS',
+                            style: textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          Text(
+                            vitrine.moradaCompleta,
+                            style: textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                if (vitrine.pontoReferencia.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Referência: ${vitrine.pontoReferencia}',
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                Text(
+                  'Coordenadas GPS: ${vitrine.latitude.toStringAsFixed(5)}, ${vitrine.longitude.toStringAsFixed(5)}',
+                  style: textTheme.labelSmall?.copyWith(
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.tonalIcon(
+                    onPressed: () {
+                      final gpsUrl = vitrine.gpsLinkExterno.isNotEmpty
+                          ? vitrine.gpsLinkExterno
+                          : 'https://www.google.com/maps/search/?api=1&query=${vitrine.latitude},${vitrine.longitude}';
+                      Clipboard.setData(ClipboardData(text: gpsUrl));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Link GPS copiado ($gpsUrl)! Pode colar no Google Maps ou Waze.',
+                          ),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.map_rounded),
+                    label: const Text('Copiar Link Direto para o GPS (Google Maps)'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // 2. Contactos Diretos (Telefone, WhatsApp, E-mail, Instagram)
+        Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(color: colorScheme.outlineVariant),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Contactos Diretos',
+                  style: textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.phone_in_talk_rounded),
+                  title: const Text('Telefone Principal'),
+                  subtitle: Text(vitrine.telefonePrincipal),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.copy_rounded),
+                    onPressed: () {
+                      Clipboard.setData(
+                        ClipboardData(text: vitrine.telefonePrincipal),
+                      );
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Número de telefone copiado!'),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.chat_bubble_outline_rounded),
+                  title: const Text('WhatsApp & Reservas Rápidas'),
+                  subtitle: Text(vitrine.whatsapp),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.copy_rounded),
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: vitrine.whatsapp));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Contacto WhatsApp copiado!'),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.email_outlined),
+                  title: const Text('E-mail & Eventos'),
+                  subtitle: Text('$vitrine.emailContacto • ${vitrine.instagram}'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // 3. Horário de Funcionamento Semanal
+        Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(color: colorScheme.outlineVariant),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.access_time_filled_rounded, color: colorScheme.primary),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Horário de Funcionamento',
+                      style: textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                ...List.generate(7, (diaIndex) {
+                  final matching = vitrine.horariosSemanal
+                      .where((h) => (h['dia_semana'] as num?)?.toInt() == diaIndex)
+                      .toList();
+                  final horarioTexto = matching.isNotEmpty
+                      ? '${matching.first['hora_abertura']?.toString().substring(0, 5) ?? '08:00'} às ${matching.first['hora_fecho']?.toString().substring(0, 5) ?? '23:00'}'
+                      : '08:00 às 23:00';
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          diasNomes[diaIndex],
+                          style: textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          horarioTexto,
+                          style: textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // 4. Formulário de Mensagens Diretas
+        Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(color: colorScheme.outlineVariant),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Enviar Mensagem ao Restaurante',
+                  style: textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Dúvidas sobre pratos, eventos privados ou sugestões? Escreva-nos diretamente:',
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _msgNameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'O seu Nome',
+                    prefixIcon: Icon(Icons.person_outline_rounded),
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _msgContactCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Telemóvel ou E-mail de Resposta',
+                    prefixIcon: Icon(Icons.contact_phone_outlined),
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _msgSubjectCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Assunto (ex.: Evento de Aniversário, Dúvida)',
+                    prefixIcon: Icon(Icons.subject_rounded),
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _msgBodyCtrl,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'A sua Mensagem',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _isSendingMessage
+                        ? null
+                        : () async {
+                            if (_msgBodyCtrl.text.trim().isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Por favor, escreva a sua mensagem.',
+                                  ),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                              return;
+                            }
+                            setState(() => _isSendingMessage = true);
+                            try {
+                              await repository.submitStoreContactMessage(
+                                storeId: store.id,
+                                payload: {
+                                  'nome': _msgNameCtrl.text.trim().isEmpty
+                                      ? 'Cliente'
+                                      : _msgNameCtrl.text.trim(),
+                                  'contacto': _msgContactCtrl.text.trim(),
+                                  'assunto': _msgSubjectCtrl.text.trim().isEmpty
+                                      ? 'Contacto pelo App'
+                                      : _msgSubjectCtrl.text.trim(),
+                                  'mensagem': _msgBodyCtrl.text.trim(),
+                                },
+                              );
+                              if (!context.mounted) return;
+                              setState(() {
+                                _isSendingMessage = false;
+                                _msgBodyCtrl.clear();
+                                _msgSubjectCtrl.clear();
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Mensagem enviada com sucesso para o restaurante!',
+                                  ),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            } catch (e) {
+                              if (!context.mounted) return;
+                              setState(() => _isSendingMessage = false);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Erro ao enviar mensagem: $e'),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                          },
+                    icon: const Icon(Icons.send_rounded),
+                    label: Text(
+                      _isSendingMessage
+                          ? 'A Enviar...'
+                          : 'Enviar Mensagem Direta',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showMediaViewerModal(
+    BuildContext context, {
+    required String title,
+    required String mediaUrl,
+    required String fallbackImageUrl,
+    required bool isVideo,
+    required String subtitle,
+  }) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  isVideo
+                      ? Icons.videocam_rounded
+                      : Icons.photo_camera_back_rounded,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Image.network(
+                  isVideo ? fallbackImageUrl : mediaUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    color: Colors.black12,
+                    child: const Icon(Icons.movie_creation_outlined, size: 48),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(subtitle),
+            if (isVideo && mediaUrl.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              FilledButton.tonalIcon(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: mediaUrl));
+                  Navigator.of(ctx).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Link do vídeo copiado!'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.video_library_rounded),
+                label: const Text('Copiar Link Direto do Vídeo HD'),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 

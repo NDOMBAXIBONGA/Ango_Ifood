@@ -7,6 +7,7 @@ import '../widgets/partner_dashboard_control_widget.dart';
 import 'business_hours_config_screen.dart';
 import 'menu_management_screen.dart';
 import 'partner_store_profile_screen.dart';
+import 'partner_storefront_cms_screen.dart';
 
 /// Shell de Navegação Principal do Parceiro Comercial (`PartnerMainNavigationShell`).
 /// Unifica as 4 abas estruturais do Portal do Parceiro:
@@ -67,10 +68,13 @@ class _PartnerMainNavigationShellState
               ],
             ),
 
-            // Aba 2: Horários de Abertura / Fecho
+            // Aba 2: Vitrine Digital & CMS Total (Textos, Fotos, Vídeos, Sobre Nós, Reservas e Mensagens)
+            const PartnerStorefrontCmsScreen(),
+
+            // Aba 3: Horários de Abertura / Fecho
             const BusinessHoursConfigScreen(),
 
-            // Aba 3: Perfil da Loja e Relatório Financeiro
+            // Aba 4: Perfil da Loja e Relatório Financeiro
             const PartnerStoreProfileScreen(),
           ],
         ),
@@ -115,6 +119,11 @@ class _PartnerMainNavigationShellState
                 icon: Icon(Icons.restaurant_menu_outlined),
                 selectedIcon: Icon(Icons.restaurant_menu_rounded),
                 label: 'Cardápio',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.web_stories_outlined),
+                selectedIcon: Icon(Icons.web_stories_rounded),
+                label: 'Vitrine CMS',
               ),
               NavigationDestination(
                 icon: Icon(Icons.calendar_month_outlined),

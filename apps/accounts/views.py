@@ -304,8 +304,59 @@ def garantir_loja_parceiro_ativa(user: CustomUser) -> None:
                 alergenos=["Lactose", "Ovos"],
                 is_disponivel=True,
             )
+
+        # Garante também categoria de Entradas e Vinhos/Cocktails e inicializa a Vitrine Digital CMS
+        cat_entradas, _ = CategoriaItem.objects.get_or_create(
+            loja=loja,
+            nome="Entradas & Petiscos",
+            defaults={"ordem_exibicao": 0},
+        )
+        if not ItemMenu.objects.filter(loja=loja, categoria=cat_entradas).exists():
+            ItemMenu.objects.create(
+                loja=loja,
+                categoria=cat_entradas,
+                nome="Chamuças Artesanais Estaladiças (4 Unid.)",
+                descricao="Chamuças douradas recheadas com carne bovina temperada com hortelã, cominhos e malagueta suave, servidas com molho agridoce.",
+                preco=180_000,  # 1.800,00 Kz
+                imagem_url="https://images.unsplash.com/photo-1601050690597-df0568f70950?w=800",
+                alergenos=["Glúten"],
+                is_disponivel=True,
+            )
+            ItemMenu.objects.create(
+                loja=loja,
+                categoria=cat_entradas,
+                nome="Tábua de Camarão ao Alhinho & Torradas",
+                descricao="Camarão da costa salteado em azeite virgem extra, alho laminado, coentros frescos e toque de limão.",
+                preco=420_000,  # 4.200,00 Kz
+                imagem_url="https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=800",
+                alergenos=["Marisco", "Glúten"],
+                is_disponivel=True,
+            )
+
+        cat_vinhos, _ = CategoriaItem.objects.get_or_create(
+            loja=loja,
+            nome="Vinhos & Cocktails",
+            defaults={"ordem_exibicao": 4},
+        )
+        if not ItemMenu.objects.filter(loja=loja, categoria=cat_vinhos).exists():
+            ItemMenu.objects.create(
+                loja=loja,
+                categoria=cat_vinhos,
+                nome="Cocktail Tropical Marginal Sunset (Sem Álcool)",
+                descricao="Mistura refrescante de maracujá fresco, manga, sumo de laranja, folhas de hortelã e água com gás.",
+                preco=220_000,  # 2.200,00 Kz
+                imagem_url="https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=800",
+                alergenos=[],
+                is_disponivel=True,
+            )
+
+        from apps.catalog.views import obter_ou_inicializar_vitrine_loja
+
+        obter_ou_inicializar_vitrine_loja(loja)
+        return loja
     except Exception as loja_err:
         logger.warning("Aviso ao garantir loja parceira ativa: %s", loja_err)
+        return None
 
 
 def garantir_morada_cliente_padrao(user: CustomUser) -> Morada | None:
