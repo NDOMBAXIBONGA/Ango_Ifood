@@ -1939,32 +1939,6 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
                           ],
                         ),
                       ),
-                        background: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            Image.network(
-                              heroBannerUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                color: colorScheme.primaryContainer,
-                              ),
-                            ),
-                            const DecoratedBox(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Colors.black38,
-                                    Colors.transparent,
-                                    Colors.black87,
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                       bottom: PreferredSize(
                         preferredSize: const Size.fromHeight(50),
                         child: Container(
