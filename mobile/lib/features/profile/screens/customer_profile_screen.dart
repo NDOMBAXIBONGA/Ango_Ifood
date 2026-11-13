@@ -1,187 +1,819 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/network/app_environment_config.dart';
 import '../../auth/auth_bloc.dart';
 import '../../auth/auth_event.dart';
 import '../../auth/auth_state.dart';
 import '../../auth/screens/role_selection_onboarding_screen.dart';
+import '../../auth/storage/secure_token_storage.dart';
+import '../../cart/cart.dart';
+import '../../catalog/customer_catalog_screens.dart';
 
-/// Ecrã de Perfil do Cliente (`CustomerProfileScreen`).
-/// Disponibiliza gestão de dados cadastrais, atalhos de moradas,
-/// definições de segurança e encerramento de sessão (Logout).
-class CustomerProfileScreen extends StatelessWidget {
+/// Ecrã de Perfil Completo do Cliente (`CustomerProfileScreen`).
+/// Disponibiliza edição de dados pessoais, gestão de moradas PostGIS (RN-005),
+/// configuração de meios de pagamento (RN-065), preferências de notificações (RN-004),
+/// alteração de palavra-passe e Central de Ajuda & Disputas (RN-138 a RN-142).
+class CustomerProfileScreen extends StatefulWidget {
   const CustomerProfileScreen({super.key});
+
+  @override
+  State<CustomerProfileScreen> createState() => _CustomerProfileScreenState();
+}
+
+class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
+  String _nome = 'Cliente';
+  String _email = '';
+  String _telemovel = '';
+  bool _notifPedidos = true;
+  bool _marketing = false;
+  bool _gpsBackground = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfileFromBackend();
+  }
+
+  Future<Dio?> _buildAuthDio() async {
+    final token = await SecureTokenStorage().getAccessToken();
+    if (token == null || token.isEmpty) return null;
+    return Dio(
+      BaseOptions(
+        baseUrl: AppEnvironmentConfig.baseHttpUrl,
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 15),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      ),
+    );
+  }
+
+  Future<void> _loadProfileFromBackend() async {
+    try {
+      final dio = await _buildAuthDio();
+      if (dio == null) return;
+      final resp = await dio.get<Map<String, dynamic>>('/api/v1/auth/profile/');
+      final data = resp.data;
+      if (data == null || !mounted) return;
+
+      final perfil = data['perfil'] as Map<String, dynamic>? ?? {};
+      final consent = data['consentimentos'] as Map<String, dynamic>? ?? {};
+
+      setState(() {
+        if ((perfil['nome'] ?? '').toString().trim().isNotEmpty) {
+          _nome = perfil['nome'].toString().trim();
+        }
+        if ((perfil['email'] ?? '').toString().trim().isNotEmpty) {
+          _email = perfil['email'].toString().trim();
+        }
+        if ((perfil['telemovel'] ?? '').toString().trim().isNotEmpty) {
+          _telemovel = perfil['telemovel'].toString().trim();
+        }
+        _marketing = (consent['marketing'] as bool?) ?? _marketing;
+        _gpsBackground =
+            (consent['localizacao_segundo_plano'] as bool?) ?? _gpsBackground;
+      });
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('O Meu Perfil'),
-      ),
-      body: BlocBuilder<AuthBloc, AuthState>(
-        builder: (context, authState) {
-          String userName = 'Cliente';
-          String userEmail = '';
-          String userPhone = '';
+    return AnimatedBuilder(
+      animation: CartService.instance,
+      builder: (context, _) {
+        final cart = CartService.instance;
 
-          if (authState is Authenticated) {
-            userName = authState.user.nome.isNotEmpty
-                ? authState.user.nome
-                : 'Cliente';
-            userEmail = authState.user.email;
-            userPhone = authState.user.telemovel;
-          }
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('O Meu Perfil'),
+            actions: [
+              IconButton(
+                tooltip: 'Editar Dados Pessoais',
+                onPressed: () => _openEditProfileSheet(context),
+                icon: const Icon(Icons.edit_outlined),
+              ),
+            ],
+          ),
+          body: BlocBuilder<AuthBloc, AuthState>(
+            builder: (context, authState) {
+              String userName = _nome;
+              String userEmail = _email;
+              String userPhone = _telemovel;
 
-          return ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-            children: [
-              // Cabeçalho de Perfil com Avatar
-              Center(
-                child: Column(
-                  children: [
-                    CircleAvatar(
-                      radius: 46,
-                      backgroundColor: colorScheme.primaryContainer,
-                      child: Text(
-                        userName.isNotEmpty
-                            ? userName.trim().substring(0, 1).toUpperCase()
-                            : 'C',
-                        style: theme.textTheme.headlineMedium?.copyWith(
+              if (authState is Authenticated) {
+                if (_nome == 'Cliente' && authState.user.nome.isNotEmpty) {
+                  userName = authState.user.nome;
+                }
+                if (userEmail.isEmpty) userEmail = authState.user.email;
+                if (userPhone.isEmpty) userPhone = authState.user.telemovel;
+              }
+
+              return ListView(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                children: [
+                  // Cabeçalho de Perfil com Avatar + Botão Editar
+                  Center(
+                    child: Column(
+                      children: [
+                        CircleAvatar(
+                          radius: 46,
+                          backgroundColor: colorScheme.primaryContainer,
+                          child: Text(
+                            userName.isNotEmpty
+                                ? userName.trim().substring(0, 1).toUpperCase()
+                                : 'C',
+                            style: theme.textTheme.headlineMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: colorScheme.onPrimaryContainer,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          userName,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        if (userEmail.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            userEmail,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                        if (userPhone.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            userPhone,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 10),
+                        OutlinedButton.icon(
+                          onPressed: () => _openEditProfileSheet(
+                            context,
+                            initialName: userName,
+                            initialEmail: userEmail,
+                            initialPhone: userPhone,
+                          ),
+                          icon: const Icon(Icons.person_outline, size: 18),
+                          label: const Text('Editar Dados Pessoais'),
+                          style: OutlinedButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 28),
+
+                  // Bloco: A Minha Conta
+                  _buildSectionHeader(context, 'A Minha Conta'),
+                  _buildSettingsTile(
+                    context,
+                    icon: Icons.location_on_outlined,
+                    title: 'Moradas de Entrega (RN-005)',
+                    subtitle: '${cart.moradaLabel} • ${cart.moradaTexto}',
+                    onTap: () => showCustomerAddressSelectionSheet(context),
+                  ),
+                  _buildSettingsTile(
+                    context,
+                    icon: Icons.payment_outlined,
+                    title: 'Meios de Pagamento (RN-065)',
+                    subtitle: _paymentDisplayLabel(cart.preferredPaymentCode),
+                    onTap: () => _openPaymentMethodsSheet(context),
+                  ),
+                  _buildSettingsTile(
+                    context,
+                    icon: Icons.notifications_none_rounded,
+                    title: 'Notificações & Privacidade (RN-004)',
+                    subtitle: _marketing
+                        ? 'Alertas de pedidos e promoções ativos'
+                        : 'Apenas alertas essenciais de estado do pedido',
+                    onTap: () => _openNotificationsSheet(context),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Bloco: Segurança e Ajuda
+                  _buildSectionHeader(context, 'Segurança & Suporte'),
+                  _buildSettingsTile(
+                    context,
+                    icon: Icons.lock_outline_rounded,
+                    title: 'Segurança & Palavra-passe',
+                    subtitle: 'Alterar ou definir palavra-passe de acesso',
+                    onTap: () => _openChangePasswordSheet(context),
+                  ),
+                  _buildSettingsTile(
+                    context,
+                    icon: Icons.support_agent_rounded,
+                    title: 'Ajuda, Suporte & Disputas (RN-138)',
+                    subtitle:
+                        'Abrir reclamação de pedido, consultar tickets e FAQ',
+                    onTap: () => _openSupportAndDisputesSheet(context),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Botão de Terminar Sessão
+                  Card(
+                    elevation: 0,
+                    color: colorScheme.errorContainer.withOpacity(0.18),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(
+                        color: colorScheme.error.withOpacity(0.3),
+                      ),
+                    ),
+                    child: ListTile(
+                      leading: Icon(
+                        Icons.logout_rounded,
+                        color: colorScheme.error,
+                      ),
+                      title: Text(
+                        'Terminar Sessão',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: colorScheme.error,
                           fontWeight: FontWeight.bold,
-                          color: colorScheme.onPrimaryContainer,
                         ),
                       ),
+                      subtitle:
+                          const Text('Desconectar a sua conta com segurança'),
+                      onTap: () => _showLogoutConfirmDialog(context),
                     ),
-                    const SizedBox(height: 14),
-                    Text(
-                      userName,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    if (userEmail.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        userEmail,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
+                  ),
+
+                  const SizedBox(height: 36),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  String _paymentDisplayLabel(String code) {
+    switch (code) {
+      case 'CARTAO':
+        return 'Cartão Bancário (Multicaixa / Visa)';
+      case 'NUMERARIO':
+        return 'Dinheiro na Entrega (Numerário)';
+      default:
+        return 'Multicaixa Express (${CartService.instance.preferredMcxPhone})';
+    }
+  }
+
+  // ===========================================================================
+  // 1. MODAL: EDITAR DADOS PESSOAIS (`PATCH /api/v1/auth/profile/`)
+  // ===========================================================================
+
+  Future<void> _openEditProfileSheet(
+    BuildContext context, {
+    String? initialName,
+    String? initialEmail,
+    String? initialPhone,
+  }) async {
+    final nameCtrl = TextEditingController(text: initialName ?? _nome);
+    final emailCtrl = TextEditingController(text: initialEmail ?? _email);
+    final phoneCtrl = TextEditingController(text: initialPhone ?? _telemovel);
+    bool isSaving = false;
+    String? errorMsg;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                24,
+                8,
+                24,
+                MediaQuery.of(context).viewInsets.bottom + 28,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Editar Dados Pessoais',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
                         ),
-                      ),
-                    ],
-                    if (userPhone.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        userPhone,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 10),
+                  ),
+                  const SizedBox(height: 16),
+                  if (errorMsg != null) ...[
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 4,
-                      ),
+                      padding: const EdgeInsets.all(10),
+                      margin: const EdgeInsets.only(bottom: 12),
                       decoration: BoxDecoration(
-                        color: colorScheme.primaryContainer.withOpacity(0.6),
-                        borderRadius: BorderRadius.circular(20),
+                        color: Theme.of(context).colorScheme.errorContainer,
+                        borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
-                        'Perfil de Cliente',
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: colorScheme.primary,
-                          fontWeight: FontWeight.bold,
+                        errorMsg!,
+                        style: TextStyle(
+                          color:
+                              Theme.of(context).colorScheme.onErrorContainer,
                         ),
                       ),
                     ),
                   ],
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              // Bloco: A Minha Conta
-              _buildSectionHeader(context, 'A Minha Conta'),
-              _buildSettingsTile(
-                context,
-                icon: Icons.location_on_outlined,
-                title: 'Moradas de Entrega',
-                subtitle: 'Gerir endereços guardados para entregas',
-                onTap: () => _showComingSoonSnackBar(context, 'Gestão de Moradas'),
-              ),
-              _buildSettingsTile(
-                context,
-                icon: Icons.payment_outlined,
-                title: 'Meios de Pagamento',
-                subtitle: 'Multicaixa Express, Cartões e Pagamento na Entrega',
-                onTap: () => _showComingSoonSnackBar(context, 'Meios de Pagamento'),
-              ),
-              _buildSettingsTile(
-                context,
-                icon: Icons.notifications_none_rounded,
-                title: 'Notificações',
-                subtitle: 'Alertas de estado dos pedidos e promoções',
-                onTap: () => _showComingSoonSnackBar(context, 'Notificações'),
-              ),
-
-              const SizedBox(height: 24),
-
-              // Bloco: Segurança e Ajuda
-              _buildSectionHeader(context, 'Segurança & Suporte'),
-              _buildSettingsTile(
-                context,
-                icon: Icons.lock_outline_rounded,
-                title: 'Segurança & Palavra-passe',
-                subtitle: 'Alterar senha e autenticação em dois fatores',
-                onTap: () => _showComingSoonSnackBar(context, 'Segurança da Conta'),
-              ),
-              _buildSettingsTile(
-                context,
-                icon: Icons.help_outline_rounded,
-                title: 'Ajuda & Apoio ao Cliente',
-                subtitle: 'Contactar a linha de apoio e resolução de dúvidas',
-                onTap: () => _showComingSoonSnackBar(context, 'Apoio ao Cliente'),
-              ),
-
-              const SizedBox(height: 24),
-
-              // Botão de Terminar Sessão
-              Card(
-                elevation: 0,
-                color: colorScheme.errorContainer.withOpacity(0.18),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: BorderSide(
-                    color: colorScheme.error.withOpacity(0.3),
-                  ),
-                ),
-                child: ListTile(
-                  leading: Icon(
-                    Icons.logout_rounded,
-                    color: colorScheme.error,
-                  ),
-                  title: Text(
-                    'Terminar Sessão',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: colorScheme.error,
-                      fontWeight: FontWeight.bold,
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Nome Completo',
+                      prefixIcon: Icon(Icons.person_outline),
                     ),
                   ),
-                  subtitle: const Text('Desconectar a sua conta com segurança'),
-                  onTap: () => _showLogoutConfirmDialog(context),
-                ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Telemóvel (+244)',
+                      hintText: '+244923000000',
+                      prefixIcon: Icon(Icons.phone_android_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Endereço de E-mail',
+                      prefixIcon: Icon(Icons.email_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    onPressed: isSaving
+                        ? null
+                        : () async {
+                            final novoNome = nameCtrl.text.trim();
+                            if (novoNome.length < 2) {
+                              setModalState(() =>
+                                  errorMsg = 'Informe um nome válido.');
+                              return;
+                            }
+                            setModalState(() {
+                              isSaving = true;
+                              errorMsg = null;
+                            });
+                            try {
+                              final dio = await _buildAuthDio();
+                              if (dio != null) {
+                                await dio.patch<Map<String, dynamic>>(
+                                  '/api/v1/auth/profile/',
+                                  data: {
+                                    'nome': novoNome,
+                                    'telemovel': phoneCtrl.text.trim(),
+                                    'email': emailCtrl.text.trim(),
+                                  },
+                                );
+                              }
+                              if (mounted) {
+                                setState(() {
+                                  _nome = novoNome;
+                                  _telemovel = phoneCtrl.text.trim();
+                                  _email = emailCtrl.text.trim();
+                                });
+                              }
+                              if (sheetCtx.mounted) {
+                                Navigator.of(sheetCtx).pop();
+                              }
+                              if (mounted) {
+                                ScaffoldMessenger.of(this.context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                        'Dados pessoais atualizados com sucesso!'),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
+                            } on DioException catch (e) {
+                              final msg = (e.response?.data is Map)
+                                  ? (e.response?.data['detalhe'] ??
+                                      'Erro ao guardar alterações.')
+                                  : 'Erro ao guardar alterações.';
+                              setModalState(() {
+                                isSaving = false;
+                                errorMsg = '$msg';
+                              });
+                            }
+                          },
+                    icon: const Icon(Icons.save_outlined),
+                    label: Text(
+                        isSaving ? 'A guardar...' : 'Guardar Alterações'),
+                  ),
+                ],
               ),
+            );
+          },
+        );
+      },
+    );
+  }
 
-              const SizedBox(height: 36),
-            ],
-          );
-        },
-      ),
+  // ===========================================================================
+  // 2. MODAL: MEIOS DE PAGAMENTO PREFERIDOS (RN-065)
+  // ===========================================================================
+
+  Future<void> _openPaymentMethodsSheet(BuildContext context) async {
+    final cart = CartService.instance;
+    String selectedCode = cart.preferredPaymentCode;
+    final phoneCtrl = TextEditingController(text: cart.preferredMcxPhone);
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                24,
+                8,
+                24,
+                MediaQuery.of(context).viewInsets.bottom + 28,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Meios de Pagamento (RN-065)',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Escolha o seu método de pagamento predefinido para o Checkout.',
+                  ),
+                  const SizedBox(height: 16),
+                  RadioListTile<String>(
+                    value: 'CARTEIRA_DIGITAL',
+                    groupValue: selectedCode,
+                    onChanged: (v) =>
+                        setModalState(() => selectedCode = v ?? selectedCode),
+                    title: const Text(
+                      'Multicaixa Express / Carteira Digital',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: const Text(
+                      'Autorização instantânea no telemóvel em Kwanzas (Kz)',
+                    ),
+                    secondary: const Icon(Icons.account_balance_wallet_rounded),
+                  ),
+                  if (selectedCode == 'CARTEIRA_DIGITAL') ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      child: TextField(
+                        controller: phoneCtrl,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(
+                          labelText: 'Telemóvel Multicaixa Express',
+                          prefixIcon: Icon(Icons.phone_iphone_rounded),
+                        ),
+                      ),
+                    ),
+                  ],
+                  RadioListTile<String>(
+                    value: 'CARTAO',
+                    groupValue: selectedCode,
+                    onChanged: (v) =>
+                        setModalState(() => selectedCode = v ?? selectedCode),
+                    title: const Text(
+                      'Cartão Bancário (TPA / Multicaixa / Visa)',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: const Text('Pagamento seguro por cartão'),
+                    secondary: const Icon(Icons.credit_card_rounded),
+                  ),
+                  RadioListTile<String>(
+                    value: 'NUMERARIO',
+                    groupValue: selectedCode,
+                    onChanged: (v) =>
+                        setModalState(() => selectedCode = v ?? selectedCode),
+                    title: const Text(
+                      'Dinheiro na Entrega (Numerário)',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: const Text(
+                      'Pague diretamente ao estafeta no ato da entrega',
+                    ),
+                    secondary: const Icon(Icons.payments_rounded),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: () {
+                      cart.updatePreferredPayment(
+                        paymentCode: selectedCode,
+                        mcxPhone: phoneCtrl.text.trim(),
+                      );
+                      Navigator.of(sheetCtx).pop();
+                      ScaffoldMessenger.of(this.context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                              'Preferência de pagamento guardada com sucesso!'),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.check_circle_outline),
+                    label: const Text('Guardar Meio de Pagamento'),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ===========================================================================
+  // 3. MODAL: NOTIFICAÇÕES & PRIVACIDADE (RN-004)
+  // ===========================================================================
+
+  Future<void> _openNotificationsSheet(BuildContext context) async {
+    bool tempPedidos = _notifPedidos;
+    bool tempMarketing = _marketing;
+    bool tempGps = _gpsBackground;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Notificações & Privacidade (RN-004)',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: 12),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: tempPedidos,
+                    onChanged: (v) => setModalState(() => tempPedidos = v),
+                    title: const Text('Estado dos Pedidos em Tempo Real'),
+                    subtitle: const Text(
+                      'Avisos de preparação, saída do estafeta e chegada à porta',
+                    ),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: tempMarketing,
+                    onChanged: (v) => setModalState(() => tempMarketing = v),
+                    title: const Text('Cupões, Ofertas & Promoções'),
+                    subtitle: const Text(
+                      'Receber descontos exclusivos de restaurantes parceiros',
+                    ),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: tempGps,
+                    onChanged: (v) => setModalState(() => tempGps = v),
+                    title: const Text('Localização Precisa de Entrega'),
+                    subtitle: const Text(
+                      'Facilitar o encontro com o estafeta na sua morada',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () async {
+                      setState(() {
+                        _notifPedidos = tempPedidos;
+                        _marketing = tempMarketing;
+                        _gpsBackground = tempGps;
+                      });
+                      Navigator.of(sheetCtx).pop();
+                      try {
+                        final dio = await _buildAuthDio();
+                        if (dio != null) {
+                          await dio.patch<void>(
+                            '/api/v1/auth/profile/',
+                            data: {
+                              'marketing': tempMarketing,
+                              'localizacao_segundo_plano': tempGps,
+                            },
+                          );
+                        }
+                      } catch (_) {}
+                      if (mounted) {
+                        ScaffoldMessenger.of(this.context).showSnackBar(
+                          const SnackBar(
+                            content:
+                                Text('Preferências de notificações guardadas!'),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    },
+                    child: const Text('Guardar Preferências'),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ===========================================================================
+  // 4. MODAL: SEGURANÇA & PALAVRA-PASSE (`POST /api/v1/auth/change-password/`)
+  // ===========================================================================
+
+  Future<void> _openChangePasswordSheet(BuildContext context) async {
+    final currentCtrl = TextEditingController();
+    final newCtrl = TextEditingController();
+    final confirmCtrl = TextEditingController();
+    bool isSaving = false;
+    String? errorMsg;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                24,
+                8,
+                24,
+                MediaQuery.of(context).viewInsets.bottom + 28,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Segurança & Palavra-passe',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Atualize a sua palavra-passe para acesso direto por e-mail/telemóvel.',
+                  ),
+                  const SizedBox(height: 16),
+                  if (errorMsg != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.errorContainer,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        errorMsg!,
+                        style: TextStyle(
+                          color:
+                              Theme.of(context).colorScheme.onErrorContainer,
+                        ),
+                      ),
+                    ),
+                  ],
+                  TextField(
+                    controller: currentCtrl,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Palavra-passe Atual (se já tiver uma)',
+                      prefixIcon: Icon(Icons.lock_clock_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: newCtrl,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Nova Palavra-passe (mín. 6 caracteres) *',
+                      prefixIcon: Icon(Icons.lock_outline_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: confirmCtrl,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Confirmar Nova Palavra-passe *',
+                      prefixIcon: Icon(Icons.verified_user_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    onPressed: isSaving
+                        ? null
+                        : () async {
+                            final nova = newCtrl.text;
+                            final conf = confirmCtrl.text;
+                            if (nova.length < 6) {
+                              setModalState(() => errorMsg =
+                                  'A nova palavra-passe deve ter pelo menos 6 caracteres.');
+                              return;
+                            }
+                            if (nova != conf) {
+                              setModalState(() => errorMsg =
+                                  'A confirmação não coincide com a nova palavra-passe.');
+                              return;
+                            }
+                            setModalState(() {
+                              isSaving = true;
+                              errorMsg = null;
+                            });
+                            try {
+                              final dio = await _buildAuthDio();
+                              if (dio != null) {
+                                await dio.post<void>(
+                                  '/api/v1/auth/change-password/',
+                                  data: {
+                                    'senha_atual': currentCtrl.text,
+                                    'nova_senha': nova,
+                                    'confirmar_senha': conf,
+                                  },
+                                );
+                              }
+                              if (sheetCtx.mounted) {
+                                Navigator.of(sheetCtx).pop();
+                              }
+                              if (mounted) {
+                                ScaffoldMessenger.of(this.context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                        'Palavra-passe atualizada com sucesso!'),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
+                            } on DioException catch (e) {
+                              final msg = (e.response?.data is Map)
+                                  ? (e.response?.data['detalhe'] ??
+                                      'Não foi possível atualizar a palavra-passe.')
+                                  : 'Não foi possível atualizar a palavra-passe.';
+                              setModalState(() {
+                                isSaving = false;
+                                errorMsg = '$msg';
+                              });
+                            }
+                          },
+                    icon: const Icon(Icons.key_rounded),
+                    label: Text(
+                        isSaving ? 'A atualizar...' : 'Atualizar Palavra-passe'),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ===========================================================================
+  // 5. MODAL: CENTRAL DE AJUDA, SUPORTE & DISPUTAS (`RN-138` a `RN-142`)
+  // ===========================================================================
+
+  Future<void> _openSupportAndDisputesSheet(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (_) => const _CustomerSupportAndDisputesSheet(),
     );
   }
 
@@ -225,6 +857,8 @@ class CustomerProfileScreen extends StatelessWidget {
         ),
         subtitle: Text(
           subtitle,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
           style: theme.textTheme.bodySmall?.copyWith(
             color: colorScheme.onSurfaceVariant,
           ),
@@ -238,17 +872,6 @@ class CustomerProfileScreen extends StatelessWidget {
     );
   }
 
-  void _showComingSoonSnackBar(BuildContext context, String feature) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          content: Text('$feature estará disponível na próxima atualização.'),
-        ),
-      );
-  }
-
   void _showLogoutConfirmDialog(BuildContext context) {
     showDialog<void>(
       context: context,
@@ -256,7 +879,7 @@ class CustomerProfileScreen extends StatelessWidget {
         return AlertDialog(
           title: const Text('Terminar Sessão?'),
           content: const Text(
-            'Tem a certeza que pretende terminar a sessão no Ango Ifood?',
+            'Tem a certeza que pretende terminar a sessão no Delivery Pro?',
           ),
           actions: [
             TextButton(
@@ -282,6 +905,384 @@ class CustomerProfileScreen extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _CustomerSupportAndDisputesSheet extends StatefulWidget {
+  const _CustomerSupportAndDisputesSheet();
+
+  @override
+  State<_CustomerSupportAndDisputesSheet> createState() =>
+      _CustomerSupportAndDisputesSheetState();
+}
+
+class _CustomerSupportAndDisputesSheetState
+    extends State<_CustomerSupportAndDisputesSheet> {
+  bool _isLoading = true;
+  bool _showCreateTicket = false;
+  bool _isSubmitting = false;
+  String? _errorMsg;
+  List<Map<String, dynamic>> _tickets = [];
+  List<Map<String, dynamic>> _recentOrders = [];
+  String? _selectedOrderId;
+  String _selectedIncidentType = 'DISPUTA_COMERCIAL';
+  final _motivoController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSupportData();
+  }
+
+  @override
+  void dispose() {
+    _motivoController.dispose();
+    super.dispose();
+  }
+
+  Future<Dio?> _buildAuthDio() async {
+    final token = await SecureTokenStorage().getAccessToken();
+    if (token == null || token.isEmpty) return null;
+    return Dio(
+      BaseOptions(
+        baseUrl: AppEnvironmentConfig.baseHttpUrl,
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 15),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      ),
+    );
+  }
+
+  Future<void> _loadSupportData() async {
+    setState(() => _isLoading = true);
+    try {
+      final dio = await _buildAuthDio();
+      if (dio == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+      final results = await Future.wait([
+        dio.get<dynamic>('/api/v1/support/disputes/'),
+        dio.get<dynamic>('/api/v1/orders/'),
+      ]);
+
+      List<dynamic> rawTickets = const [];
+      if (results[0].data is List) {
+        rawTickets = results[0].data as List<dynamic>;
+      } else if (results[0].data is Map &&
+          (results[0].data as Map)['results'] is List) {
+        rawTickets = (results[0].data as Map)['results'] as List<dynamic>;
+      }
+
+      List<dynamic> rawOrders = const [];
+      if (results[1].data is List) {
+        rawOrders = results[1].data as List<dynamic>;
+      } else if (results[1].data is Map &&
+          (results[1].data as Map)['results'] is List) {
+        rawOrders = (results[1].data as Map)['results'] as List<dynamic>;
+      }
+
+      final parsedOrders =
+          rawOrders.whereType<Map<String, dynamic>>().toList();
+      if (mounted) {
+        setState(() {
+          _tickets = rawTickets.whereType<Map<String, dynamic>>().toList();
+          _recentOrders = parsedOrders;
+          if (_selectedOrderId == null && parsedOrders.isNotEmpty) {
+            _selectedOrderId = parsedOrders.first['id']?.toString();
+          }
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _submitTicket() async {
+    if (_selectedOrderId == null || _selectedOrderId!.isEmpty) {
+      setState(() =>
+          _errorMsg = 'Selecione o pedido associado à reclamação.');
+      return;
+    }
+    if (_motivoController.text.trim().length < 10) {
+      setState(() => _errorMsg =
+          'Descreva o problema com pelo menos 10 caracteres (RN-138).');
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _errorMsg = null;
+    });
+
+    try {
+      final dio = await _buildAuthDio();
+      if (dio != null) {
+        await dio.post<dynamic>(
+          '/api/v1/support/disputes/',
+          data: {
+            'pedido_id': _selectedOrderId,
+            'tipo_incidente': _selectedIncidentType,
+            'prioridade': 'ALTA',
+            'motivo': _motivoController.text.trim(),
+          },
+        );
+      }
+      _motivoController.clear();
+      setState(() {
+        _isSubmitting = false;
+        _showCreateTicket = false;
+      });
+      await _loadSupportData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Ticket de suporte aberto com sucesso! A nossa equipa irá analisar.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } on DioException catch (e) {
+      setState(() {
+        _isSubmitting = false;
+        _errorMsg = e.response?.data?.toString() ??
+            'Não foi possível abrir o ticket neste momento.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    _showCreateTicket
+                        ? 'Abrir Ticket de Disputa'
+                        : 'Central de Ajuda & Disputas',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: () =>
+                      setState(() => _showCreateTicket = !_showCreateTicket),
+                  icon: Icon(_showCreateTicket
+                      ? Icons.close
+                      : Icons.report_problem_outlined),
+                  label: Text(_showCreateTicket ? 'Voltar' : 'Reportar Problema'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (_errorMsg != null) ...[
+              Container(
+                padding: const EdgeInsets.all(10),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: colorScheme.errorContainer,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  _errorMsg!,
+                  style: TextStyle(color: colorScheme.onErrorContainer),
+                ),
+              ),
+            ],
+            if (_showCreateTicket) ...[
+              if (_recentOrders.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                    'Ainda não possui pedidos realizados para associar a uma disputa.',
+                  ),
+                )
+              else ...[
+                DropdownButtonFormField<String>(
+                  value: _selectedOrderId,
+                  decoration: const InputDecoration(
+                    labelText: 'Selecione o Pedido *',
+                    prefixIcon: Icon(Icons.receipt_long_outlined),
+                  ),
+                  items: _recentOrders.map((o) {
+                    final id = (o['id'] ?? '').toString();
+                    final shortId =
+                        id.length >= 8 ? id.substring(0, 8).toUpperCase() : id;
+                    final loja =
+                        (o['loja_nome'] ?? 'Restaurante').toString();
+                    return DropdownMenuItem<String>(
+                      value: id,
+                      child: Text('$loja (#$shortId)'),
+                    );
+                  }).toList(),
+                  onChanged: (v) => setState(() => _selectedOrderId = v),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: _selectedIncidentType,
+                  decoration: const InputDecoration(
+                    labelText: 'Tipo de Incidente (RN-138)',
+                    prefixIcon: Icon(Icons.category_outlined),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'DISPUTA_COMERCIAL',
+                      child: Text('Item em Falta / Pedido Incorreto'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'ATRASO_CRITICO',
+                      child: Text('Atraso Crítico na Entrega'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'ACIDENTE_VIACAO',
+                      child: Text('Incidente na Entrega / Estafeta'),
+                    ),
+                  ],
+                  onChanged: (v) => setState(
+                      () => _selectedIncidentType = v ?? _selectedIncidentType),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _motivoController,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Descrição Detalhada do Problema *',
+                    hintText:
+                        'Explique o que aconteceu com o seu pedido (mín. 10 caracteres)...',
+                  ),
+                ),
+                const SizedBox(height: 18),
+                FilledButton.icon(
+                  onPressed: _isSubmitting ? null : _submitTicket,
+                  icon: const Icon(Icons.send_rounded),
+                  label: Text(_isSubmitting
+                      ? 'A enviar reclamação...'
+                      : 'Submeter Ticket de Suporte'),
+                ),
+              ],
+            ] else ...[
+              if (_isLoading)
+                const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else ...[
+                if (_tickets.isNotEmpty) ...[
+                  Text(
+                    'Os Meus Tickets de Suporte (${_tickets.length})',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ..._tickets.map((t) {
+                    final estado = (t['estado'] ?? 'ABERTO').toString();
+                    final motivo = (t['motivo'] ?? '').toString();
+                    final compensacao =
+                        (t['compensacao_valor_formatado_kz'] ?? '').toString();
+                    return Card(
+                      elevation: 0,
+                      margin: const EdgeInsets.only(bottom: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: colorScheme.outlineVariant),
+                      ),
+                      child: ListTile(
+                        leading: Icon(
+                          Icons.confirmation_number_outlined,
+                          color: colorScheme.primary,
+                        ),
+                        title: Text(
+                          motivo,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Text(
+                          'Estado: $estado${compensacao.isNotEmpty ? ' • Compensação: $compensacao' : ''}',
+                        ),
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 16),
+                ],
+                Text(
+                  'Perguntas Frequentes (FAQ)',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const ExpansionTile(
+                  leading: Icon(Icons.pin_outlined),
+                  title: Text('O que é o PIN de Entrega de 4 dígitos (RN-094)?'),
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: Text(
+                        'Para sua segurança, cada pedido gera um código PIN único de 4 dígitos. '
+                        'Informe este PIN ao estafeta apenas no momento em que receber o pedido em mãos.',
+                      ),
+                    ),
+                  ],
+                ),
+                const ExpansionTile(
+                  leading: Icon(Icons.timer_outlined),
+                  title: Text('Como funciona a validade de 15 minutos no Checkout?'),
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: Text(
+                        'Pela regra RN-043, a cotação de taxas e preços fica congelada durante 15 minutos. '
+                        'Se o tempo expirar, basta tocar em Atualizar para recalcular.',
+                      ),
+                    ),
+                  ],
+                ),
+                const ExpansionTile(
+                  leading: Icon(Icons.cancel_outlined),
+                  title: Text('Posso cancelar um pedido após confirmar?'),
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: Text(
+                        'Sim! Enquanto o pedido ainda não tiver entrado em preparação na cozinha da loja, '
+                        'pode cancelá-lo diretamente no separador "Pedidos". Após iniciar o preparo, '
+                        'utilize o botão "Reportar Problema" acima.',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

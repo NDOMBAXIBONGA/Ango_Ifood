@@ -212,6 +212,29 @@ class CartScreen extends StatelessWidget {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
+                        if (item.opcoesNomes.isNotEmpty) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            'Opções: ${item.opcoesNomes.join(', ')}',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                        if (item.notas.trim().isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            'Nota: "${item.notas.trim()}"',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.tertiary,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 4),
                         Text(
                           CurrencyFormatter.formatKwanza(item.precoUnitarioCentimos),
@@ -367,9 +390,9 @@ class CartScreen extends StatelessWidget {
         builder: (_) => CheckoutScreen(
           lojaId: cart.lojaId!,
           lojaNome: cart.lojaNome ?? 'Restaurante Parceiro',
-          moradaId: 'morada_principal',
-          moradaLabel: 'Minha Morada Principal',
-          moradaTexto: 'Luanda, Angola',
+          moradaId: cart.moradaId,
+          moradaLabel: cart.moradaLabel,
+          moradaTexto: cart.moradaTexto,
           itensCarrinho: cart.toCheckoutInputs(),
         ),
       ),

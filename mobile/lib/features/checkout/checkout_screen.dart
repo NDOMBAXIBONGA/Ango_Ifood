@@ -22,7 +22,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
+import '../../core/network/app_environment_config.dart';
+import '../auth/storage/secure_token_storage.dart';
 import '../cart/cart.dart';
+import '../catalog/customer_catalog_screens.dart';
 import '../tracking/order_real_time_tracking_screen.dart';
 
 // ============================================================================
@@ -433,6 +436,7 @@ class ConfirmedOrderResult extends Equatable {
   final String metodoPagamento;
   final int totalCobrado;
   final String eventoGerado;
+  final String pinEntrega;
 
   const ConfirmedOrderResult({
     required this.pedidoId,
@@ -441,6 +445,7 @@ class ConfirmedOrderResult extends Equatable {
     required this.metodoPagamento,
     required this.totalCobrado,
     required this.eventoGerado,
+    this.pinEntrega = '4829',
   });
 
   factory ConfirmedOrderResult.fromJson(Map<String, dynamic> json) {
@@ -454,6 +459,7 @@ class ConfirmedOrderResult extends Equatable {
       metodoPagamento: (pedidoMap['metodo_pagamento'] ?? '').toString(),
       totalCobrado: (pedidoMap['total_cobrado'] as num?)?.toInt() ?? 0,
       eventoGerado: (json['evento_gerado'] ?? 'order.created').toString(),
+      pinEntrega: (pedidoMap['pin_entrega'] ?? '4829').toString(),
     );
   }
 
@@ -465,6 +471,7 @@ class ConfirmedOrderResult extends Equatable {
         metodoPagamento,
         totalCobrado,
         eventoGerado,
+        pinEntrega,
       ];
 }
 
@@ -489,18 +496,24 @@ class CheckoutRepository {
       : _dio = dio ??
             Dio(
               BaseOptions(
-                baseUrl: const String.fromEnvironment(
-                  'API_BASE_URL',
-                  defaultValue: 'http://10.0.2.2:8000',
-                ),
-                connectTimeout: const Duration(seconds: 10),
-                receiveTimeout: const Duration(seconds: 12),
+                baseUrl: AppEnvironmentConfig.baseHttpUrl,
+                connectTimeout: const Duration(seconds: 15),
+                receiveTimeout: const Duration(seconds: 15),
                 headers: const {
                   'Content-Type': 'application/json',
                   'Accept': 'application/json',
                 },
               ),
             );
+
+  Future<Options> _buildAuthOptions() async {
+    final token = await SecureTokenStorage().getAccessToken();
+    return Options(
+      headers: {
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      },
+    );
+  }
 
   /// Executa `POST /api/v1/orders/checkout/preview/` para calcular/recalcular a cotação
   /// em unidades mínimas inteiras e obter um `id_cotacao` válido por 15 minutos em Redis (RN-043).
@@ -516,11 +529,13 @@ class CheckoutRepository {
     };
 
     try {
+      final authOptions = await _buildAuthOptions();
       final response = await _dio.post<Map<String, dynamic>>(
         '/api/v1/orders/checkout/preview/',
+        options: authOptions,
         data: {
           'loja_id': lojaId,
-          'morada_id': moradaId,
+          'morada_id': moradaId.isEmpty ? 'morada_principal' : moradaId,
           'itens': itens.map((e) => e.toJson()).toList(),
           'gorjeta_estafeta': gorjetaEstafeta,
           if (cupaoCodigo != null && cupaoCodigo.trim().isNotEmpty)
@@ -548,8 +563,10 @@ class CheckoutRepository {
     required String metodoPagamentoId,
   }) async {
     try {
+      final authOptions = await _buildAuthOptions();
       final response = await _dio.post<Map<String, dynamic>>(
         '/api/v1/orders/checkout/confirm/',
+        options: authOptions,
         data: {
           'id_cotacao': idCotacao,
           'metodo_pagamento_id': metodoPagamentoId,
@@ -654,6 +671,22 @@ class ConfirmAndPayOrderEvent extends CheckoutEvent {
   const ConfirmAndPayOrderEvent();
 }
 
+/// Atualiza a morada de entrega diretamente no ecrã de Checkout e recalcula a cotação.
+class ChangeCheckoutAddressEvent extends CheckoutEvent {
+  final String moradaId;
+  final String moradaLabel;
+  final String moradaTexto;
+
+  const ChangeCheckoutAddressEvent({
+    required this.moradaId,
+    required this.moradaLabel,
+    required this.moradaTexto,
+  });
+
+  @override
+  List<Object?> get props => [moradaId, moradaLabel, moradaTexto];
+}
+
 @immutable
 class CheckoutState extends Equatable {
   final String lojaId;
@@ -695,6 +728,9 @@ class CheckoutState extends Equatable {
   });
 
   CheckoutState copyWith({
+    String? moradaId,
+    String? moradaLabel,
+    String? moradaTexto,
     CheckoutQuoteModel? cotacao,
     int? gorjetaSelecionada,
     String? cupaoAplicado,
@@ -713,9 +749,9 @@ class CheckoutState extends Equatable {
     return CheckoutState(
       lojaId: lojaId,
       lojaNome: lojaNome,
-      moradaId: moradaId,
-      moradaLabel: moradaLabel,
-      moradaTexto: moradaTexto,
+      moradaId: moradaId ?? this.moradaId,
+      moradaLabel: moradaLabel ?? this.moradaLabel,
+      moradaTexto: moradaTexto ?? this.moradaTexto,
       itensInput: itensInput,
       cotacao: cotacao ?? this.cotacao,
       gorjetaSelecionada: gorjetaSelecionada ?? this.gorjetaSelecionada,
@@ -774,6 +810,21 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
     on<SelectPaymentMethodEvent>(_onSelectPaymentMethod);
     on<QuoteTimerExpiredEvent>(_onQuoteTimerExpired);
     on<ConfirmAndPayOrderEvent>(_onConfirmAndPay);
+    on<ChangeCheckoutAddressEvent>(_onChangeAddress);
+  }
+
+  Future<void> _onChangeAddress(
+    ChangeCheckoutAddressEvent event,
+    Emitter<CheckoutState> emit,
+  ) async {
+    emit(
+      state.copyWith(
+        moradaId: event.moradaId,
+        moradaLabel: event.moradaLabel,
+        moradaTexto: event.moradaTexto,
+      ),
+    );
+    await _onLoadPreview(const LoadCheckoutPreviewEvent(), emit);
   }
 
   Future<void> _onLoadPreview(
@@ -1211,7 +1262,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                     cotacao?.moradaTexto ?? state.moradaTexto,
                                 distanciaKm:
                                     cotacao?.detalhesEntrega.distanciaKm,
-                                onChangeAddressTap: widget.onChangeAddressTap,
+                                onChangeAddressTap: widget.onChangeAddressTap ??
+                                    () {
+                                      showCustomerAddressSelectionSheet(
+                                        context,
+                                        onAddressSelected: (newAddr) {
+                                          _checkoutBloc.add(
+                                            ChangeCheckoutAddressEvent(
+                                              moradaId: newAddr.id,
+                                              moradaLabel: newAddr.label,
+                                              moradaTexto: newAddr.fullAddress,
+                                            ),
+                                          );
+                                        },
+                                      );
+                                    },
                               ),
                               const SizedBox(height: 16),
 
@@ -1308,6 +1373,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   ) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    CartService.instance.clear();
 
     showModalBottomSheet<void>(
       context: context,
@@ -1353,7 +1419,47 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     color: colorScheme.onSurfaceVariant,
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colorScheme.primaryContainer.withOpacity(0.55),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: colorScheme.primary.withOpacity(0.35),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.pin_outlined,
+                            color: colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'PIN de Entrega (RN-094):',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ],
+                      ),
+                      Text(
+                        resultado.pinEntrega,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 3,
+                          color: colorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -1381,19 +1487,28 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    onPressed: () {
-                      CartService.instance.clear();
+                    onPressed: () async {
+                      final token =
+                          await SecureTokenStorage().getAccessToken() ?? '';
+                      if (!sheetContext.mounted) return;
                       Navigator.of(sheetContext).pop();
+                      if (!context.mounted) return;
                       Navigator.of(context).pushReplacement(
                         MaterialPageRoute<void>(
                           builder: (_) => OrderRealTimeTrackingScreen(
                             pedidoId: resultado.pedidoId,
-                            jwtToken: '',
+                            jwtToken: token,
+                            baseHttpUrl: AppEnvironmentConfig.baseHttpUrl,
+                            baseWsUrl: AppEnvironmentConfig.baseWsUrl,
                             nomeLoja: widget.lojaNome,
                             moradaLojaTexto: 'Restaurante ${widget.lojaNome}',
                             coordenadasLoja: const LatLng(-8.839988, 13.289437),
-                            moradaClienteTexto: widget.moradaTexto,
-                            coordenadasCliente: const LatLng(-8.836804, 13.234321),
+                            moradaClienteTexto:
+                                _checkoutBloc.state.moradaTexto,
+                            coordenadasCliente: LatLng(
+                              CartService.instance.latitude,
+                              CartService.instance.longitude,
+                            ),
                           ),
                         ),
                       );

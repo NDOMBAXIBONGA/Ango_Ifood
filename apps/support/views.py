@@ -50,6 +50,19 @@ class DisputeResolutionViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     http_method_names = ["get", "post", "head", "options"]
 
+    def get_queryset(self):
+        qs = (
+            TicketDisputa.objects.all()
+            .select_related("pedido", "autor_decisao", "supervisor_aprovador")
+            .order_by("-data_criacao")
+        )
+        user = self.request.user
+        if not user.is_authenticated:
+            return TicketDisputa.objects.none()
+        if user.is_staff or getattr(user, "tipo_utilizador", "") in ("OPERACOES", "SUPORTE", "FINANCEIRO"):
+            return qs
+        return qs.filter(pedido__cliente=user)
+
     def get_serializer_class(self):
         if self.action == "create":
             return TicketDisputaCreateSerializer

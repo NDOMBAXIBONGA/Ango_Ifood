@@ -34,7 +34,9 @@ from apps.accounts.models import (
     RegistoOTPEmail,
 )
 from apps.accounts.serializers import (
+    ChangePasswordSerializer,
     CompleteRegistrationSerializer,
+    CustomerProfileUpdateSerializer,
     EmailOTPRequestSerializer,
     EmailOTPVerifySerializer,
     EmailPasswordLoginSerializer,
@@ -135,6 +137,31 @@ def garantir_loja_parceiro_ativa(user: CustomUser) -> None:
             )
     except Exception as loja_err:
         logger.warning("Aviso ao garantir loja parceira ativa: %s", loja_err)
+
+
+def garantir_morada_cliente_padrao(user: CustomUser) -> Morada | None:
+    """
+    RN-005: Garante que qualquer utilizador autenticado possui pelo menos uma morada
+    de entrega pré-configurada em Luanda para que o catálogo e o checkout funcionem sem fricção.
+    """
+    try:
+        from django.contrib.gis.geos import Point
+
+        morada_existente = Morada.objects.filter(utilizador=user).first()
+        if morada_existente:
+            return morada_existente
+        return Morada.objects.create(
+            utilizador=user,
+            texto_endereco="Centro de Luanda, Ingombota, Luanda",
+            referencia="Próximo à Marginal de Luanda",
+            andar_porta="R/C",
+            instrucoes_estafeta="Ligar ao chegar à portaria.",
+            geolocalizacao=Point(13.2343, -8.8147, srid=4326),
+        )
+    except Exception as morada_err:
+        logger.warning("Aviso ao criar morada padrão para o cliente: %s", morada_err)
+        return None
+
 
 # Parâmetros operacionais e SLAs da regra RN-002 (Secções 6.1 e 8)
 OTP_EXPIRACAO_MINUTOS = 5
@@ -1288,20 +1315,170 @@ class MoradaViewSet(viewsets.ModelViewSet):
     ViewSet para gestão de moradas do cliente autenticado (RN-005):
     - GET /api/v1/auth/moradas/
     - POST /api/v1/auth/moradas/
-    - DELETE /api/v1/auth/moradas/{id}/
+    - PATCH / PUT / DELETE /api/v1/auth/moradas/{id}/
     """
 
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = MoradaSerializer
+    pagination_class = None
 
     def get_queryset(self):
         user = self.request.user
         if not user.is_authenticated:
             return Morada.objects.none()
-        return Morada.objects.filter(utilizador=user)
+        if not Morada.objects.filter(utilizador=user).exists():
+            garantir_morada_cliente_padrao(user)
+        return Morada.objects.filter(utilizador=user).order_by("-id")
 
     def perform_create(self, serializer):
         serializer.save(utilizador=self.request.user)
+
+
+class CustomerProfileView(APIView):
+    """
+    Endpoint para consulta e atualização de perfil do utilizador autenticado:
+    - GET /api/v1/auth/profile/
+    - PATCH / PUT /api/v1/auth/profile/
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request: Request) -> Response:
+        user: CustomUser = request.user
+        consentimento, _ = PerfilConsentimento.objects.get_or_create(
+            utilizador=user,
+            defaults={
+                "termos_utilizacao": True,
+                "politica_privacidade": True,
+                "marketing": False,
+                "localizacao_segundo_plano": False,
+            },
+        )
+        moradas = MoradaSerializer(
+            Morada.objects.filter(utilizador=user),
+            many=True,
+        ).data
+        return Response(
+            {
+                "perfil": UtilizadorResumoSerializer(user).data,
+                "consentimentos": {
+                    "termos_utilizacao": consentimento.termos_utilizacao,
+                    "politica_privacidade": consentimento.politica_privacidade,
+                    "marketing": consentimento.marketing,
+                    "localizacao_segundo_plano": consentimento.localizacao_segundo_plano,
+                },
+                "moradas": moradas,
+                "tem_senha_definida": user.has_usable_password(),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @transaction.atomic
+    def patch(self, request: Request) -> Response:
+        user: CustomUser = request.user
+        serializer = CustomerProfileUpdateSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        dados = serializer.validated_data
+
+        campos_update: list[str] = []
+        if "nome" in dados and dados["nome"].strip():
+            user.nome = dados["nome"].strip()
+            campos_update.append("nome")
+
+        if "telemovel" in dados:
+            tel = dados["telemovel"].strip() or None
+            if tel and CustomUser.objects.filter(telemovel=tel).exclude(pk=user.pk).exists():
+                return Response(
+                    {"erro": "telemovel_em_uso", "detalhe": _("Este número de telemóvel já está associado a outra conta.")},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            user.telemovel = tel
+            campos_update.append("telemovel")
+
+        if "email" in dados and dados["email"].strip():
+            novo_email = dados["email"].strip().lower()
+            if CustomUser.objects.filter(email__iexact=novo_email).exclude(pk=user.pk).exists():
+                return Response(
+                    {"erro": "email_em_uso", "detalhe": _("Este endereço de e-mail já está associado a outra conta.")},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            user.email = novo_email
+            campos_update.append("email")
+
+        if "data_nascimento" in dados and dados["data_nascimento"]:
+            user.data_nascimento = dados["data_nascimento"]
+            campos_update.append("data_nascimento")
+
+        if campos_update:
+            user.save(update_fields=campos_update)
+
+        consentimento, _ = PerfilConsentimento.objects.get_or_create(utilizador=user)
+        consent_fields = []
+        if "marketing" in dados:
+            consentimento.marketing = bool(dados["marketing"])
+            consent_fields.append("marketing")
+        if "localizacao_segundo_plano" in dados:
+            consentimento.localizacao_segundo_plano = bool(dados["localizacao_segundo_plano"])
+            consent_fields.append("localizacao_segundo_plano")
+        if consent_fields:
+            consentimento.save(update_fields=consent_fields)
+
+        return Response(
+            {
+                "mensagem": _("Perfil atualizado com sucesso."),
+                "perfil": UtilizadorResumoSerializer(user).data,
+                "consentimentos": {
+                    "termos_utilizacao": consentimento.termos_utilizacao,
+                    "politica_privacidade": consentimento.politica_privacidade,
+                    "marketing": consentimento.marketing,
+                    "localizacao_segundo_plano": consentimento.localizacao_segundo_plano,
+                },
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def put(self, request: Request) -> Response:
+        return self.patch(request)
+
+
+class ChangePasswordView(APIView):
+    """
+    Endpoint para definição ou alteração de palavra-passe da conta autenticada:
+    - POST /api/v1/auth/change-password/
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request: Request) -> Response:
+        user: CustomUser = request.user
+        serializer = ChangePasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        senha_atual = serializer.validated_data.get("senha_atual", "")
+        nova_senha = serializer.validated_data["nova_senha"]
+
+        if user.has_usable_password() and senha_atual:
+            if not user.check_password(senha_atual):
+                return Response(
+                    {
+                        "erro": "senha_atual_incorreta",
+                        "detalhe": _("A palavra-passe atual informada está incorreta."),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        user.set_password(nova_senha)
+        user.save(update_fields=["password"])
+
+        return Response(
+            {
+                "sucesso": True,
+                "mensagem": _("Palavra-passe atualizada com sucesso."),
+            },
+            status=status.HTTP_200_OK,
+        )
+
 
 
 

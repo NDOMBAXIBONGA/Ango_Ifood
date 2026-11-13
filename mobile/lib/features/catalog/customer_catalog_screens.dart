@@ -15,6 +15,8 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../core/network/app_environment_config.dart';
+import '../auth/storage/secure_token_storage.dart';
 import '../cart/cart.dart';
 import '../checkout/checkout_screen.dart';
 
@@ -25,20 +27,55 @@ import '../checkout/checkout_screen.dart';
 /// Representa a morada atual geolocalizada do Cliente (RN-005, RN-025).
 @immutable
 class CustomerGeoAddress extends Equatable {
+  final String id;
   final String label;
   final String fullAddress;
+  final String referencia;
+  final String andarPorta;
+  final String instrucoesEstafeta;
   final double latitude;
   final double longitude;
 
   const CustomerGeoAddress({
+    this.id = 'morada_principal',
     required this.label,
     required this.fullAddress,
+    this.referencia = '',
+    this.andarPorta = '',
+    this.instrucoesEstafeta = '',
     required this.latitude,
     required this.longitude,
   });
 
+  factory CustomerGeoAddress.fromMoradaJson(Map<String, dynamic> json) {
+    final texto = (json['texto_endereco'] as String?) ?? 'Luanda, Angola';
+    final ref = (json['referencia'] as String?) ?? '';
+    final labelExtraido = ref.trim().isNotEmpty
+        ? ref.trim()
+        : texto.split(',').first.trim();
+    return CustomerGeoAddress(
+      id: '${json['id'] ?? 'morada_principal'}',
+      label: labelExtraido.isNotEmpty ? labelExtraido : 'Morada de Entrega',
+      fullAddress: texto,
+      referencia: ref,
+      andarPorta: (json['andar_porta'] as String?) ?? '',
+      instrucoesEstafeta: (json['instrucoes_estafeta'] as String?) ?? '',
+      latitude: (json['lat'] as num?)?.toDouble() ?? -8.8147,
+      longitude: (json['lng'] as num?)?.toDouble() ?? 13.2343,
+    );
+  }
+
   @override
-  List<Object?> get props => [label, fullAddress, latitude, longitude];
+  List<Object?> get props => [
+        id,
+        label,
+        fullAddress,
+        referencia,
+        andarPorta,
+        instrucoesEstafeta,
+        latitude,
+        longitude,
+      ];
 }
 
 /// Representa uma Loja retornada pelo `StoreDiscoveryViewSet` (`/api/v1/catalog/stores/`).
@@ -694,6 +731,51 @@ class _HomeScreenState extends State<HomeScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _syncDefaultAddressFromBackend();
+  }
+
+  Future<void> _syncDefaultAddressFromBackend() async {
+    try {
+      final token = await SecureTokenStorage().getAccessToken();
+      if (token == null || token.isEmpty) return;
+
+      final dio = Dio(BaseOptions(baseUrl: AppEnvironmentConfig.baseHttpUrl));
+      final resp = await dio.get<dynamic>(
+        '/api/v1/auth/moradas/',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+      final rawData = resp.data;
+      List<dynamic> list = const [];
+      if (rawData is List) {
+        list = rawData;
+      } else if (rawData is Map<String, dynamic> && rawData['results'] is List) {
+        list = rawData['results'] as List<dynamic>;
+      }
+      if (list.isNotEmpty && list.first is Map<String, dynamic>) {
+        final addr = CustomerGeoAddress.fromMoradaJson(
+          list.first as Map<String, dynamic>,
+        );
+        CartService.instance.updateActiveAddress(
+          id: addr.id,
+          label: addr.label,
+          fullAddress: addr.fullAddress,
+          referencia: addr.referencia,
+          latitude: addr.latitude,
+          longitude: addr.longitude,
+        );
+        if (mounted) {
+          final currentState = context.read<StoreDiscoveryBloc>().state;
+          _dispatchFilterUpdate(currentState, address: addr);
+        }
+      }
+    } catch (_) {
+      // Mantém morada inicial em caso de falha silenciosa
+    }
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -701,6 +783,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _dispatchFilterUpdate(
     StoreDiscoveryState state, {
+    CustomerGeoAddress? address,
     String? cuisine,
     bool clearCuisine = false,
     double? minRating,
@@ -710,7 +793,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }) {
     context.read<StoreDiscoveryBloc>().add(
           LoadStoresForLocationEvent(
-            address: state.currentAddress,
+            address: address ?? state.currentAddress,
             selectedCuisine:
                 clearCuisine ? null : (cuisine ?? state.selectedCuisine),
             minRating:
@@ -820,7 +903,15 @@ class _HomeScreenState extends State<HomeScreen> {
             titleSpacing: 16,
             title: InkWell(
               borderRadius: BorderRadius.circular(12),
-              onTap: () {},
+              onTap: () {
+                showCustomerAddressSelectionSheet(
+                  context,
+                  currentAddress: state.currentAddress,
+                  onAddressSelected: (newAddr) {
+                    _dispatchFilterUpdate(state, address: newAddr);
+                  },
+                );
+              },
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Row(
@@ -842,12 +933,26 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Entregar em • ${state.currentAddress.label}',
-                            style: textTheme.labelMedium?.copyWith(
-                              color: colorScheme.primary,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  'Entregar em • ${state.currentAddress.label}',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: textTheme.labelMedium?.copyWith(
+                                    color: colorScheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(
+                                Icons.keyboard_arrow_down_rounded,
+                                size: 16,
+                                color: colorScheme.primary,
+                              ),
+                            ],
                           ),
                           Text(
                             state.currentAddress.fullAddress,
@@ -1304,220 +1409,248 @@ class StoreMenuScreen extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return BlocBuilder<StoreMenuBloc, StoreMenuState>(
-      builder: (context, state) {
-        if (state is StoreMenuLoading) {
-          return Scaffold(
-            appBar: AppBar(title: Text(store.nome)),
-            body: const Center(child: CircularProgressIndicator()),
-          );
-        }
+    return AnimatedBuilder(
+      animation: CartService.instance,
+      builder: (context, _) {
+        final cart = CartService.instance;
+        final isThisStoreCart = cart.lojaId == store.id && cart.isNotEmpty;
 
-        if (state is StoreMenuError) {
-          return Scaffold(
-            appBar: AppBar(title: Text(store.nome)),
-            body: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(state.message, textAlign: TextAlign.center),
-                    const SizedBox(height: 16),
-                    FilledButton(
-                      onPressed: () => context
-                          .read<StoreMenuBloc>()
-                          .add(LoadStoreMenuEvent(storeId: store.id)),
-                      child: const Text('Recarregar Menu'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }
+        return BlocBuilder<StoreMenuBloc, StoreMenuState>(
+          builder: (context, state) {
+            if (state is StoreMenuLoading) {
+              return Scaffold(
+                appBar: AppBar(title: Text(store.nome)),
+                body: const Center(child: CircularProgressIndicator()),
+              );
+            }
 
-        final loadedState = state as StoreMenuLoaded;
-        final categories = loadedState.categories;
-
-        return DefaultTabController(
-          length: categories.isEmpty ? 1 : categories.length,
-          child: Scaffold(
-            body: NestedScrollView(
-              headerSliverBuilder: (context, innerBoxIsScrolled) {
-                return [
-                  // Cabeçalho Expansível da Loja Selecionada (SliverAppBar)
-                  SliverAppBar(
-                    expandedHeight: 220,
-                    pinned: true,
-                    stretch: true,
-                    flexibleSpace: FlexibleSpaceBar(
-                      title: Text(
-                        store.nome,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          shadows: [
-                            Shadow(
-                              blurRadius: 8,
-                              color: Colors.black54,
-                            ),
-                          ],
+            if (state is StoreMenuError) {
+              return Scaffold(
+                appBar: AppBar(title: Text(store.nome)),
+                body: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(state.message, textAlign: TextAlign.center),
+                        const SizedBox(height: 16),
+                        FilledButton(
+                          onPressed: () => context
+                              .read<StoreMenuBloc>()
+                              .add(LoadStoreMenuEvent(storeId: store.id)),
+                          child: const Text('Recarregar Menu'),
                         ),
-                      ),
-                      background: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Image.network(
-                            store.imagemUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              color: colorScheme.primaryContainer,
-                            ),
-                          ),
-                          const DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.black26,
-                                  Colors.transparent,
-                                  Colors.black87,
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                      ],
                     ),
-                    // Lista de Categorias em formato de abas horizontais (TabBar)
-                    bottom: categories.isNotEmpty
-                        ? PreferredSize(
-                            preferredSize: const Size.fromHeight(48),
-                            child: Container(
-                              color: colorScheme.surface,
-                              child: TabBar(
-                                isScrollable: true,
-                                tabAlignment: TabAlignment.start,
-                                labelColor: colorScheme.primary,
-                                unselectedLabelColor:
-                                    colorScheme.onSurfaceVariant,
-                                indicatorColor: colorScheme.primary,
-                                tabs: categories
-                                    .map((cat) => Tab(text: cat.nome))
-                                    .toList(),
-                              ),
-                            ),
-                          )
-                        : null,
                   ),
-                ];
-              },
-              body: categories.isEmpty
-                  ? const Center(
-                      child: Text('Esta loja ainda não publicou itens no menu.'),
-                    )
-                  : TabBarView(
-                      children: categories.map((category) {
-                        if (category.itens.isEmpty) {
-                          return const Center(
-                            child: Text('Sem itens nesta categoria.'),
-                          );
-                        }
-                        return ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                          itemCount: category.itens.length,
-                          separatorBuilder: (_, __) => const Divider(height: 24),
-                          itemBuilder: (context, index) {
-                            final item = category.itens[index];
-                            final quantityInCart =
-                                loadedState.cartQuantities[item.id] ?? 0;
+                ),
+              );
+            }
 
-                            return _MenuItemTile(
-                              item: item,
-                              storeIsOpen: store.isAberta,
-                              quantityInCart: quantityInCart,
-                              onAddPressed: () {
-                                context
-                                    .read<StoreMenuBloc>()
-                                    .add(AddMenuItemToCartEvent(item: item));
-                                CartService.instance.addItem(
-                                  itemId: item.id,
-                                  lojaId: store.id,
-                                  lojaNome: store.nome,
-                                  nome: item.nome,
-                                  imagemUrl: item.imagemUrl,
-                                  precoUnitarioCentimos: item.preco,
+            final loadedState = state as StoreMenuLoaded;
+            final categories = loadedState.categories;
+
+            return DefaultTabController(
+              length: categories.isEmpty ? 1 : categories.length,
+              child: Scaffold(
+                body: NestedScrollView(
+                  headerSliverBuilder: (context, innerBoxIsScrolled) {
+                    return [
+                      // Cabeçalho Expansível da Loja Selecionada (SliverAppBar)
+                      SliverAppBar(
+                        expandedHeight: 220,
+                        pinned: true,
+                        stretch: true,
+                        flexibleSpace: FlexibleSpaceBar(
+                          title: Text(
+                            store.nome,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              shadows: [
+                                Shadow(
+                                  blurRadius: 8,
+                                  color: Colors.black54,
+                                ),
+                              ],
+                            ),
+                          ),
+                          background: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Image.network(
+                                store.imagemUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  color: colorScheme.primaryContainer,
+                                ),
+                              ),
+                              const DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Colors.black26,
+                                      Colors.transparent,
+                                      Colors.black87,
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Lista de Categorias em formato de abas horizontais (TabBar)
+                        bottom: categories.isNotEmpty
+                            ? PreferredSize(
+                                preferredSize: const Size.fromHeight(48),
+                                child: Container(
+                                  color: colorScheme.surface,
+                                  child: TabBar(
+                                    isScrollable: true,
+                                    tabAlignment: TabAlignment.start,
+                                    labelColor: colorScheme.primary,
+                                    unselectedLabelColor:
+                                        colorScheme.onSurfaceVariant,
+                                    indicatorColor: colorScheme.primary,
+                                    tabs: categories
+                                        .map((cat) => Tab(text: cat.nome))
+                                        .toList(),
+                                  ),
+                                ),
+                              )
+                            : null,
+                      ),
+                    ];
+                  },
+                  body: categories.isEmpty
+                      ? const Center(
+                          child: Text(
+                              'Esta loja ainda não publicou itens no menu.'),
+                        )
+                      : TabBarView(
+                          children: categories.map((category) {
+                            if (category.itens.isEmpty) {
+                              return const Center(
+                                child: Text('Sem itens nesta categoria.'),
+                              );
+                            }
+                            return ListView.separated(
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                              itemCount: category.itens.length,
+                              separatorBuilder: (_, __) =>
+                                  const Divider(height: 24),
+                              itemBuilder: (context, index) {
+                                final item = category.itens[index];
+                                final quantityInCart = isThisStoreCart
+                                    ? cart.getQuantity(item.id)
+                                    : 0;
+
+                                return _MenuItemTile(
+                                  item: item,
+                                  storeIsOpen: store.isAberta,
+                                  quantityInCart: quantityInCart,
+                                  onAddPressed: () =>
+                                      _handleMenuItemTap(context, store, item),
                                 );
                               },
                             );
-                          },
-                        );
-                      }).toList(),
-                    ),
-            ),
-
-            // Barra inferior de resumo do carrinho (RN-040)
-            bottomNavigationBar: loadedState.totalCartItems > 0
-                ? SafeArea(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: FilledButton(
-                        onPressed: () {
-                          final itens = <CheckoutCartItemInput>[];
-                          for (final category in loadedState.categories) {
-                            for (final menuItem in category.itens) {
-                              final qty =
-                                  loadedState.cartQuantities[menuItem.id] ?? 0;
-                              if (qty > 0) {
-                                itens.add(
-                                  CheckoutCartItemInput(
-                                    itemId: menuItem.id,
-                                    nome: menuItem.nome,
-                                    imagemUrl: menuItem.imagemUrl,
-                                    quantidade: qty,
-                                  ),
-                                );
-                              }
-                            }
-                          }
-
-                          Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => CheckoutScreen(
-                                lojaId: store.id,
-                                lojaNome: store.nome,
-                                moradaId: 'morada_principal',
-                                moradaLabel: 'Minha Morada Principal',
-                                moradaTexto: 'Luanda, Angola',
-                                itensCarrinho: itens,
-                              ),
-                            ),
-                          );
-                        },
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              '${loadedState.totalCartItems} item(ns) • Ver Pedido',
-                            ),
-                            Text(
-                              formatarMoedaUnidadesMinimas(
-                                loadedState.cartSubtotalCentimos,
-                              ),
-                              style: textTheme.titleMedium?.copyWith(
-                                color: colorScheme.onPrimary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
+                          }).toList(),
                         ),
-                      ),
-                    ),
-                  )
-                : null,
-          ),
+                ),
+
+                // Barra inferior de resumo do carrinho (RN-040)
+                bottomNavigationBar: isThisStoreCart
+                    ? SafeArea(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: FilledButton(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => CheckoutScreen(
+                                    lojaId: store.id,
+                                    lojaNome: store.nome,
+                                    moradaId: cart.moradaId,
+                                    moradaLabel: cart.moradaLabel,
+                                    moradaTexto: cart.moradaTexto,
+                                    itensCarrinho: cart.toCheckoutInputs(),
+                                  ),
+                                ),
+                              );
+                            },
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  '${cart.totalItemsCount} item(ns) • Ver Pedido',
+                                ),
+                                Text(
+                                  formatarMoedaUnidadesMinimas(
+                                    cart.totalSubtotalCentimos,
+                                  ),
+                                  style: textTheme.titleMedium?.copyWith(
+                                    color: colorScheme.onPrimary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      )
+                    : null,
+              ),
+            );
+          },
         );
+      },
+    );
+  }
+
+  Future<void> _handleMenuItemTap(
+    BuildContext context,
+    StoreSummaryModel store,
+    MenuItemModel item,
+  ) async {
+    final cart = CartService.instance;
+    if (cart.hasStoreConflict(store.id)) {
+      final confirmClear = await showDialog<bool>(
+        context: context,
+        builder: (dialogCtx) => AlertDialog(
+          title: const Text('Limpar sacola atual? (RN-040)'),
+          content: Text(
+            'A sua sacola já contém itens de "${cart.lojaNome ?? 'outra loja'}". '
+            'Deseja limpar a sacola atual e iniciar um novo pedido em "${store.nome}"?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(true),
+              child: const Text('Sim, limpar e continuar'),
+            ),
+          ],
+        ),
+      );
+      if (confirmClear != true || !context.mounted) return;
+      cart.clear();
+    }
+
+    showItemCustomizationBottomSheet(
+      context,
+      store: store,
+      item: item,
+      onItemAdded: () {
+        if (context.mounted) {
+          context
+              .read<StoreMenuBloc>()
+              .add(AddMenuItemToCartEvent(item: item));
+        }
       },
     );
   }
@@ -1702,6 +1835,960 @@ class _MenuItemTile extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// 7. MODAL DE PERSONALIZAÇÃO DE ITEM DE MENU (RN-014, RN-042, RN-045)
+// ============================================================================
+
+Future<void> showItemCustomizationBottomSheet(
+  BuildContext context, {
+  required StoreSummaryModel store,
+  required MenuItemModel item,
+  VoidCallback? onItemAdded,
+}) async {
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    useSafeArea: true,
+    builder: (_) => _ItemCustomizationSheet(
+      store: store,
+      item: item,
+      onItemAdded: onItemAdded,
+    ),
+  );
+}
+
+class _ItemCustomizationSheet extends StatefulWidget {
+  final StoreSummaryModel store;
+  final MenuItemModel item;
+  final VoidCallback? onItemAdded;
+
+  const _ItemCustomizationSheet({
+    required this.store,
+    required this.item,
+    this.onItemAdded,
+  });
+
+  @override
+  State<_ItemCustomizationSheet> createState() =>
+      _ItemCustomizationSheetState();
+}
+
+class _ItemCustomizationSheetState extends State<_ItemCustomizationSheet> {
+  int _quantity = 1;
+  final Map<String, Set<String>> _selectedOptionsByGroup = {};
+  final TextEditingController _notesController = TextEditingController();
+  String? _validationError;
+
+  @override
+  void initState() {
+    super.initState();
+    for (final group in widget.item.gruposOpcoes) {
+      _selectedOptionsByGroup[group.id] = <String>{};
+      // Se for obrigatório e tiver pelo menos 1 opção disponível, pré-seleciona a primeira para conveniência
+      if (group.isObrigatorio) {
+        final available = group.opcoes.where((o) => o.isDisponivel).toList();
+        final minNeeded = group.minimoEscolhas > 0 ? group.minimoEscolhas : 1;
+        for (var i = 0; i < minNeeded && i < available.length; i++) {
+          _selectedOptionsByGroup[group.id]!.add(available[i].id);
+        }
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  int get _optionsExtraCentimos {
+    var extra = 0;
+    for (final group in widget.item.gruposOpcoes) {
+      final selectedSet = _selectedOptionsByGroup[group.id] ?? const <String>{};
+      for (final opt in group.opcoes) {
+        if (selectedSet.contains(opt.id)) {
+          extra += opt.precoAdicional;
+        }
+      }
+    }
+    return extra;
+  }
+
+  int get _unitPriceCentimos => widget.item.preco + _optionsExtraCentimos;
+
+  int get _totalPriceCentimos => _unitPriceCentimos * _quantity;
+
+  bool _validateGroups() {
+    for (final group in widget.item.gruposOpcoes) {
+      final count = (_selectedOptionsByGroup[group.id] ?? const <String>{}).length;
+      final minRequired = group.isObrigatorio
+          ? (group.minimoEscolhas > 0 ? group.minimoEscolhas : 1)
+          : group.minimoEscolhas;
+      if (count < minRequired) {
+        setState(() {
+          _validationError =
+              'Selecione pelo menos $minRequired opção(ões) em "${group.nome}" (RN-014).';
+        });
+        return false;
+      }
+      if (group.maximoEscolhas > 0 && count > group.maximoEscolhas) {
+        setState(() {
+          _validationError =
+              'Máximo de ${group.maximoEscolhas} opção(ões) permitido em "${group.nome}" (RN-014).';
+        });
+        return false;
+      }
+    }
+    setState(() => _validationError = null);
+    return true;
+  }
+
+  void _toggleOption(MenuOptionGroupModel group, MenuOptionItemModel option) {
+    if (!option.isDisponivel) return;
+    final set = _selectedOptionsByGroup.putIfAbsent(group.id, () => <String>{});
+    setState(() {
+      _validationError = null;
+      if (set.contains(option.id)) {
+        set.remove(option.id);
+      } else {
+        if (group.maximoEscolhas == 1) {
+          set
+            ..clear()
+            ..add(option.id);
+        } else if (group.maximoEscolhas <= 0 ||
+            set.length < group.maximoEscolhas) {
+          set.add(option.id);
+        } else {
+          _validationError =
+              'Já selecionou o limite máximo (${group.maximoEscolhas}) para "${group.nome}".';
+        }
+      }
+    });
+  }
+
+  void _confirmAdd() {
+    if (!_validateGroups()) return;
+
+    final selectedIds = <String>[];
+    final selectedNames = <String>[];
+    for (final group in widget.item.gruposOpcoes) {
+      final set = _selectedOptionsByGroup[group.id] ?? const <String>{};
+      for (final opt in group.opcoes) {
+        if (set.contains(opt.id)) {
+          selectedIds.add(opt.id);
+          selectedNames.add(opt.nome);
+        }
+      }
+    }
+
+    CartService.instance.addItem(
+      itemId: widget.item.id,
+      lojaId: widget.store.id,
+      lojaNome: widget.store.nome,
+      nome: widget.item.nome,
+      imagemUrl: widget.item.imagemUrl,
+      precoUnitarioCentimos: _unitPriceCentimos,
+      quantidade: _quantity,
+      opcoesIds: selectedIds,
+      opcoesNomes: selectedNames,
+      notas: _notesController.text.trim(),
+    );
+
+    widget.onItemAdded?.call();
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${_quantity}x ${widget.item.nome} adicionado à sacola!',
+        ),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+                children: [
+                  if (widget.item.imagemUrl.isNotEmpty) ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: AspectRatio(
+                        aspectRatio: 16 / 9,
+                        child: Image.network(
+                          widget.item.imagemUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: colorScheme.surfaceContainerHighest,
+                            child: const Icon(Icons.fastfood_rounded, size: 48),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  Text(
+                    widget.item.nome,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    formatarMoedaUnidadesMinimas(widget.item.preco),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (widget.item.descricao.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      widget.item.descricao,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                  if (widget.item.gruposOpcoes.isNotEmpty) ...[
+                    const SizedBox(height: 18),
+                    const Divider(),
+                    ...widget.item.gruposOpcoes.map((group) {
+                      final selectedSet =
+                          _selectedOptionsByGroup[group.id] ?? const <String>{};
+                      final minRequired = group.isObrigatorio
+                          ? (group.minimoEscolhas > 0 ? group.minimoEscolhas : 1)
+                          : group.minimoEscolhas;
+
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 12, bottom: 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        group.nome,
+                                        style: theme.textTheme.titleSmall
+                                            ?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      Text(
+                                        minRequired > 0
+                                            ? 'Escolha de $minRequired até ${group.maximoEscolhas}'
+                                            : 'Escolha até ${group.maximoEscolhas} (Opcional)',
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                          color: colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: group.isObrigatorio
+                                        ? colorScheme.primaryContainer
+                                        : colorScheme.surfaceContainerHighest,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    group.isObrigatorio
+                                        ? 'Obrigatório'
+                                        : 'Opcional',
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: group.isObrigatorio
+                                          ? colorScheme.onPrimaryContainer
+                                          : colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            ...group.opcoes.map((opt) {
+                              final isSelected = selectedSet.contains(opt.id);
+                              return CheckboxListTile(
+                                value: isSelected,
+                                enabled: opt.isDisponivel,
+                                dense: true,
+                                contentPadding: EdgeInsets.zero,
+                                controlAffinity:
+                                    ListTileControlAffinity.leading,
+                                onChanged: opt.isDisponivel
+                                    ? (_) => _toggleOption(group, opt)
+                                    : null,
+                                title: Text(
+                                  opt.nome,
+                                  style: TextStyle(
+                                    decoration: opt.isDisponivel
+                                        ? null
+                                        : TextDecoration.lineThrough,
+                                  ),
+                                ),
+                                secondary: Text(
+                                  opt.precoAdicional > 0
+                                      ? '+ ${formatarMoedaUnidadesMinimas(opt.precoAdicional)}'
+                                      : 'Grátis',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: colorScheme.primary,
+                                  ),
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                  const SizedBox(height: 16),
+                  Text(
+                    'Observações para a cozinha (RN-045)',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _notesController,
+                    maxLines: 2,
+                    maxLength: 200,
+                    decoration: InputDecoration(
+                      hintText:
+                          'Ex.: Sem cebola, molho à parte, bem passado...',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                  if (_validationError != null) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: colorScheme.errorContainer,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        _validationError!,
+                        style: TextStyle(
+                          color: colorScheme.onErrorContainer,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            // Barra inferior: Quantidade + Botão Adicionar
+            SafeArea(
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                decoration: BoxDecoration(
+                  color: colorScheme.surface,
+                  border: Border(
+                    top: BorderSide(color: colorScheme.outlineVariant),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: colorScheme.outlineVariant),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          IconButton(
+                            onPressed: _quantity > 1
+                                ? () => setState(() => _quantity--)
+                                : null,
+                            icon: const Icon(Icons.remove_rounded),
+                          ),
+                          Text(
+                            '$_quantity',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: _quantity < 20
+                                ? () => setState(() => _quantity++)
+                                : null,
+                            icon: const Icon(Icons.add_rounded),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: _confirmAdd,
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        child: Text(
+                          'Adicionar • ${formatarMoedaUnidadesMinimas(_totalPriceCentimos)}',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// 8. MODAL DE GESTÃO E SELEÇÃO DE MORADAS DE ENTREGA (RN-005, RN-025)
+// ============================================================================
+
+Future<void> showCustomerAddressSelectionSheet(
+  BuildContext context, {
+  CustomerGeoAddress? currentAddress,
+  ValueChanged<CustomerGeoAddress>? onAddressSelected,
+}) async {
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    useSafeArea: true,
+    builder: (_) => _CustomerAddressSelectionSheet(
+      currentAddress: currentAddress,
+      onAddressSelected: onAddressSelected,
+    ),
+  );
+}
+
+class _CustomerAddressSelectionSheet extends StatefulWidget {
+  final CustomerGeoAddress? currentAddress;
+  final ValueChanged<CustomerGeoAddress>? onAddressSelected;
+
+  const _CustomerAddressSelectionSheet({
+    this.currentAddress,
+    this.onAddressSelected,
+  });
+
+  @override
+  State<_CustomerAddressSelectionSheet> createState() =>
+      _CustomerAddressSelectionSheetState();
+}
+
+class _CustomerAddressSelectionSheetState
+    extends State<_CustomerAddressSelectionSheet> {
+  bool _isLoading = true;
+  bool _isCreating = false;
+  bool _showForm = false;
+  String? _errorMsg;
+  List<CustomerGeoAddress> _savedAddresses = [];
+
+  final _enderecoController = TextEditingController();
+  final _referenciaController = TextEditingController();
+  final _andarPortaController = TextEditingController();
+  final _instrucoesController = TextEditingController();
+  int _selectedPresetIndex = 0;
+
+  static const List<CustomerGeoAddress> _luandaDistrictPresets = [
+    CustomerGeoAddress(
+      id: 'preset_ingombota',
+      label: 'Ingombota / Centro',
+      fullAddress: 'Avenida 4 de Fevereiro, Marginal de Luanda, Ingombota',
+      referencia: 'Centro de Luanda',
+      latitude: -8.8147,
+      longitude: 13.2343,
+    ),
+    CustomerGeoAddress(
+      id: 'preset_talatona',
+      label: 'Talatona',
+      fullAddress: 'Via S8, Condomínio Belas Business Park, Talatona, Luanda',
+      referencia: 'Talatona Shopping',
+      latitude: -8.9167,
+      longitude: 13.1833,
+    ),
+    CustomerGeoAddress(
+      id: 'preset_kilamba',
+      label: 'Centralidade do Kilamba',
+      fullAddress: 'Quarteirão Q, Centralidade do Kilamba, Belas, Luanda',
+      referencia: 'Kero Kilamba',
+      latitude: -8.9950,
+      longitude: 13.2680,
+    ),
+    CustomerGeoAddress(
+      id: 'preset_maianga',
+      label: 'Maianga / Alvalade',
+      fullAddress: 'Rua Comandante Gika, Alvalade, Maianga, Luanda',
+      referencia: 'Hotel Alvalade',
+      latitude: -8.8399,
+      longitude: 13.2345,
+    ),
+    CustomerGeoAddress(
+      id: 'preset_morro_bento',
+      label: 'Morro Bento',
+      fullAddress: 'Avenida 21 de Janeiro, Morro Bento, Luanda',
+      referencia: 'Rotunda da Multiperfil',
+      latitude: -8.8850,
+      longitude: 13.1950,
+    ),
+    CustomerGeoAddress(
+      id: 'preset_viana',
+      label: 'Viana / Zango',
+      fullAddress: 'Estrada de Catete, Vila de Viana, Luanda',
+      referencia: 'Administração de Viana',
+      latitude: -8.9030,
+      longitude: 13.3740,
+    ),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAddresses();
+  }
+
+  @override
+  void dispose() {
+    _enderecoController.dispose();
+    _referenciaController.dispose();
+    _andarPortaController.dispose();
+    _instrucoesController.dispose();
+    super.dispose();
+  }
+
+  Future<Dio?> _buildAuthDio() async {
+    final token = await const SecureTokenStorage().getAccessToken();
+    if (token == null || token.isEmpty) return null;
+    return Dio(
+      BaseOptions(
+        baseUrl: AppEnvironmentConfig.baseHttpUrl,
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 15),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      ),
+    );
+  }
+
+  Future<void> _loadAddresses() async {
+    setState(() {
+      _isLoading = true;
+      _errorMsg = null;
+    });
+    try {
+      final dio = await _buildAuthDio();
+      if (dio == null) {
+        setState(() {
+          _savedAddresses = _luandaDistrictPresets;
+          _isLoading = false;
+        });
+        return;
+      }
+      final resp = await dio.get<dynamic>('/api/v1/auth/moradas/');
+      final raw = resp.data;
+      List<dynamic> list = const [];
+      if (raw is List) {
+        list = raw;
+      } else if (raw is Map<String, dynamic> && raw['results'] is List) {
+        list = raw['results'] as List<dynamic>;
+      }
+      final parsed = list
+          .whereType<Map<String, dynamic>>()
+          .map(CustomerGeoAddress.fromMoradaJson)
+          .toList();
+
+      if (mounted) {
+        setState(() {
+          _savedAddresses = parsed;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _savedAddresses = _luandaDistrictPresets;
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _selectAndActivate(
+    CustomerGeoAddress address, {
+    bool persistIfPreset = false,
+  }) async {
+    var chosen = address;
+    if (persistIfPreset && address.id.startsWith('preset_')) {
+      try {
+        final dio = await _buildAuthDio();
+        if (dio != null) {
+          final resp = await dio.post<Map<String, dynamic>>(
+            '/api/v1/auth/moradas/',
+            data: {
+              'texto_endereco': address.fullAddress,
+              'referencia': address.label,
+              'andar_porta': address.andarPorta,
+              'instrucoes_estafeta': address.instrucoesEstafeta,
+              'latitude': address.latitude,
+              'longitude': address.longitude,
+            },
+          );
+          if (resp.data != null) {
+            chosen = CustomerGeoAddress.fromMoradaJson(resp.data!);
+          }
+        }
+      } catch (_) {}
+    }
+
+    CartService.instance.updateActiveAddress(
+      id: chosen.id,
+      label: chosen.label,
+      fullAddress: chosen.fullAddress,
+      referencia: chosen.referencia,
+      latitude: chosen.latitude,
+      longitude: chosen.longitude,
+    );
+    widget.onAddressSelected?.call(chosen);
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  Future<void> _createNewAddress() async {
+    final texto = _enderecoController.text.trim();
+    if (texto.length < 5) {
+      setState(() => _errorMsg = 'Informe o endereço completo (mín. 5 letras).');
+      return;
+    }
+
+    setState(() {
+      _isCreating = true;
+      _errorMsg = null;
+    });
+
+    final preset = _luandaDistrictPresets[_selectedPresetIndex];
+    final ref = _referenciaController.text.trim().isNotEmpty
+        ? _referenciaController.text.trim()
+        : preset.label;
+
+    try {
+      final dio = await _buildAuthDio();
+      if (dio != null) {
+        final resp = await dio.post<Map<String, dynamic>>(
+          '/api/v1/auth/moradas/',
+          data: {
+            'texto_endereco': '$texto, ${preset.label}, Luanda',
+            'referencia': ref,
+            'andar_porta': _andarPortaController.text.trim(),
+            'instrucoes_estafeta': _instrucoesController.text.trim(),
+            'latitude': preset.latitude,
+            'longitude': preset.longitude,
+          },
+        );
+        if (resp.data != null) {
+          final created = CustomerGeoAddress.fromMoradaJson(resp.data!);
+          await _selectAndActivate(created);
+          return;
+        }
+      }
+      // Fallback caso offline
+      final fallback = CustomerGeoAddress(
+        id: 'morada_principal',
+        label: ref,
+        fullAddress: '$texto, ${preset.label}, Luanda',
+        referencia: ref,
+        andarPorta: _andarPortaController.text.trim(),
+        instrucoesEstafeta: _instrucoesController.text.trim(),
+        latitude: preset.latitude,
+        longitude: preset.longitude,
+      );
+      await _selectAndActivate(fallback);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isCreating = false;
+          _errorMsg = 'Não foi possível guardar a morada. Tente novamente.';
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteAddress(CustomerGeoAddress addr) async {
+    if (addr.id.startsWith('preset_') || addr.id == 'morada_principal') return;
+    try {
+      final dio = await _buildAuthDio();
+      if (dio != null) {
+        await dio.delete<void>('/api/v1/auth/moradas/${addr.id}/');
+      }
+      await _loadAddresses();
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final activeId = CartService.instance.moradaId;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  _showForm
+                      ? 'Nova Morada de Entrega'
+                      : 'Morada de Entrega (RN-005)',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () => setState(() => _showForm = !_showForm),
+                  icon: Icon(_showForm ? Icons.close : Icons.add_location_alt),
+                  label: Text(_showForm ? 'Voltar' : 'Nova Morada'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (_errorMsg != null) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: colorScheme.errorContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  _errorMsg!,
+                  style: TextStyle(color: colorScheme.onErrorContainer),
+                ),
+              ),
+            ],
+            if (_showForm) ...[
+              Text(
+                'Selecione a Zona / Município em Luanda:',
+                style: theme.textTheme.labelLarge,
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: List.generate(_luandaDistrictPresets.length, (i) {
+                  final p = _luandaDistrictPresets[i];
+                  return ChoiceChip(
+                    label: Text(p.label),
+                    selected: _selectedPresetIndex == i,
+                    onSelected: (_) => setState(() => _selectedPresetIndex = i),
+                  );
+                }),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _enderecoController,
+                decoration: const InputDecoration(
+                  labelText: 'Rua, Avenida ou Condomínio *',
+                  hintText: 'Ex.: Rua Comandante Gika, Casa 24',
+                  prefixIcon: Icon(Icons.home_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _referenciaController,
+                decoration: const InputDecoration(
+                  labelText: 'Nome / Ponto de Referência (ex.: Casa, Trabalho)',
+                  hintText: 'Ex.: Em frente à Clínica Multiperfil',
+                  prefixIcon: Icon(Icons.place_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _andarPortaController,
+                      decoration: const InputDecoration(
+                        labelText: 'Andar / Porta',
+                        hintText: 'Ex.: 2.º Andar, Porta B',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _instrucoesController,
+                      decoration: const InputDecoration(
+                        labelText: 'Instruções p/ Estafeta',
+                        hintText: 'Ex.: Tocar campainha',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: _isCreating ? null : _createNewAddress,
+                icon: _isCreating
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.check_circle_outline),
+                label: const Text('Guardar e Usar Esta Morada'),
+              ),
+            ] else ...[
+              if (_isLoading)
+                const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else ...[
+                if (_savedAddresses.isNotEmpty) ...[
+                  Text(
+                    'As Minhas Moradas Guardadas',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ..._savedAddresses.map((addr) {
+                    final isSelected = addr.id == activeId ||
+                        addr.fullAddress == CartService.instance.moradaTexto;
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      elevation: 0,
+                      color: isSelected
+                          ? colorScheme.primaryContainer.withOpacity(0.35)
+                          : null,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        side: BorderSide(
+                          color: isSelected
+                              ? colorScheme.primary
+                              : colorScheme.outlineVariant,
+                        ),
+                      ),
+                      child: ListTile(
+                        onTap: () => _selectAndActivate(addr),
+                        leading: Icon(
+                          isSelected
+                              ? Icons.radio_button_checked_rounded
+                              : Icons.location_on_outlined,
+                          color: colorScheme.primary,
+                        ),
+                        title: Text(
+                          addr.label,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text(
+                          addr.fullAddress,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: _savedAddresses.length > 1 &&
+                                !addr.id.startsWith('preset_')
+                            ? IconButton(
+                                icon: Icon(
+                                  Icons.delete_outline_rounded,
+                                  color: colorScheme.error,
+                                ),
+                                onPressed: () => _deleteAddress(addr),
+                              )
+                            : null,
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 16),
+                ],
+                Text(
+                  'Zonas Rápidas de Luanda',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ..._luandaDistrictPresets.map((preset) {
+                  return ListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                    leading: const Icon(Icons.my_location_rounded, size: 20),
+                    title: Text(
+                      preset.label,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: Text(
+                      preset.fullAddress,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => _selectAndActivate(
+                      preset,
+                      persistIfPreset: true,
+                    ),
+                  );
+                }),
+              ],
+            ],
+          ],
         ),
       ),
     );

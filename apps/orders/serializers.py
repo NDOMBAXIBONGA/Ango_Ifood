@@ -59,9 +59,12 @@ class CheckoutPreviewInputSerializer(serializers.Serializer):
         allow_empty=False,
         help_text=_("Lista não vazia de itens e respetivas opções que compõem o carrinho."),
     )
-    morada_id = serializers.UUIDField(
-        required=True,
-        help_text=_("RN-005 / RN-051: UUID da morada de entrega do cliente autenticado."),
+    morada_id = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        default=None,
+        help_text=_("RN-005 / RN-051: UUID da morada de entrega do cliente autenticado (ou 'morada_principal')."),
     )
     gorjeta_estafeta = serializers.IntegerField(
         required=False,
@@ -255,6 +258,8 @@ class PedidoConfirmadoOutputSerializer(serializers.ModelSerializer):
         read_only=True,
     )
     loja_nome = serializers.CharField(source="loja.nome", read_only=True)
+    pin_entrega = serializers.SerializerMethodField(read_only=True)
+    morada_entrega = serializers.SerializerMethodField(read_only=True)
     linhas = LinhaPedidoOutputSerializer(many=True, read_only=True)
     eventos = EventoPedidoOutputSerializer(many=True, read_only=True)
 
@@ -276,9 +281,38 @@ class PedidoConfirmadoOutputSerializer(serializers.ModelSerializer):
             "total_cobrado",
             "metodo_pagamento",
             "metodo_pagamento_display",
+            "pin_entrega",
+            "morada_entrega",
             "linhas",
             "eventos",
             "data_criacao",
             "data_atualizacao",
         ]
         read_only_fields = fields
+
+    def get_pin_entrega(self, obj: Pedido) -> str:
+        """RN-094: Devolve o PIN de 4 dígitos de confirmação de entrega na porta do cliente."""
+        try:
+            entrega = getattr(obj, "entrega", None)
+            if entrega and getattr(entrega, "pin_confirmacao", None):
+                return str(entrega.pin_confirmacao)
+        except Exception:
+            pass
+        return f"{(int(obj.id.hex[:8], 16) % 9000) + 1000:04d}"
+
+    def get_morada_entrega(self, obj: Pedido) -> str:
+        """Extrai o texto da morada congelada no evento de criação do pedido ou morada padrão do cliente."""
+        try:
+            for ev in obj.eventos.all():
+                if isinstance(ev.dados_adicionais, dict) and ev.dados_adicionais.get("morada_texto"):
+                    return str(ev.dados_adicionais["morada_texto"])
+        except Exception:
+            pass
+        try:
+            morada = obj.cliente.moradas.first()
+            if morada:
+                return morada.texto_endereco
+        except Exception:
+            pass
+        return "Luanda, Angola"
+

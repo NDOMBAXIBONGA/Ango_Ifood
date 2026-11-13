@@ -451,9 +451,52 @@ class MoradaSerializer(serializers.ModelSerializer):
         from django.contrib.gis.geos import Point
         lat = validated_data.pop("latitude", -8.839988)
         lng = validated_data.pop("longitude", 13.289437)
-        user = self.context["request"].user
+        user = validated_data.pop("utilizador", None) or self.context["request"].user
         return Morada.objects.create(
             utilizador=user,
             geolocalizacao=Point(lng, lat, srid=4326),
             **validated_data,
         )
+
+    def update(self, instance, validated_data):
+        from django.contrib.gis.geos import Point
+        lat = validated_data.pop("latitude", None)
+        lng = validated_data.pop("longitude", None)
+        validated_data.pop("utilizador", None)
+        if lat is not None and lng is not None:
+            instance.geolocalizacao = Point(float(lng), float(lat), srid=4326)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance
+
+
+class CustomerProfileUpdateSerializer(serializers.Serializer):
+    """
+    Serializer para consulta e atualização do perfil do cliente (`GET/PATCH /api/v1/auth/profile/`).
+    """
+
+    nome = serializers.CharField(max_length=150, required=False)
+    telemovel = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    email = serializers.EmailField(required=False)
+    data_nascimento = serializers.DateField(required=False, allow_null=True)
+    marketing = serializers.BooleanField(required=False)
+    localizacao_segundo_plano = serializers.BooleanField(required=False)
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    """
+    Serializer para alteração de palavra-passe (`POST /api/v1/auth/change-password/`).
+    """
+
+    senha_atual = serializers.CharField(required=False, allow_blank=True, write_only=True)
+    nova_senha = serializers.CharField(required=True, min_length=6, write_only=True)
+    confirmar_senha = serializers.CharField(required=False, allow_blank=True, write_only=True)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        nova = attrs.get("nova_senha", "")
+        conf = attrs.get("confirmar_senha", "")
+        if conf and nova != conf:
+            raise serializers.ValidationError({"confirmar_senha": _("A confirmação não coincide com a nova palavra-passe.")})
+        return attrs
+

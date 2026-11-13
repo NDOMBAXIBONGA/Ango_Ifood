@@ -15,11 +15,64 @@ class CartService extends ChangeNotifier {
   String? _lojaNome;
   final Map<String, CartItemModel> _items = {};
 
+  // Estado partilhado de Morada ativa do Cliente (RN-005, RN-025)
+  String _moradaId = 'morada_principal';
+  String _moradaLabel = 'Centro de Luanda';
+  String _moradaTexto = 'Centro de Luanda, Ingombota, Luanda';
+  String _moradaReferencia = 'Próximo à Marginal de Luanda';
+  double _latitude = -8.8147;
+  double _longitude = 13.2343;
+
+  // Preferência de pagamento do Cliente (RN-065)
+  String _preferredPaymentCode = 'CARTEIRA_DIGITAL';
+  String _preferredMcxPhone = '+244 923 000 000';
+
   String? get lojaId => _lojaId;
   String? get lojaNome => _lojaNome;
+  String get moradaId => _moradaId;
+  String get moradaLabel => _moradaLabel;
+  String get moradaTexto => _moradaTexto;
+  String get moradaReferencia => _moradaReferencia;
+  double get latitude => _latitude;
+  double get longitude => _longitude;
+  String get preferredPaymentCode => _preferredPaymentCode;
+  String get preferredMcxPhone => _preferredMcxPhone;
+
   List<CartItemModel> get items => _items.values.toList();
   bool get isEmpty => _items.isEmpty;
   bool get isNotEmpty => _items.isNotEmpty;
+
+  /// RN-040: Verifica se já existem itens no carrinho pertencentes a outra loja.
+  bool hasStoreConflict(String targetLojaId) =>
+      _lojaId != null && _lojaId != targetLojaId && _items.isNotEmpty;
+
+  void updateActiveAddress({
+    required String id,
+    required String label,
+    required String fullAddress,
+    String referencia = '',
+    required double latitude,
+    required double longitude,
+  }) {
+    _moradaId = id.isNotEmpty ? id : 'morada_principal';
+    _moradaLabel = label.isNotEmpty ? label : 'Morada de Entrega';
+    _moradaTexto = fullAddress;
+    _moradaReferencia = referencia;
+    _latitude = latitude;
+    _longitude = longitude;
+    notifyListeners();
+  }
+
+  void updatePreferredPayment({
+    required String paymentCode,
+    String? mcxPhone,
+  }) {
+    _preferredPaymentCode = paymentCode;
+    if (mcxPhone != null) {
+      _preferredMcxPhone = mcxPhone;
+    }
+    notifyListeners();
+  }
 
   int get totalItemsCount =>
       _items.values.fold(0, (sum, item) => sum + item.quantidade);
@@ -38,7 +91,9 @@ class CartService extends ChangeNotifier {
     required String nome,
     required String imagemUrl,
     required int precoUnitarioCentimos,
+    int quantidade = 1,
     List<String> opcoesIds = const [],
+    List<String> opcoesNomes = const [],
     String notas = '',
   }) {
     if (_lojaId != null && _lojaId != lojaId) {
@@ -50,7 +105,11 @@ class CartService extends ChangeNotifier {
     if (_items.containsKey(itemId)) {
       final existing = _items[itemId]!;
       _items[itemId] = existing.copyWith(
-        quantidade: existing.quantidade + 1,
+        quantidade: existing.quantidade + quantidade,
+        precoUnitarioCentimos: precoUnitarioCentimos,
+        opcoesIds: opcoesIds.isNotEmpty ? opcoesIds : existing.opcoesIds,
+        opcoesNomes: opcoesNomes.isNotEmpty ? opcoesNomes : existing.opcoesNomes,
+        notas: notas.isNotEmpty ? notas : existing.notas,
       );
     } else {
       _items[itemId] = CartItemModel(
@@ -60,8 +119,9 @@ class CartService extends ChangeNotifier {
         nome: nome,
         imagemUrl: imagemUrl,
         precoUnitarioCentimos: precoUnitarioCentimos,
-        quantidade: 1,
+        quantidade: quantidade,
         opcoesIds: opcoesIds,
+        opcoesNomes: opcoesNomes,
         notas: notas,
       );
     }

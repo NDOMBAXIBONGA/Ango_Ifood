@@ -10,6 +10,7 @@ class CartItemModel extends Equatable {
   final int precoUnitarioCentimos;
   final int quantidade;
   final List<String> opcoesIds;
+  final List<String> opcoesNomes;
   final String notas;
 
   const CartItemModel({
@@ -21,6 +22,7 @@ class CartItemModel extends Equatable {
     required this.precoUnitarioCentimos,
     this.quantidade = 1,
     this.opcoesIds = const [],
+    this.opcoesNomes = const [],
     this.notas = '',
   });
 
@@ -35,6 +37,7 @@ class CartItemModel extends Equatable {
     int? precoUnitarioCentimos,
     int? quantidade,
     List<String>? opcoesIds,
+    List<String>? opcoesNomes,
     String? notas,
   }) {
     return CartItemModel(
@@ -47,6 +50,7 @@ class CartItemModel extends Equatable {
           precoUnitarioCentimos ?? this.precoUnitarioCentimos,
       quantidade: quantidade ?? this.quantidade,
       opcoesIds: opcoesIds ?? this.opcoesIds,
+      opcoesNomes: opcoesNomes ?? this.opcoesNomes,
       notas: notas ?? this.notas,
     );
   }
@@ -61,6 +65,7 @@ class CartItemModel extends Equatable {
         precoUnitarioCentimos,
         quantidade,
         opcoesIds,
+        opcoesNomes,
         notas,
       ];
 }

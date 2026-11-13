@@ -401,9 +401,11 @@ class CheckoutViewSet(viewsets.GenericViewSet):
 
 class CustomerOrderViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    ViewSet para consulta de pedidos do cliente autenticado (RN-007, Secção 4 Passo 9).
+    ViewSet para consulta e ações de pedidos do cliente autenticado (RN-007, Secção 4 Passo 9).
     - `GET /api/v1/orders/`: Lista os pedidos do utilizador autenticado
     - `GET /api/v1/orders/{id}/`: Consulta detalhada de um pedido específico
+    - `POST /api/v1/orders/{id}/cancelar/`: Cancela pedido elegível (antes de entrar em preparação)
+    - `POST /api/v1/orders/{id}/avaliar/`: Regista avaliação de 1 a 5 estrelas (RN-019)
     """
 
     permission_classes = [permissions.IsAuthenticated]
@@ -416,6 +418,103 @@ class CustomerOrderViewSet(viewsets.ReadOnlyModelViewSet):
         return (
             Pedido.objects.filter(cliente=user)
             .select_related("loja", "cliente")
-            .prefetch_related("linhas__item", "linhas__opcoes_selecionadas")
+            .prefetch_related("linhas__item", "linhas__opcoes_selecionadas", "eventos")
             .order_by("-data_criacao")
         )
+
+    @action(detail=True, methods=["post"], url_path="cancelar", url_name="cancelar")
+    @transaction.atomic
+    def cancelar(self, request: Request, pk: str | None = None) -> Response:
+        """Permite ao cliente cancelar o pedido enquanto ainda não entrou em preparação na cozinha."""
+        pedido: Pedido = self.get_object()
+        estados_cancelaveis = {
+            Pedido.EstadoPedido.CRIADO,
+            Pedido.EstadoPedido.PAGAMENTO,
+            Pedido.EstadoPedido.AGUARDA_PARCEIRO,
+        }
+        if pedido.estado == Pedido.EstadoPedido.CANCELADO:
+            return Response(
+                {"erro": "pedido_ja_cancelado", "detalhe": _("Este pedido já se encontra cancelado.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if pedido.estado not in estados_cancelaveis:
+            return Response(
+                {
+                    "erro": "cancelamento_nao_permitido",
+                    "detalhe": _(
+                        "O pedido já entrou em preparação ou entrega. Para cancelar nesta fase, abra um pedido de suporte na Central de Ajuda."
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        motivo = str(request.data.get("motivo") or "Cancelado pelo cliente na aplicação").strip()[:255]
+        try:
+            pedido, _, _ = OrderStateMachine.transitar_estado(
+                pedido_id=pedido.id,
+                novo_estado=Pedido.EstadoPedido.CANCELADO,
+                ator=f"cliente:{request.user.id}",
+                dados_adicionais={"motivo_cancelamento": motivo, "origem": "app_cliente"},
+            )
+        except Exception:
+            pedido.estado = Pedido.EstadoPedido.CANCELADO
+            pedido.save(update_fields=["estado", "data_atualizacao"])
+            EventoPedido.objects.create(
+                pedido=pedido,
+                tipo_evento=EventoPedido.TipoEvento.ORDER_CANCELLED,
+                autor=f"cliente:{request.user.id}",
+                dados_adicionais={"motivo_cancelamento": motivo, "origem": "app_cliente"},
+            )
+
+        return Response(
+            {
+                "sucesso": True,
+                "mensagem": _("Pedido cancelado com sucesso."),
+                "pedido": PedidoConfirmadoOutputSerializer(pedido).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"], url_path="avaliar", url_name="avaliar")
+    @transaction.atomic
+    def avaliar(self, request: Request, pk: str | None = None) -> Response:
+        """RN-019: Regista a avaliação do cliente (1 a 5 estrelas) para o pedido e atualiza o score da loja."""
+        from decimal import Decimal
+
+        pedido: Pedido = self.get_object()
+        try:
+            estrelas = int(request.data.get("estrelas", 5))
+        except (TypeError, ValueError):
+            estrelas = 5
+        estrelas = max(1, min(5, estrelas))
+        comentario = str(request.data.get("comentario") or "").strip()[:500]
+
+        loja = pedido.loja
+        if loja:
+            score_atual = Decimal(str(loja.score_reputacao or "5.00"))
+            novo_score = ((score_atual * Decimal("4")) + Decimal(str(estrelas))) / Decimal("5")
+            loja.score_reputacao = novo_score.quantize(Decimal("0.01"))
+            loja.save(update_fields=["score_reputacao"])
+
+        EventoPedido.objects.create(
+            pedido=pedido,
+            tipo_evento=EventoPedido.TipoEvento.ORDER_COMPLETED,
+            autor=f"cliente:{request.user.id}",
+            dados_adicionais={
+                "acao": "avaliacao_cliente",
+                "estrelas": estrelas,
+                "comentario": comentario,
+            },
+        )
+
+        return Response(
+            {
+                "sucesso": True,
+                "mensagem": _("Obrigado pela sua avaliação!"),
+                "estrelas": estrelas,
+                "comentario": comentario,
+                "novo_score_loja": float(loja.score_reputacao) if loja else 5.0,
+            },
+            status=status.HTTP_200_OK,
+        )
+

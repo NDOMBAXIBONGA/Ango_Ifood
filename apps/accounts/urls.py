@@ -4,7 +4,9 @@ Rotas da aplicação 'accounts' para autenticação passwordless via OTP e concl
 from django.urls import path
 
 from apps.accounts.views import (
+    ChangePasswordView,
     CompleteRegistrationView,
+    CustomerProfileView,
     EmailPasswordLoginView,
     EmailRegisterView,
     EmailRequestOTPView,
@@ -23,6 +25,9 @@ moradas_detail = MoradaViewSet.as_view(
 )
 
 urlpatterns = [
+    # Gestão de Perfil e Segurança do Utilizador
+    path("profile/", CustomerProfileView.as_view(), name="customer-profile"),
+    path("change-password/", ChangePasswordView.as_view(), name="change-password"),
     # Gestão de Moradas do Utilizador (RN-005)
     path("moradas/", moradas_list, name="moradas-list"),
     path("moradas/<uuid:pk>/", moradas_detail, name="moradas-detail"),

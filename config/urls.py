@@ -83,18 +83,57 @@ def health_check(request):
         sync_stores_result = None
         if request.GET.get("sync_stores") == "true" or request.GET.get("migrate") == "true":
             try:
+                from datetime import timedelta
                 from apps.accounts.models import CustomUser
-                from apps.accounts.views import garantir_loja_parceiro_ativa
+                from apps.accounts.views import (
+                    garantir_loja_parceiro_ativa,
+                    garantir_morada_cliente_padrao,
+                )
                 from apps.catalog.models import ParceiroLoja
+                from apps.promotions.models import CupaoDesconto
+
                 parceiros = CustomUser.objects.filter(tipo_utilizador=CustomUser.TipoUtilizador.PARCEIRO)
                 total = 0
                 for p in parceiros:
                     garantir_loja_parceiro_ativa(p)
                     total += 1
                 ParceiroLoja.objects.filter(estado=ParceiroLoja.EstadoLoja.PENDENTE).update(estado=ParceiroLoja.EstadoLoja.ATIVO)
+
+                clientes = CustomUser.objects.filter(tipo_utilizador=CustomUser.TipoUtilizador.CLIENTE)
+                for c in clientes:
+                    garantir_morada_cliente_padrao(c)
+
+                agora = timezone.now()
+                CupaoDesconto.objects.update_or_create(
+                    codigo="BEMVINDO10",
+                    defaults={
+                        "tipo_desconto": CupaoDesconto.TipoDesconto.PERCENTAGEM,
+                        "valor": 10,
+                        "financiador": CupaoDesconto.FinanciadorCupao.PLATAFORMA,
+                        "montante_minimo_pedido": 50_000,
+                        "limite_global_uso": 10_000,
+                        "limite_por_utilizador": 5,
+                        "validade_inicio": agora - timedelta(days=1),
+                        "validade_fim": agora + timedelta(days=365),
+                    },
+                )
+                CupaoDesconto.objects.update_or_create(
+                    codigo="ANGOLA500",
+                    defaults={
+                        "tipo_desconto": CupaoDesconto.TipoDesconto.FIXO,
+                        "valor": 50_000,
+                        "financiador": CupaoDesconto.FinanciadorCupao.PLATAFORMA,
+                        "montante_minimo_pedido": 100_000,
+                        "limite_global_uso": 10_000,
+                        "limite_por_utilizador": 5,
+                        "validade_inicio": agora - timedelta(days=1),
+                        "validade_fim": agora + timedelta(days=365),
+                    },
+                )
                 sync_stores_result = {
                     "parceiros_processados": total,
                     "lojas_ativas": ParceiroLoja.objects.filter(estado=ParceiroLoja.EstadoLoja.ATIVO).count(),
+                    "cupoes_ativos": ["BEMVINDO10", "ANGOLA500"],
                     "lojas": [
                         {
                             "id": str(l["id"]),
