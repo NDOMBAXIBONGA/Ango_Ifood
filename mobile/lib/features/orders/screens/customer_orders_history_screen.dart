@@ -618,8 +618,6 @@ class _CustomerOrdersHistoryScreenState
                               builder: (_) => OrderRealTimeTrackingScreen(
                                 pedidoId: order.id,
                                 jwtToken: token,
-                                baseHttpUrl: AppEnvironmentConfig.baseHttpUrl,
-                                baseWsUrl: AppEnvironmentConfig.baseWsUrl,
                                 nomeLoja: order.lojaNome,
                                 moradaLojaTexto: 'Restaurante ${order.lojaNome}',
                                 coordenadasLoja:
@@ -629,6 +627,9 @@ class _CustomerOrdersHistoryScreenState
                                   CartService.instance.latitude,
                                   CartService.instance.longitude,
                                 ),
+                                pinEntrega: order.pinEntrega.isNotEmpty
+                                    ? order.pinEntrega
+                                    : '7429',
                               ),
                             ),
                           );

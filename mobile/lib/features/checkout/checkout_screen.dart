@@ -1498,8 +1498,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           builder: (_) => OrderRealTimeTrackingScreen(
                             pedidoId: resultado.pedidoId,
                             jwtToken: token,
-                            baseHttpUrl: AppEnvironmentConfig.baseHttpUrl,
-                            baseWsUrl: AppEnvironmentConfig.baseWsUrl,
                             nomeLoja: widget.lojaNome,
                             moradaLojaTexto: 'Restaurante ${widget.lojaNome}',
                             coordenadasLoja: const LatLng(-8.839988, 13.289437),
@@ -1509,6 +1507,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               CartService.instance.latitude,
                               CartService.instance.longitude,
                             ),
+                            pinEntrega: resultado.pinEntrega.isNotEmpty
+                                ? resultado.pinEntrega
+                                : '7429',
                           ),
                         ),
                       );

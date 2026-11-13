@@ -22,6 +22,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import '../../core/network/app_environment_config.dart';
+
 // ============================================================================
 // 1. MODELO DE DADOS: TrackingLocationModel (Secção 12.1)
 // ============================================================================
@@ -108,7 +110,7 @@ class TrackingWebSocketService {
   bool _isDisposed = false;
 
   TrackingWebSocketService({
-    this.baseUrl = 'ws://10.0.2.2:8000', // Host padrão para emulador Android local
+    this.baseUrl = AppEnvironmentConfig.baseWebsocketUrl,
   });
 
   Stream<TrackingLocationModel> get locationStream => _locationController.stream;

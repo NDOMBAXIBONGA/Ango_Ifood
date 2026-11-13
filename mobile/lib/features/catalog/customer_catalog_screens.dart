@@ -2400,7 +2400,7 @@ class _CustomerAddressSelectionSheetState
   }
 
   Future<Dio?> _buildAuthDio() async {
-    final token = await const SecureTokenStorage().getAccessToken();
+    final token = await SecureTokenStorage().getAccessToken();
     if (token == null || token.isEmpty) return null;
     return Dio(
       BaseOptions(
