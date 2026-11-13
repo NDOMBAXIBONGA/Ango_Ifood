@@ -38,29 +38,23 @@ class DiscoveryQueryParamsSerializer(serializers.Serializer):
     lat = serializers.FloatField(
         min_value=-90.0,
         max_value=90.0,
-        required=True,
-        error_messages={
-            "required": _("RN-025: O parâmetro 'lat' (latitude) é obrigatório para a pesquisa geoespacial."),
-            "invalid": _("RN-025: O parâmetro 'lat' deve ser um número decimal válido entre -90.0 e 90.0."),
-        },
+        required=False,
+        default=-8.8368,
         help_text=_("RN-025: Latitude da morada do cliente em graus decimais (WGS84 / SRID 4326)."),
     )
     lng = serializers.FloatField(
         min_value=-180.0,
         max_value=180.0,
-        required=True,
-        error_messages={
-            "required": _("RN-025: O parâmetro 'lng' (longitude) é obrigatório para a pesquisa geoespacial."),
-            "invalid": _("RN-025: O parâmetro 'lng' deve ser um número decimal válido entre -180.0 e 180.0."),
-        },
+        required=False,
+        default=13.2343,
         help_text=_("RN-025: Longitude da morada do cliente em graus decimais (WGS84 / SRID 4326)."),
     )
     show_closed = serializers.BooleanField(
-        default=False,
+        default=True,
         required=False,
         help_text=_(
             "RN-026: Se True, inclui lojas fechadas enviando-as para o fim da ordenação. "
-            "Se False (padrão), omite lojas fechadas."
+            "Se False, omite lojas fechadas."
         ),
     )
     incluir_fechadas = serializers.BooleanField(
@@ -114,11 +108,21 @@ class DiscoveryQueryParamsSerializer(serializers.Serializer):
     )
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        # Harmoniza aliases
-        if "incluir_fechadas" in attrs and "show_closed" not in attrs:
-            attrs["show_closed"] = attrs["incluir_fechadas"]
-        elif attrs.get("show_closed") is None and attrs.get("incluir_fechadas") is not None:
-            attrs["show_closed"] = attrs["incluir_fechadas"]
+        # Harmoniza inclusão de lojas abertas e fechadas
+        if "incluir_fechadas" in self.initial_data:
+            val = self.initial_data.get("incluir_fechadas")
+            if isinstance(val, str):
+                attrs["show_closed"] = val.lower() in ("true", "1", "yes")
+            else:
+                attrs["show_closed"] = bool(val)
+        elif "show_closed" in self.initial_data:
+            val = self.initial_data.get("show_closed")
+            if isinstance(val, str):
+                attrs["show_closed"] = val.lower() in ("true", "1", "yes")
+            else:
+                attrs["show_closed"] = bool(val)
+        else:
+            attrs["show_closed"] = True
 
         if "score_min" in attrs and "avaliacao_min" not in attrs:
             attrs["avaliacao_min"] = attrs["score_min"]
@@ -160,6 +164,9 @@ class StoreDiscoverySerializer(serializers.ModelSerializer):
     )
     latitude = serializers.SerializerMethodField()
     longitude = serializers.SerializerMethodField()
+    imagem_url = serializers.SerializerMethodField()
+    tipo_cozinha = serializers.SerializerMethodField()
+    taxa_entrega = serializers.SerializerMethodField()
 
     class Meta:
         model = ParceiroLoja
@@ -170,6 +177,9 @@ class StoreDiscoverySerializer(serializers.ModelSerializer):
             "contacto",
             "latitude",
             "longitude",
+            "imagem_url",
+            "tipo_cozinha",
+            "taxa_entrega",
             "raio_entrega_km",
             "estado",
             "score_reputacao",
@@ -183,6 +193,21 @@ class StoreDiscoverySerializer(serializers.ModelSerializer):
             "eta_minutos_estimado",
         )
         read_only_fields = fields
+
+    def get_imagem_url(self, obj: ParceiroLoja) -> str:
+        return (
+            getattr(obj, "imagem_url", None)
+            or "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800"
+        )
+
+    def get_tipo_cozinha(self, obj: ParceiroLoja) -> str:
+        cat = obj.categorias.first()
+        return cat.nome if cat else "Restaurante"
+
+    def get_taxa_entrega(self, obj: ParceiroLoja) -> int:
+        if obj.is_entrega_gratis:
+            return 0
+        return 50000
 
     def get_latitude(self, obj: ParceiroLoja) -> float | None:
         return round(float(obj.geolocalizacao.y), 6) if obj.geolocalizacao else None

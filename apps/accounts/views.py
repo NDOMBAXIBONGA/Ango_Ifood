@@ -73,6 +73,69 @@ def obter_ip_cliente(request: Request) -> str | None:
     except ValueError:
         return None
 
+
+def garantir_loja_parceiro_ativa(user: CustomUser) -> None:
+    """
+    RN-010 / RN-011: Garante que o parceiro possui uma loja comercial associada e ATIVA,
+    com coordenadas em Luanda, raio de cobertura alargado (25km) e turnos diários configurados
+    (08:00 às 23:00) para descoberta imediata pelos clientes.
+    """
+    try:
+        from datetime import time
+        from decimal import Decimal
+        from django.contrib.gis.geos import Point
+        from apps.catalog.models import CategoriaItem, HorarioFuncionamento, ParceiroLoja
+
+        loja = user.lojas_geridas.first()
+        if not loja:
+            nif_gerado = f"NIF-{user.id.hex[:8].upper()}"
+            loja = ParceiroLoja.objects.create(
+                proprietario=user,
+                nome=f"Loja de {user.nome or 'Parceiro'}",
+                nif=nif_gerado,
+                morada_texto="Luanda, Angola",
+                contacto=user.telemovel or "",
+                geolocalizacao=Point(13.2343, -8.8368, srid=4326),
+                raio_entrega_km=Decimal("25.00"),
+                estado=ParceiroLoja.EstadoLoja.ATIVO,
+                score_reputacao=Decimal("5.00"),
+                is_entrega_gratis=False,
+            )
+        else:
+            campos_atualizar = []
+            if loja.estado != ParceiroLoja.EstadoLoja.ATIVO:
+                loja.estado = ParceiroLoja.EstadoLoja.ATIVO
+                campos_atualizar.append("estado")
+            if float(loja.raio_entrega_km or 0) < 20.0:
+                loja.raio_entrega_km = Decimal("25.00")
+                campos_atualizar.append("raio_entrega_km")
+            if not loja.geolocalizacao:
+                loja.geolocalizacao = Point(13.2343, -8.8368, srid=4326)
+                campos_atualizar.append("geolocalizacao")
+            if campos_atualizar:
+                loja.save(update_fields=campos_atualizar)
+
+        # Configura horários diários de segunda a domingo
+        if not loja.horarios.exists():
+            for dia in range(7):
+                HorarioFuncionamento.objects.create(
+                    loja=loja,
+                    dia_semana=dia,
+                    hora_abertura=time(8, 0),
+                    hora_fecho=time(23, 0),
+                    is_pausa_temporaria=False,
+                )
+
+        # Cria categoria inicial no cardápio
+        if not loja.categorias.exists():
+            CategoriaItem.objects.create(
+                loja=loja,
+                nome="Especialidades",
+                ordem_exibicao=0,
+            )
+    except Exception as loja_err:
+        logger.warning("Aviso ao garantir loja parceira ativa: %s", loja_err)
+
 # Parâmetros operacionais e SLAs da regra RN-002 (Secções 6.1 e 8)
 OTP_EXPIRACAO_MINUTOS = 5
 OTP_MAX_TENTATIVAS = 5
@@ -541,21 +604,7 @@ class CompleteRegistrationView(APIView):
 
             # Auto-provisionamento de Loja ou Perfil Logístico conforme o papel funcional
             if tipo_solicitado == CustomUser.TipoUtilizador.PARCEIRO:
-                try:
-                    from django.contrib.gis.geos import Point
-                    from apps.catalog.models import ParceiroLoja
-                    if not user.lojas_geridas.exists():
-                        nif_gerado = f"NIF-{user.id.hex[:8].upper()}"
-                        ParceiroLoja.objects.create(
-                            proprietario=user,
-                            nome=f"Loja de {user.nome}",
-                            nif=nif_gerado,
-                            morada_texto="Luanda, Angola",
-                            geolocalizacao=Point(13.2343, -8.8368, srid=4326),
-                            raio_entrega_km=8.0,
-                        )
-                except Exception as loja_err:
-                    logger.warning("Aviso ao auto-provisionar loja parceira: %s", loja_err)
+                garantir_loja_parceiro_ativa(user)
 
             if tipo_solicitado == CustomUser.TipoUtilizador.ESTAFETA:
                 try:
@@ -959,21 +1008,7 @@ class EmailRegisterView(APIView):
 
         # Auto-provisionamento de Loja ou Perfil Logístico conforme o papel funcional
         if tipo_solicitado == CustomUser.TipoUtilizador.PARCEIRO:
-            try:
-                from django.contrib.gis.geos import Point
-                from apps.catalog.models import ParceiroLoja
-                if not user.lojas_geridas.exists():
-                    nif_gerado = f"NIF-{user.id.hex[:8].upper()}"
-                    ParceiroLoja.objects.create(
-                        proprietario=user,
-                        nome=f"Loja de {user.nome}",
-                        nif=nif_gerado,
-                        morada_texto="Luanda, Angola",
-                        geolocalizacao=Point(13.2343, -8.8368, srid=4326),
-                        raio_entrega_km=8.0,
-                    )
-            except Exception as loja_err:
-                logger.warning("Aviso ao auto-provisionar loja parceira: %s", loja_err)
+            garantir_loja_parceiro_ativa(user)
 
         if tipo_solicitado == CustomUser.TipoUtilizador.ESTAFETA:
             try:
@@ -1204,21 +1239,8 @@ class EmailPasswordLoginView(APIView):
                 user.save(update_fields=["estado", "is_active"])
 
             # Auto-provisionamento resiliente de perfil de Loja ou Estafeta se ainda não existirem
-            if user.tipo_utilizador == CustomUser.TipoUtilizador.PARCEIRO and not user.lojas_geridas.exists():
-                try:
-                    from django.contrib.gis.geos import Point
-                    from apps.catalog.models import ParceiroLoja
-                    nif_gerado = f"NIF-{user.id.hex[:8].upper()}"
-                    ParceiroLoja.objects.create(
-                        proprietario=user,
-                        nome=f"Loja de {user.nome}",
-                        nif=nif_gerado,
-                        morada_texto="Luanda, Angola",
-                        geolocalizacao=Point(13.2343, -8.8368, srid=4326),
-                        raio_entrega_km=8.0,
-                    )
-                except Exception as l_err:
-                    logger.warning("Aviso ao auto-provisionar loja parceira no login: %s", l_err)
+            if user.tipo_utilizador == CustomUser.TipoUtilizador.PARCEIRO:
+                garantir_loja_parceiro_ativa(user)
 
             if user.tipo_utilizador == CustomUser.TipoUtilizador.ESTAFETA and not hasattr(user, "perfil_estafeta"):
                 try:

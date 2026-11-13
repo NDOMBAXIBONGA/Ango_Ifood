@@ -96,7 +96,7 @@ jobs:
           WRAPPER_PROP="android/gradle/wrapper/gradle-wrapper.properties"
           if [ -f "$WRAPPER_PROP" ]; then
             echo "A configurar espelho resiliente do Gradle Wrapper (Anti-504 Gateway Timeout)..."
-            sed -i 's|https\\://services.gradle.org/distributions/|https\\://mirrors.cloud.tencent.com/gradle/|g' "$WRAPPER_PROP"
+            sed -i -E 's|distributionUrl=.*gradle-([0-9.]+)-([a-z]+)\.zip|distributionUrl=https\\://mirrors.cloud.tencent.com/gradle/gradle-\1-\2.zip|g' "$WRAPPER_PROP"
             echo "Conteúdo de $WRAPPER_PROP:"
             cat "$WRAPPER_PROP"
           fi
@@ -123,7 +123,7 @@ jobs:
           # Garante espelho resiliente do Gradle Wrapper antes de iniciar o assembleRelease (Anti-504)
           WRAPPER_PROP="android/gradle/wrapper/gradle-wrapper.properties"
           if [ -f "$WRAPPER_PROP" ]; then
-            sed -i 's|https\\://services.gradle.org/distributions/|https\\://mirrors.cloud.tencent.com/gradle/|g' "$WRAPPER_PROP"
+            sed -i -E 's|distributionUrl=.*gradle-([0-9.]+)-([a-z]+)\.zip|distributionUrl=https\\://mirrors.cloud.tencent.com/gradle/gradle-\1-\2.zip|g' "$WRAPPER_PROP"
           fi
 
           # A flag --no-tree-shake-icons impede que o compilador elimine glifos de ícones

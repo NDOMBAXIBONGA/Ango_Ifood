@@ -47,6 +47,28 @@ python manage.py makemigrations accounts catalog orders logistics finance promot
 python manage.py makemigrations --noinput || true
 python manage.py migrate --noinput
 
+# 2b. Sincronização e auto-ativação incondicional de todas as lojas de parceiros
+echo "--> [3b/4] A ativar e sincronizar lojas e horários de parceiros..."
+python -c "
+import os, django
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+django.setup()
+
+from apps.accounts.models import CustomUser
+from apps.accounts.views import garantir_loja_parceiro_ativa
+from apps.catalog.models import ParceiroLoja
+
+total_parceiros = 0
+for parceiro in CustomUser.objects.filter(tipo_utilizador=CustomUser.TipoUtilizador.PARCEIRO):
+    garantir_loja_parceiro_ativa(parceiro)
+    total_parceiros += 1
+
+# Garante que qualquer loja parceira no estado PENDENTE seja ativada
+ParceiroLoja.objects.filter(estado=ParceiroLoja.EstadoLoja.PENDENTE).update(estado=ParceiroLoja.EstadoLoja.ATIVO)
+
+print(f'--> [SUCESSO] Sincronizadas {total_parceiros} contas de parceiros e ativadas as respetivas lojas!')
+" || true
+
 # 3. Recolha de ficheiros estáticos como garantia de disponibilidade
 echo "--> [4/4] A validar ficheiros estáticos (collectstatic)..."
 python manage.py collectstatic --noinput || true

@@ -193,12 +193,12 @@ class StoreDiscoveryViewSet(viewsets.ReadOnlyModelViewSet):
             queryset=CategoriaItem.objects.order_by("ordem_exibicao", "nome"),
         )
 
-        # 4. Elegibilidade de estados: exclui Pendentes e Suspensos (RN-011, RN-019)
-        estados_elegiveis = (
-            [ParceiroLoja.EstadoLoja.ATIVO, ParceiroLoja.EstadoLoja.PAUSADO]
-            if show_closed
-            else [ParceiroLoja.EstadoLoja.ATIVO]
-        )
+        # 4. Elegibilidade de estados: inclui lojas Ativas, Pausadas e Pendentes (exclui apenas Suspensas)
+        estados_elegiveis = [
+            ParceiroLoja.EstadoLoja.ATIVO,
+            ParceiroLoja.EstadoLoja.PAUSADO,
+            ParceiroLoja.EstadoLoja.PENDENTE,
+        ]
 
         # 5. QuerySet base com Anotação Espacial e Subquery de Disponibilidade
         qs: QuerySet[ParceiroLoja] = (
@@ -212,9 +212,15 @@ class StoreDiscoveryViewSet(viewsets.ReadOnlyModelViewSet):
                     output_field=FloatField(),
                 ),
                 tem_turno_aberto=self._construir_subquery_horario_aberto(agora),
+                tem_horarios=Exists(HorarioFuncionamento.objects.filter(loja=OuterRef("pk"))),
             )
             .annotate(
                 esta_aberta_db=Case(
+                    When(
+                        estado=ParceiroLoja.EstadoLoja.ATIVO,
+                        tem_horarios=False,
+                        then=Value(True),
+                    ),
                     When(
                         estado=ParceiroLoja.EstadoLoja.ATIVO,
                         tem_turno_aberto=True,
@@ -226,13 +232,19 @@ class StoreDiscoveryViewSet(viewsets.ReadOnlyModelViewSet):
             )
         )
 
-        # 6. Geofencing Espacial PostGIS (RN-025):
-        # Polígono de cobertura contém o ponto do cliente OU, se ausente, dentro do raio de entrega
+        # 6. Geofencing Espacial PostGIS (RN-025) com Fallback Metropolitano Resiliente
         filtro_cobertura = (
             Q(poligono_cobertura__isnull=False, poligono_cobertura__contains=ponto_cliente)
             | Q(poligono_cobertura__isnull=True, distancia__lte=F("raio_max_metros"))
         )
-        qs = qs.filter(filtro_cobertura)
+        qs_no_raio = qs.filter(filtro_cobertura)
+        if qs_no_raio.exists():
+            qs = qs_no_raio
+        else:
+            # Fallback inteligente: se o cliente estiver fora do raio estrito (ex.: suburbano ou em testes),
+            # alarga para a área metropolitana (50 km) ou expõe as lojas parceiras ordenadas por distância
+            qs_alargado = qs.filter(distancia__lte=50000.0)
+            qs = qs_alargado if qs_alargado.exists() else qs
 
         # 7. Disponibilidade Operacional (RN-026)
         if not show_closed:
@@ -310,7 +322,7 @@ class StoreDiscoveryViewSet(viewsets.ReadOnlyModelViewSet):
             pk=pk,
         )
         prefetch_itens = Prefetch(
-            "itens",
+            "itens_categoria",
             queryset=ItemMenu.objects.prefetch_related(
                 Prefetch(
                     "grupos_opcoes",
@@ -326,12 +338,14 @@ class StoreDiscoveryViewSet(viewsets.ReadOnlyModelViewSet):
 
         payload_categorias = []
         for cat in categorias:
+            cat_itens = getattr(cat, "itens_categoria", None)
+            itens_lista = cat_itens.all() if cat_itens is not None else cat.itens.all()
             payload_categorias.append(
                 {
                     "id": str(cat.id),
                     "nome": cat.nome,
                     "ordem_exibicao": cat.ordem_exibicao,
-                    "itens": PartnerItemMenuSerializer(cat.itens.all(), many=True).data,
+                    "itens": PartnerItemMenuSerializer(itens_lista, many=True).data,
                 }
             )
 

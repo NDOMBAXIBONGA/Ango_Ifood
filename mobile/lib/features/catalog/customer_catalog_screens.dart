@@ -83,7 +83,7 @@ class StoreSummaryModel extends Equatable {
         : double.tryParse('$scoreRaw') ?? 5.0;
 
     return StoreSummaryModel(
-      id: json['id'] as String,
+      id: '${json['id']}',
       nome: (json['nome'] as String?) ?? 'Loja Parceira',
       moradaTexto: (json['morada_texto'] as String?) ?? '',
       imagemUrl: (json['imagem_url'] as String?) ??

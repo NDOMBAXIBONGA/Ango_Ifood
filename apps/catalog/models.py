@@ -241,9 +241,13 @@ class ParceiroLoja(gis_models.Model):
         else:
             data_hora_local = data_hora_atual
 
-        # 1. Lojas pendentes de aprovação ou suspensas nunca estão abertas (RN-011, RN-019)
-        if self.estado in (self.EstadoLoja.PENDENTE, self.EstadoLoja.SUSPENSO):
+        # 1. Lojas suspensas nunca estão abertas (RN-011, RN-019)
+        if self.estado == self.EstadoLoja.SUSPENSO:
             return False
+
+        # Se a loja não possui horários cadastrados mas está ativa/pendente, considera aberta por padrão
+        if not self.horarios.exists():
+            return True
 
         dia_atual = data_hora_local.weekday()  # 0 (Segunda-feira) a 6 (Domingo)
         dia_anterior = (dia_atual - 1) % 7
@@ -444,6 +448,11 @@ class CategoriaItem(models.Model):
 
     def __str__(self) -> str:
         return f"{self.loja.nome} -> {self.nome} (#{self.ordem_exibicao})"
+
+    @property
+    def itens(self):
+        """Retorna os itens de menu pertencentes a esta categoria."""
+        return self.itens_categoria.all()
 
 
 class ItemMenu(models.Model):

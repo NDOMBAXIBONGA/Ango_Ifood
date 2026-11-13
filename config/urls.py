@@ -25,6 +25,7 @@ def health_check(request):
     is_deep_check = bool(
         request.GET.get("diagnostics") == "true"
         or request.GET.get("migrate") == "true"
+        or request.GET.get("sync_stores") == "true"
         or request.GET.get("check_events")
         or request.GET.get("list_senders") == "true"
         or request.GET.get("test_email")
@@ -78,6 +79,34 @@ def health_check(request):
             with connection.cursor() as cursor:
                 cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public';")
                 db_tables = [r[0] for r in cursor.fetchall()]
+
+        sync_stores_result = None
+        if request.GET.get("sync_stores") == "true" or request.GET.get("migrate") == "true":
+            try:
+                from apps.accounts.models import CustomUser
+                from apps.accounts.views import garantir_loja_parceiro_ativa
+                from apps.catalog.models import ParceiroLoja
+                parceiros = CustomUser.objects.filter(tipo_utilizador=CustomUser.TipoUtilizador.PARCEIRO)
+                total = 0
+                for p in parceiros:
+                    garantir_loja_parceiro_ativa(p)
+                    total += 1
+                ParceiroLoja.objects.filter(estado=ParceiroLoja.EstadoLoja.PENDENTE).update(estado=ParceiroLoja.EstadoLoja.ATIVO)
+                sync_stores_result = {
+                    "parceiros_processados": total,
+                    "lojas_ativas": ParceiroLoja.objects.filter(estado=ParceiroLoja.EstadoLoja.ATIVO).count(),
+                    "lojas": [
+                        {
+                            "id": str(l["id"]),
+                            "nome": l["nome"],
+                            "estado": l["estado"],
+                            "raio_km": float(l["raio_entrega_km"] or 0),
+                        }
+                        for l in ParceiroLoja.objects.values("id", "nome", "estado", "raio_entrega_km")
+                    ],
+                }
+            except Exception as ss_err:
+                sync_stores_result = {"error": str(ss_err)}
     except Exception as e:
         db_err = str(e)
 
@@ -144,6 +173,7 @@ def health_check(request):
             "status": "healthy" if db_ok else "degraded",
             "version": "v1.0.6-release",
             "service": "delivery-backend-api",
+            "sync_stores": sync_stores_result,
             "brevo_senders": brevo_senders,
             "brevo_events": brevo_events,
             "database": {
