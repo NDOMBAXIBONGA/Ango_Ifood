@@ -14,10 +14,12 @@ import '../models/customer_order_summary_model.dart';
 /// e "Anteriores" (pedidos concluídos ou cancelados, com Pedir Novamente e Avaliação RN-019).
 class CustomerOrdersHistoryScreen extends StatefulWidget {
   final VoidCallback? onExploreTap;
+  final int refreshTrigger;
 
   const CustomerOrdersHistoryScreen({
     super.key,
     this.onExploreTap,
+    this.refreshTrigger = 0,
   });
 
   @override
@@ -39,6 +41,14 @@ class _CustomerOrdersHistoryScreenState
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _loadOrders();
+  }
+
+  @override
+  void didUpdateWidget(covariant CustomerOrdersHistoryScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.refreshTrigger != oldWidget.refreshTrigger) {
+      _loadOrders();
+    }
   }
 
   @override
@@ -278,6 +288,8 @@ class _CustomerOrdersHistoryScreenState
         imagemUrl: order.lojaImagem,
         precoUnitarioCentimos: line.precoUnitarioCentimos,
         quantidade: line.quantidade,
+        opcoesIds: line.opcoesIds,
+        opcoesNomes: line.opcoesNomes,
         notas: line.notas,
       );
     }

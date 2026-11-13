@@ -86,7 +86,14 @@ def garantir_loja_parceiro_ativa(user: CustomUser) -> None:
         from datetime import time
         from decimal import Decimal
         from django.contrib.gis.geos import Point
-        from apps.catalog.models import CategoriaItem, HorarioFuncionamento, ParceiroLoja
+        from apps.catalog.models import (
+            CategoriaItem,
+            GrupoOpcao,
+            HorarioFuncionamento,
+            ItemMenu,
+            OpcaoItem,
+            ParceiroLoja,
+        )
 
         loja = user.lojas_geridas.first()
         if not loja:
@@ -117,23 +124,185 @@ def garantir_loja_parceiro_ativa(user: CustomUser) -> None:
             if campos_atualizar:
                 loja.save(update_fields=campos_atualizar)
 
-        # Configura horários diários de segunda a domingo
+        # Configura horários diários de segunda a domingo (00:00 às 23:59 para cobertura contínua)
         if not loja.horarios.exists():
             for dia in range(7):
                 HorarioFuncionamento.objects.create(
                     loja=loja,
                     dia_semana=dia,
-                    hora_abertura=time(8, 0),
-                    hora_fecho=time(23, 0),
+                    hora_abertura=time(0, 0),
+                    hora_fecho=time(23, 59),
                     is_pausa_temporaria=False,
                 )
+        else:
+            loja.horarios.filter(
+                hora_abertura=time(8, 0),
+                hora_fecho=time(23, 0),
+            ).update(hora_abertura=time(0, 0), hora_fecho=time(23, 59))
 
-        # Cria categoria inicial no cardápio
-        if not loja.categorias.exists():
-            CategoriaItem.objects.create(
+        # Cria categorias e cardápio inicial completo se a loja ainda não tiver itens publicados
+        cat_esp, _ = CategoriaItem.objects.get_or_create(
+            loja=loja,
+            nome="Especialidades",
+            defaults={"ordem_exibicao": 0},
+        )
+        if not ItemMenu.objects.filter(loja=loja).exists():
+            cat_pizzas, _ = CategoriaItem.objects.get_or_create(
                 loja=loja,
-                nome="Especialidades",
-                ordem_exibicao=0,
+                nome="Pizzas & Massas",
+                defaults={"ordem_exibicao": 1},
+            )
+            cat_bebidas, _ = CategoriaItem.objects.get_or_create(
+                loja=loja,
+                nome="Bebidas & Sobremesas",
+                defaults={"ordem_exibicao": 2},
+            )
+
+            item_burger = ItemMenu.objects.create(
+                loja=loja,
+                categoria=cat_esp,
+                nome="Hambúrguer Artesanal Luanda Duplo",
+                descricao="Dois hambúrgueres de carne bovina grelhada na brasa (360g), queijo cheddar duplo, cebola caramelizada, alface crocante e molho especial da casa em pão brioche tostado.",
+                preco=350_000,  # 3.500,00 Kz
+                imagem_url="https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800",
+                alergenos=["Glúten", "Lactose"],
+                is_disponivel=True,
+            )
+            grp_ponto = GrupoOpcao.objects.create(
+                item=item_burger,
+                nome="Ponto da Carne",
+                is_obrigatorio=True,
+                minimo_escolhas=1,
+                maximo_escolhas=1,
+            )
+            OpcaoItem.objects.create(
+                grupo=grp_ponto,
+                nome="Ao Ponto (Suculento)",
+                preco_adicional=0,
+                is_disponivel=True,
+            )
+            OpcaoItem.objects.create(
+                grupo=grp_ponto,
+                nome="Bem Passado",
+                preco_adicional=0,
+                is_disponivel=True,
+            )
+            grp_extras = GrupoOpcao.objects.create(
+                item=item_burger,
+                nome="Adicionais & Extras",
+                is_obrigatorio=False,
+                minimo_escolhas=0,
+                maximo_escolhas=3,
+            )
+            OpcaoItem.objects.create(
+                grupo=grp_extras,
+                nome="Bacon Crocante Extra",
+                preco_adicional=60_000,  # +600 Kz
+                is_disponivel=True,
+            )
+            OpcaoItem.objects.create(
+                grupo=grp_extras,
+                nome="Queijo Cheddar Extra",
+                preco_adicional=50_000,  # +500 Kz
+                is_disponivel=True,
+            )
+            OpcaoItem.objects.create(
+                grupo=grp_extras,
+                nome="Ovo Estrelado",
+                preco_adicional=40_000,  # +400 Kz
+                is_disponivel=True,
+            )
+
+            item_frango = ItemMenu.objects.create(
+                loja=loja,
+                categoria=cat_esp,
+                nome="Frango Grelhado no Carvão com Batata Frita",
+                descricao="Meio frango marinado em especiarias angolanas e grelhado no carvão, acompanhado de batata frita estaladiça e salada mista.",
+                preco=480_000,  # 4.800,00 Kz
+                imagem_url="https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?w=800",
+                alergenos=[],
+                is_disponivel=True,
+            )
+            grp_molho = GrupoOpcao.objects.create(
+                item=item_frango,
+                nome="Escolha o Molho",
+                is_obrigatorio=True,
+                minimo_escolhas=1,
+                maximo_escolhas=1,
+            )
+            OpcaoItem.objects.create(
+                grupo=grp_molho,
+                nome="Jindungo / Piri-Piri Tradicional",
+                preco_adicional=0,
+                is_disponivel=True,
+            )
+            OpcaoItem.objects.create(
+                grupo=grp_molho,
+                nome="Molho de Alho e Ervas",
+                preco_adicional=0,
+                is_disponivel=True,
+            )
+            OpcaoItem.objects.create(
+                grupo=grp_molho,
+                nome="Sem Molho Picante",
+                preco_adicional=0,
+                is_disponivel=True,
+            )
+
+            ItemMenu.objects.create(
+                loja=loja,
+                categoria=cat_esp,
+                nome="Mufete Tradicional da Ilha",
+                descricao="Cacusso fresco grelhado na brasa acompanhado de feijão de óleo de palma, banana-pão cozida, batata-doce, mandioca e farinha musseque.",
+                preco=650_000,  # 6.500,00 Kz
+                imagem_url="https://images.unsplash.com/photo-1544025162-d76694265947?w=800",
+                alergenos=["Peixe"],
+                is_disponivel=True,
+            )
+
+            item_pizza = ItemMenu.objects.create(
+                loja=loja,
+                categoria=cat_pizzas,
+                nome="Pizza Familiar Suprema de Luanda",
+                descricao="Molho de tomate artesanal, queijo mozzarella derretido, chouriço, fiambre, pimentos, cebola roxa e azeitonas pretas (8 fatias).",
+                preco=550_000,  # 5.500,00 Kz
+                imagem_url="https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800",
+                alergenos=["Glúten", "Lactose"],
+                is_disponivel=True,
+            )
+            grp_borda = GrupoOpcao.objects.create(
+                item=item_pizza,
+                nome="Tipo de Borda",
+                is_obrigatorio=False,
+                minimo_escolhas=0,
+                maximo_escolhas=1,
+            )
+            OpcaoItem.objects.create(
+                grupo=grp_borda,
+                nome="Borda Recheada com Queijo Creme",
+                preco_adicional=80_000,  # +800 Kz
+                is_disponivel=True,
+            )
+
+            ItemMenu.objects.create(
+                loja=loja,
+                categoria=cat_bebidas,
+                nome="Sumo Natural de Múcua / Maracujá (500ml)",
+                descricao="Sumo 100% natural preparado na hora, bem fresco.",
+                preco=120_000,  # 1.200,00 Kz
+                imagem_url="https://images.unsplash.com/photo-1613478223719-2ab802602423?w=800",
+                alergenos=[],
+                is_disponivel=True,
+            )
+            ItemMenu.objects.create(
+                loja=loja,
+                categoria=cat_bebidas,
+                nome="Pudim Caseiro de Leite Condensado",
+                descricao="Fatia generosa de pudim tradicional com calda de caramelo dourado.",
+                preco=150_000,  # 1.500,00 Kz
+                imagem_url="https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=800",
+                alergenos=["Lactose", "Ovos"],
+                is_disponivel=True,
             )
     except Exception as loja_err:
         logger.warning("Aviso ao garantir loja parceira ativa: %s", loja_err)

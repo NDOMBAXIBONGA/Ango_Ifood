@@ -381,15 +381,20 @@ class CheckoutPricingService:
             )
 
         # RN-040: Validar estritamente se TODOS os itens pertencem à mesma loja indicada em `loja_id`
-        itens_outra_loja = [
-            {
-                "item_id": str(item.id),
-                "nome": item.nome,
-                "loja_item_id": str(item.categoria.loja_id),
-            }
-            for item in mapa_itens_bd.values()
-            if str(item.categoria.loja_id) != str(loja.id)
-        ]
+        itens_outra_loja = []
+        for item in mapa_itens_bd.values():
+            loja_do_item = str(
+                item.loja_id
+                or (item.categoria.loja_id if item.categoria else "")
+            )
+            if loja_do_item and loja_do_item != str(loja.id):
+                itens_outra_loja.append(
+                    {
+                        "item_id": str(item.id),
+                        "nome": item.nome,
+                        "loja_item_id": loja_do_item,
+                    }
+                )
         if itens_outra_loja:
             raise CheckoutPricingError(
                 mensagem=_(

@@ -1091,15 +1091,48 @@ class _HomeScreenState extends State<HomeScreen> {
                     }
                     if (state is StoreDiscoveryLoaded) {
                       if (state.stores.isEmpty) {
+                        final hasActiveFilters = state.selectedCuisine != null ||
+                            state.minRating != null ||
+                            state.onlyFreeDelivery ||
+                            state.searchQuery.trim().isNotEmpty;
                         return Center(
                           child: Padding(
                             padding: const EdgeInsets.all(24),
-                            child: Text(
-                              'Nenhuma loja encontrada com cobertura para esta morada ou filtros selecionados (RN-025).',
-                              textAlign: TextAlign.center,
-                              style: textTheme.bodyLarge?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.storefront_outlined,
+                                  size: 56,
+                                  color: colorScheme.outline,
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'Nenhuma loja encontrada com cobertura para esta morada ou filtros selecionados (RN-025).',
+                                  textAlign: TextAlign.center,
+                                  style: textTheme.bodyLarge?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                if (hasActiveFilters) ...[
+                                  const SizedBox(height: 16),
+                                  FilledButton.tonalIcon(
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      _dispatchFilterUpdate(
+                                        state,
+                                        clearCuisine: true,
+                                        clearMinRating: true,
+                                        onlyFreeDelivery: false,
+                                        searchQuery: '',
+                                      );
+                                    },
+                                    icon: const Icon(
+                                        Icons.filter_alt_off_rounded),
+                                    label: const Text('Limpar Filtros'),
+                                  ),
+                                ],
+                              ],
                             ),
                           ),
                         );

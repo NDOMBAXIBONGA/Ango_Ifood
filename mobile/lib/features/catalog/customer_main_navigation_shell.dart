@@ -29,6 +29,7 @@ class CustomerMainNavigationShell extends StatefulWidget {
 class _CustomerMainNavigationShellState
     extends State<CustomerMainNavigationShell> {
   late int _currentIndex;
+  int _ordersRefreshCount = 0;
   late final CatalogRepository _catalogRepository;
 
   @override
@@ -43,6 +44,9 @@ class _CustomerMainNavigationShellState
   void _onTabSelected(int index) {
     setState(() {
       _currentIndex = index;
+      if (index == 2) {
+        _ordersRefreshCount++;
+      }
     });
   }
 
@@ -91,6 +95,7 @@ class _CustomerMainNavigationShellState
                   ),
                   CustomerOrdersHistoryScreen(
                     onExploreTap: () => _onTabSelected(0),
+                    refreshTrigger: _ordersRefreshCount,
                   ),
                   const CustomerProfileScreen(),
                 ],

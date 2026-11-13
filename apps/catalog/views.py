@@ -349,6 +349,27 @@ class StoreDiscoveryViewSet(viewsets.ReadOnlyModelViewSet):
                 }
             )
 
+        # Inclui também eventuais itens criados diretamente na loja sem categoria associada
+        itens_sem_cat = (
+            ItemMenu.objects.filter(loja=loja, categoria__isnull=True)
+            .prefetch_related(
+                Prefetch(
+                    "grupos_opcoes",
+                    queryset=GrupoOpcao.objects.prefetch_related("opcoes").order_by("nome"),
+                )
+            )
+            .order_by("-is_disponivel", "nome")
+        )
+        if itens_sem_cat.exists():
+            payload_categorias.append(
+                {
+                    "id": f"{loja.id}-outros",
+                    "nome": "Outros Pratos",
+                    "ordem_exibicao": 999,
+                    "itens": PartnerItemMenuSerializer(itens_sem_cat, many=True).data,
+                }
+            )
+
         return Response(
             {
                 "loja_id": str(loja.id),
@@ -413,7 +434,7 @@ class PartnerCategoryViewSet(PartnerCatalogBaseMixin, viewsets.ModelViewSet):
     def get_queryset(self) -> QuerySet[CategoriaItem]:
         user = self.request.user
         qs = CategoriaItem.objects.select_related("loja").annotate(
-            total_itens=Count("itens")
+            total_itens=Count("itens_categoria")
         )
         if not user.is_staff:
             qs = qs.filter(loja__proprietario=user)

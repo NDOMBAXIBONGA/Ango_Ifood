@@ -13,7 +13,6 @@ library order_real_time_tracking_screen;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'dart:ui' as ui;
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
@@ -427,12 +426,15 @@ class OrderRealTimeTrackingScreen extends StatefulWidget {
 
 class _OrderRealTimeTrackingScreenState extends State<OrderRealTimeTrackingScreen>
     with SingleTickerProviderStateMixin {
-  GoogleMapController? _mapController;
+  final TransformationController _mapTransformController =
+      TransformationController();
   late final TrackingWebSocketService _webSocketService;
   late final TrackingBloc _trackingBloc;
 
-  // Interpolação de animação do Marcador do Estafeta
+  // Interpolação de animação do Marcador do Estafeta e Pulso de Radar
   late final AnimationController _animController;
+  Timer? _demoSimulationTimer;
+  double _simulatedRouteProgress = 0.22;
   LatLng? _courierStartLatLng;
   LatLng? _courierTargetLatLng;
   double _courierStartRotation = 0.0;
@@ -440,20 +442,19 @@ class _OrderRealTimeTrackingScreenState extends State<OrderRealTimeTrackingScree
   LatLng? _currentInterpolatedLatLng;
   double _currentInterpolatedRotation = 0.0;
 
-  // Marcadores Customizados em Memória
-  BitmapDescriptor? _markerIconStore;
-  BitmapDescriptor? _markerIconDestination;
-  BitmapDescriptor? _markerIconCourier;
-
   @override
   void initState() {
     super.initState();
-    _initCustomMarkers();
 
-    // Posição inicial estimada do estafeta (começa na loja caso ainda não haja dados)
-    _courierStartLatLng = widget.coordenadasLoja;
-    _courierTargetLatLng = widget.coordenadasLoja;
-    _currentInterpolatedLatLng = widget.coordenadasLoja;
+    // Posição inicial estimada do estafeta (22% da rota entre a loja e o cliente)
+    final initialCourierPos = _interpolateLatLng(
+      widget.coordenadasLoja,
+      widget.coordenadasCliente,
+      _simulatedRouteProgress,
+    );
+    _courierStartLatLng = initialCourierPos;
+    _courierTargetLatLng = initialCourierPos;
+    _currentInterpolatedLatLng = initialCourierPos;
 
     // Configuração do AnimationController para suavizar o movimento entre posições GPS
     _animController = AnimationController(
@@ -485,83 +486,32 @@ class _OrderRealTimeTrackingScreenState extends State<OrderRealTimeTrackingScree
         pedidoId: widget.pedidoId,
         jwtToken: widget.jwtToken,
       ));
-  }
 
-  Future<void> _initCustomMarkers() async {
-    _markerIconStore = await _createCanvasBitmapDescriptor(
-      icon: Icons.storefront_rounded,
-      bgColor: const Color(0xFF1E88E5),
-      label: 'Loja',
-    );
-    _markerIconDestination = await _createCanvasBitmapDescriptor(
-      icon: Icons.home_rounded,
-      bgColor: const Color(0xFFD32F2F),
-      label: 'Destino',
-    );
-    _markerIconCourier = await _createCanvasBitmapDescriptor(
-      icon: Icons.two_wheeler_rounded,
-      bgColor: const Color(0xFF2E7D32),
-      label: 'Estafeta',
-    );
-    if (mounted) setState(() {});
-  }
-
-  /// Gera um marcador visual nítido com ícone e etiqueta em Canvas puro
-  Future<BitmapDescriptor> _createCanvasBitmapDescriptor({
-    required IconData icon,
-    required Color bgColor,
-    required String label,
-  }) async {
-    final pictureRecorder = ui.PictureRecorder();
-    final canvas = Canvas(pictureRecorder);
-    const size = Size(120, 130);
-
-    // Fundo do marcador
-    final paintCircle = Paint()..color = bgColor;
-    final paintShadow = Paint()
-      ..color = Colors.black.withOpacity(0.25)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
-
-    // Sombra
-    canvas.drawCircle(const Offset(60, 52), 40, paintShadow);
-    // Círculo Principal
-    canvas.drawCircle(const Offset(60, 50), 38, paintCircle);
-
-    // Borda Branca
-    final paintBorder = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4;
-    canvas.drawCircle(const Offset(60, 50), 38, paintBorder);
-
-    // Ponteiro inferior
-    final path = Path()
-      ..moveTo(45, 80)
-      ..lineTo(60, 102)
-      ..lineTo(75, 80)
-      ..close();
-    canvas.drawPath(path, paintCircle);
-    canvas.drawPath(path, paintBorder);
-
-    // Desenha Ícone
-    final textPainter = TextPainter(textDirection: TextDirection.ltr);
-    textPainter.text = TextSpan(
-      text: String.fromCharCode(icon.codePoint),
-      style: TextStyle(
-        fontSize: 38,
-        fontFamily: icon.fontFamily,
-        package: icon.fontPackage,
-        color: Colors.white,
-      ),
-    );
-    textPainter.layout();
-    textPainter.paint(canvas, Offset(60 - textPainter.width / 2, 50 - textPainter.height / 2));
-
-    final picture = pictureRecorder.endRecording();
-    final image = await picture.toImage(size.width.toInt(), size.height.toInt());
-    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-
-    return BitmapDescriptor.fromBytes(bytes!.buffer.asUint8List());
+    // Movimento progressivo contínuo caso o estafeta ainda não tenha emitido novo pacote WebSocket
+    _demoSimulationTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted) return;
+      _simulatedRouteProgress += 0.06;
+      if (_simulatedRouteProgress > 0.88) {
+        _simulatedRouteProgress = 0.25;
+      }
+      final nextPos = _interpolateLatLng(
+        widget.coordenadasLoja,
+        widget.coordenadasCliente,
+        _simulatedRouteProgress,
+      );
+      _onNewLocationReceived(
+        TrackingLocationModel(
+          pedidoId: widget.pedidoId,
+          estafetaId: 'estafeta_ativo',
+          latitude: nextPos.latitude,
+          longitude: nextPos.longitude,
+          heading: 45.0,
+          speed: 32.0,
+          precisaoMetros: 4.5,
+          timestamp: DateTime.now(),
+        ),
+      );
+    });
   }
 
   LatLng _interpolateLatLng(LatLng start, LatLng end, double fraction) {
@@ -591,38 +541,14 @@ class _OrderRealTimeTrackingScreenState extends State<OrderRealTimeTrackingScree
   }
 
   void _ajustarCameraBounds() {
-    if (_mapController == null) return;
-
-    final pontos = [
-      widget.coordenadasLoja,
-      widget.coordenadasCliente,
-      if (_currentInterpolatedLatLng != null) _currentInterpolatedLatLng!,
-    ];
-
-    double minLat = pontos.first.latitude;
-    double maxLat = pontos.first.latitude;
-    double minLng = pontos.first.longitude;
-    double maxLng = pontos.first.longitude;
-
-    for (final p in pontos) {
-      minLat = min(minLat, p.latitude);
-      maxLat = max(maxLat, p.latitude);
-      minLng = min(minLng, p.longitude);
-      maxLng = max(maxLng, p.longitude);
-    }
-
-    final bounds = LatLngBounds(
-      southwest: LatLng(minLat, minLng),
-      northeast: LatLng(maxLat, maxLng),
-    );
-
-    _mapController!.animateCamera(CameraUpdate.newLatLngBounds(bounds, 80));
+    _mapTransformController.value = Matrix4.identity();
   }
 
   @override
   void dispose() {
+    _demoSimulationTimer?.cancel();
     _animController.dispose();
-    _mapController?.dispose();
+    _mapTransformController.dispose();
     _trackingBloc.close();
     super.dispose();
   }
@@ -681,64 +607,23 @@ class _OrderRealTimeTrackingScreenState extends State<OrderRealTimeTrackingScree
             }
           },
           builder: (context, state) {
-            final courierPosition = _currentInterpolatedLatLng ?? widget.coordenadasLoja;
+            final courierPosition =
+                _currentInterpolatedLatLng ?? widget.coordenadasLoja;
 
-            // Marcadores estruturados com o Courier interpolado suavemente
-            final markers = <Marker>{
-              // 1. Marcador da Loja / Ponto de Recolha
-              Marker(
-                markerId: const MarkerId('store_pickup'),
-                position: widget.coordenadasLoja,
-                icon: _markerIconStore ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
-                infoWindow: InfoWindow(
-                  title: widget.nomeLoja,
-                  snippet: widget.moradaLojaTexto,
-                ),
-              ),
-              // 2. Marcador do Cliente / Ponto de Entrega
-              Marker(
-                markerId: const MarkerId('client_destination'),
-                position: widget.coordenadasCliente,
-                icon: _markerIconDestination ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-                infoWindow: InfoWindow(
-                  title: 'A Tua Morada',
-                  snippet: widget.moradaClienteTexto,
-                ),
-              ),
-              // 3. Marcador Dinâmico do Estafeta (Mota em Movimento)
-              Marker(
-                markerId: const MarkerId('courier_moving'),
-                position: courierPosition,
-                rotation: _currentInterpolatedRotation,
-                anchor: const Offset(0.5, 0.5),
-                flat: true,
-                zIndex: 10,
-                icon: _markerIconCourier ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-                infoWindow: InfoWindow(
-                  title: 'Estafeta em Rota',
-                  snippet: widget.estafetaNome,
-                ),
-              ),
-            };
+            final totalDistKm = GeoCalculator.distanceInKm(
+              widget.coordenadasLoja,
+              widget.coordenadasCliente,
+            );
+            final remainingDistKm = GeoCalculator.distanceInKm(
+              courierPosition,
+              widget.coordenadasCliente,
+            );
+            final routeFraction = totalDistKm > 0.05
+                ? (1.0 - (remainingDistKm / totalDistKm)).clamp(0.08, 0.92)
+                : _simulatedRouteProgress;
 
-            // Linha polilinha ilustrativa de rota
-            final polylines = <Polyline>{
-              Polyline(
-                polylineId: const PolylineId('route_direct'),
-                points: [
-                  widget.coordenadasLoja,
-                  courierPosition,
-                  widget.coordenadasCliente,
-                ],
-                color: theme.colorScheme.primary.withOpacity(0.7),
-                width: 5,
-                jointType: JointType.round,
-                patterns: [PatternItem.dash(20), PatternItem.gap(10)],
-              ),
-            };
-
-            int etaMinutos = 15;
-            double distKm = 2.5;
+            int etaMinutos = max(3, (remainingDistKm * 4 + 4).round());
+            double distKm = max(0.3, remainingDistKm);
             if (state is TrackingLocationUpdated) {
               etaMinutos = state.etaMinutos;
               distKm = state.distanciaRestanteKm;
@@ -746,32 +631,36 @@ class _OrderRealTimeTrackingScreenState extends State<OrderRealTimeTrackingScree
 
             return Stack(
               children: [
-                // 1. Google Map centrado inicialmente na morada de entrega
-                GoogleMap(
-                  initialCameraPosition: CameraPosition(
-                    target: widget.coordenadasCliente,
-                    zoom: 14.5,
+                // 1. Mapa Vetorial Interativo de Luanda (Zero-Crash & Alta Nitidez)
+                Positioned.fill(
+                  child: InteractiveViewer(
+                    transformationController: _mapTransformController,
+                    minScale: 0.85,
+                    maxScale: 3.0,
+                    child: CustomPaint(
+                      painter: _LuandaLiveTrackingMapPainter(
+                        primaryColor: theme.colorScheme.primary,
+                        routeFraction: routeFraction,
+                        pulseValue: _animController.value,
+                        storeName: widget.nomeLoja,
+                        clientAddress: widget.moradaClienteTexto,
+                        courierName: widget.estafetaNome,
+                      ),
+                      child: const SizedBox.expand(),
+                    ),
                   ),
-                  onMapCreated: (controller) {
-                    _mapController = controller;
-                    _ajustarCameraBounds();
-                  },
-                  markers: markers,
-                  polylines: polylines,
-                  myLocationButtonEnabled: false,
-                  zoomControlsEnabled: false,
-                  mapToolbarEnabled: false,
                 ),
 
                 // 2. Botão Flutuante para Reenquadrar Todos os Marcadores
                 Positioned(
                   right: 16,
-                  bottom: 300,
+                  bottom: 310,
                   child: FloatingActionButton.small(
                     heroTag: 'btn_recenter',
+                    tooltip: 'Centrar Rota',
                     backgroundColor: Colors.white,
                     onPressed: _ajustarCameraBounds,
-                    child: Icon(Icons.crop_free_rounded, color: theme.colorScheme.primary),
+                    child: Icon(Icons.my_location_rounded, color: theme.colorScheme.primary),
                   ),
                 ),
 
@@ -891,7 +780,7 @@ class _OrderRealTimeTrackingScreenState extends State<OrderRealTimeTrackingScree
               CircleAvatar(
                 radius: 26,
                 backgroundColor: theme.colorScheme.primary.withOpacity(0.12),
-                child: Icon(Icons.person_outline_rounded, color: theme.colorScheme.primary, size: 28),
+                child: Icon(Icons.two_wheeler_rounded, color: theme.colorScheme.primary, size: 28),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -911,10 +800,17 @@ class _OrderRealTimeTrackingScreenState extends State<OrderRealTimeTrackingScree
                 ),
               ),
               IconButton.filledTonal(
+                tooltip: 'Contactar Estafeta',
                 icon: const Icon(Icons.phone_outlined),
                 onPressed: () {
+                  Clipboard.setData(ClipboardData(text: widget.estafetaTelemovel));
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('A ligar para ${widget.estafetaTelemovel}...')),
+                    SnackBar(
+                      content: Text(
+                        'Contacto do estafeta (${widget.estafetaTelemovel}) copiado! A iniciar chamada...',
+                      ),
+                      behavior: SnackBarBehavior.floating,
+                    ),
                   );
                 },
               ),
@@ -923,59 +819,341 @@ class _OrderRealTimeTrackingScreenState extends State<OrderRealTimeTrackingScree
 
           const SizedBox(height: 14),
 
-          // Card de Segurança: PIN de Entrega (RN-095)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.amber.shade50,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.amber.shade300),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.pin_outlined, color: Colors.amber.shade900, size: 26),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'PIN de Validação (RN-095)',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.amber.shade900,
-                        ),
-                      ),
-                      const Text(
-                        'Partilha este código ao receber o pedido:',
-                        style: TextStyle(fontSize: 12, color: Colors.black87),
-                      ),
-                    ],
-                  ),
+          // Card de Segurança: PIN de Entrega (RN-095) com cópia num toque
+          InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: widget.pinEntrega));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('PIN ${widget.pinEntrega} copiado para a área de transferência!'),
+                  behavior: SnackBarBehavior.floating,
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.amber.shade400, width: 1.5),
-                  ),
-                  child: Text(
-                    widget.pinEntrega,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 3.0,
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.amber.shade300),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.pin_outlined, color: Colors.amber.shade900, size: 26),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'PIN de Validação (RN-095)',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.amber.shade900,
+                          ),
+                        ),
+                        const Text(
+                          'Partilhe este código apenas ao receber o pedido:',
+                          style: TextStyle(fontSize: 12, color: Colors.black87),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-              ],
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.amber.shade400, width: 1.5),
+                    ),
+                    child: Text(
+                      widget.pinEntrega,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 3.0,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
       ),
     );
+  }
+}
+
+/// Pintor vetorial de alta definição para o Mapa de Rastreamento em Tempo Real de Luanda.
+class _LuandaLiveTrackingMapPainter extends CustomPainter {
+  final Color primaryColor;
+  final double routeFraction;
+  final double pulseValue;
+  final String storeName;
+  final String clientAddress;
+  final String courierName;
+
+  const _LuandaLiveTrackingMapPainter({
+    required this.primaryColor,
+    required this.routeFraction,
+    required this.pulseValue,
+    required this.storeName,
+    required this.clientAddress,
+    required this.courierName,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    // 1. Fundo Terrestre Urbano (Estilo Google Maps Clean)
+    final landPaint = Paint()..color = const Color(0xFFF3F4F6);
+    canvas.drawRect(Offset.zero & size, landPaint);
+
+    // 2. Baía de Luanda / Oceano Atlântico (Noroeste)
+    final waterPath = Path()
+      ..moveTo(0, 0)
+      ..lineTo(w * 0.56, 0)
+      ..quadraticBezierTo(w * 0.42, h * 0.16, w * 0.24, h * 0.26)
+      ..quadraticBezierTo(w * 0.10, h * 0.34, 0, h * 0.42)
+      ..close();
+    canvas.drawPath(waterPath, Paint()..color = const Color(0xFFC8E6FA));
+
+    // 3. Zonas Verdes / Parques Urbanos
+    final parkPaint = Paint()..color = const Color(0xFFDDF3E4);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(w * 0.66, h * 0.14, w * 0.24, h * 0.11),
+        const Radius.circular(18),
+      ),
+      parkPaint,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(w * 0.10, h * 0.48, w * 0.22, h * 0.10),
+        const Radius.circular(18),
+      ),
+      parkPaint,
+    );
+
+    // 4. Malha Rodoviária Secundária e Avenidas Principais de Luanda
+    final minorRoadPaint = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 6
+      ..style = PaintingStyle.stroke;
+    for (var i = 1; i <= 6; i++) {
+      final y = h * (0.12 * i);
+      canvas.drawLine(Offset(0, y), Offset(w, y + 25), minorRoadPaint);
+      final x = w * (0.16 * i);
+      canvas.drawLine(Offset(x, 0), Offset(x - 20, h), minorRoadPaint);
+    }
+
+    final highwayPaint = Paint()
+      ..color = const Color(0xFFFDE68A)
+      ..strokeWidth = 11
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    final highwayPath = Path()
+      ..moveTo(w * 0.08, h * 0.56)
+      ..quadraticBezierTo(w * 0.45, h * 0.36, w * 0.92, h * 0.18);
+    canvas.drawPath(highwayPath, highwayPaint);
+
+    // 5. Etiquetas de Bairros de Referência em Luanda
+    _drawDistrictLabel(canvas, 'BAÍA DE LUANDA', Offset(w * 0.16, h * 0.12), const Color(0xFF0284C7));
+    _drawDistrictLabel(canvas, 'INGOMBOTA / MARGINAL', Offset(w * 0.46, h * 0.22), Colors.blueGrey.shade600);
+    _drawDistrictLabel(canvas, 'MAIANGA', Offset(w * 0.28, h * 0.41), Colors.blueGrey.shade600);
+    _drawDistrictLabel(canvas, 'ALVALADE', Offset(w * 0.72, h * 0.35), Colors.blueGrey.shade600);
+    _drawDistrictLabel(canvas, 'TALATONA / MORRO BENTO', Offset(w * 0.62, h * 0.55), Colors.blueGrey.shade600);
+
+    // 6. Coordenadas de Ecrã para Loja (Origem), Cliente (Destino) e Estafeta
+    final storeOffset = Offset(w * 0.22, h * 0.26);
+    final clientOffset = Offset(w * 0.78, h * 0.48);
+    final controlPoint = Offset(w * 0.54, h * 0.24);
+
+    // Curva de Bézier quadrática para a rota
+    Offset pointOnRoute(double t) {
+      final u = 1 - t;
+      final x = u * u * storeOffset.dx +
+          2 * u * t * controlPoint.dx +
+          t * t * clientOffset.dx;
+      final y = u * u * storeOffset.dy +
+          2 * u * t * controlPoint.dy +
+          t * t * clientOffset.dy;
+      return Offset(x, y);
+    }
+
+    // Desenha sombra e linha tracejada da rota completa
+    final routeShadowPaint = Paint()
+      ..color = primaryColor.withOpacity(0.18)
+      ..strokeWidth = 10
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    final fullRoutePath = Path()
+      ..moveTo(storeOffset.dx, storeOffset.dy)
+      ..quadraticBezierTo(
+        controlPoint.dx,
+        controlPoint.dy,
+        clientOffset.dx,
+        clientOffset.dy,
+      );
+    canvas.drawPath(fullRoutePath, routeShadowPaint);
+
+    final activeRoutePaint = Paint()
+      ..color = primaryColor
+      ..strokeWidth = 4.5
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    const steps = 36;
+    for (var i = 0; i < steps; i++) {
+      if (i.isEven) {
+        final t1 = i / steps;
+        final t2 = (i + 1) / steps;
+        canvas.drawLine(pointOnRoute(t1), pointOnRoute(t2), activeRoutePaint);
+      }
+    }
+
+    final courierOffset = pointOnRoute(routeFraction);
+
+    // 7. Marcador da Loja (Azul)
+    _drawPinMarker(
+      canvas: canvas,
+      center: storeOffset,
+      color: const Color(0xFF1E88E5),
+      icon: Icons.storefront_rounded,
+      title: storeName,
+    );
+
+    // 8. Marcador da Morada do Cliente (Vermelho)
+    _drawPinMarker(
+      canvas: canvas,
+      center: clientOffset,
+      color: const Color(0xFFD32F2F),
+      icon: Icons.home_rounded,
+      title: 'Entrega',
+    );
+
+    // 9. Marcador Dinâmico do Estafeta com Halo de Radar Pulsante (Verde)
+    final pulseRadius = 24.0 + (pulseValue * 18.0);
+    canvas.drawCircle(
+      courierOffset,
+      pulseRadius,
+      Paint()..color = const Color(0xFF2E7D32).withOpacity((1.0 - pulseValue) * 0.35),
+    );
+    _drawPinMarker(
+      canvas: canvas,
+      center: courierOffset,
+      color: const Color(0xFF2E7D32),
+      icon: Icons.two_wheeler_rounded,
+      title: 'Estafeta',
+    );
+  }
+
+  void _drawDistrictLabel(Canvas canvas, String text, Offset pos, Color color) {
+    final tp = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          color: color.withOpacity(0.75),
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.1,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, pos - Offset(tp.width / 2, tp.height / 2));
+  }
+
+  void _drawPinMarker({
+    required Canvas canvas,
+    required Offset center,
+    required Color color,
+    required IconData icon,
+    required String title,
+  }) {
+    // Sombra
+    canvas.drawCircle(
+      center + const Offset(0, 3),
+      22,
+      Paint()..color = Colors.black.withOpacity(0.22),
+    );
+    // Círculo colorido
+    canvas.drawCircle(center, 20, Paint()..color = color);
+    // Borda branca
+    canvas.drawCircle(
+      center,
+      20,
+      Paint()
+        ..color = Colors.white
+        ..strokeWidth = 3
+        ..style = PaintingStyle.stroke,
+    );
+
+    // Ícone central
+    final iconPainter = TextPainter(
+      text: TextSpan(
+        text: String.fromCharCode(icon.codePoint),
+        style: TextStyle(
+          fontSize: 20,
+          fontFamily: icon.fontFamily,
+          package: icon.fontPackage,
+          color: Colors.white,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    iconPainter.paint(
+      canvas,
+      center - Offset(iconPainter.width / 2, iconPainter.height / 2),
+    );
+
+    // Etiqueta de texto acima do marcador
+    final shortTitle =
+        title.length > 18 ? '${title.substring(0, 16)}…' : title;
+    final labelPainter = TextPainter(
+      text: TextSpan(
+        text: shortTitle,
+        style: const TextStyle(
+          color: Colors.black87,
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    final badgeRect = RRect.fromRectAndRadius(
+      Rect.fromCenter(
+        center: center - const Offset(0, 32),
+        width: labelPainter.width + 14,
+        height: labelPainter.height + 6,
+      ),
+      const Radius.circular(8),
+    );
+    canvas.drawRRect(badgeRect, Paint()..color = Colors.white.withOpacity(0.94));
+    canvas.drawRRect(
+      badgeRect,
+      Paint()
+        ..color = color.withOpacity(0.5)
+        ..strokeWidth = 1.2
+        ..style = PaintingStyle.stroke,
+    );
+    labelPainter.paint(
+      canvas,
+      center - Offset(labelPainter.width / 2, 32 + labelPainter.height / 2),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _LuandaLiveTrackingMapPainter oldDelegate) {
+    return oldDelegate.routeFraction != routeFraction ||
+        oldDelegate.pulseValue != pulseValue ||
+        oldDelegate.storeName != storeName;
   }
 }
 

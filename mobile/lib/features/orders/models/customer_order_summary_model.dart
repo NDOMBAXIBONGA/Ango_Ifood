@@ -7,6 +7,8 @@ class CustomerOrderLineItem extends Equatable {
   final int quantidade;
   final int precoUnitarioCentimos;
   final String notas;
+  final List<String> opcoesIds;
+  final List<String> opcoesNomes;
 
   const CustomerOrderLineItem({
     required this.itemId,
@@ -14,9 +16,31 @@ class CustomerOrderLineItem extends Equatable {
     required this.quantidade,
     required this.precoUnitarioCentimos,
     this.notas = '',
+    this.opcoesIds = const [],
+    this.opcoesNomes = const [],
   });
 
   factory CustomerOrderLineItem.fromJson(Map<String, dynamic> json) {
+    final rawOpcoes =
+        (json['opcoes_selecionadas'] ?? json['opcoes']) as List<dynamic>? ??
+            const [];
+    final parsedOpcoesIds = <String>[];
+    final parsedOpcoesNomes = <String>[];
+    for (final raw in rawOpcoes) {
+      if (raw is Map<String, dynamic>) {
+        final id = (raw['opcao'] ?? raw['opcao_id'] ?? raw['id'] ?? '')
+            .toString()
+            .trim();
+        final nome =
+            (raw['opcao_nome'] ?? raw['nome'] ?? '').toString().trim();
+        if (id.isNotEmpty) parsedOpcoesIds.add(id);
+        if (nome.isNotEmpty) parsedOpcoesNomes.add(nome);
+      } else if (raw != null) {
+        final id = raw.toString().trim();
+        if (id.isNotEmpty) parsedOpcoesIds.add(id);
+      }
+    }
+
     return CustomerOrderLineItem(
       itemId: (json['item'] ?? json['item_id'] ?? '').toString(),
       nome: (json['item_nome'] ?? json['nome'] ?? 'Artigo').toString(),
@@ -24,6 +48,8 @@ class CustomerOrderLineItem extends Equatable {
       precoUnitarioCentimos:
           (json['preco_unitario_no_momento'] as num?)?.toInt() ?? 0,
       notas: (json['notas'] ?? '').toString(),
+      opcoesIds: parsedOpcoesIds,
+      opcoesNomes: parsedOpcoesNomes,
     );
   }
 
@@ -34,6 +60,8 @@ class CustomerOrderLineItem extends Equatable {
         quantidade,
         precoUnitarioCentimos,
         notas,
+        opcoesIds,
+        opcoesNomes,
       ];
 }
 

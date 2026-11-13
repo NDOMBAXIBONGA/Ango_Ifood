@@ -93,6 +93,19 @@ enum PaymentMethodType {
     required this.subtitulo,
     required this.icone,
   });
+
+  static PaymentMethodType fromCode(String code) {
+    final normalized = code.trim().toUpperCase();
+    for (final method in PaymentMethodType.values) {
+      if (method.id == normalized) {
+        return method;
+      }
+    }
+    if (normalized == 'DINHEIRO' || normalized == 'CASH') {
+      return PaymentMethodType.dinheiro;
+    }
+    return PaymentMethodType.carteiraDigital;
+  }
 }
 
 /// Item do carrinho enviado como input para `/api/v1/orders/checkout/preview/`.
@@ -1000,6 +1013,9 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
     SelectPaymentMethodEvent event,
     Emitter<CheckoutState> emit,
   ) {
+    CartService.instance.updatePreferredPayment(
+      paymentCode: event.metodoPagamento.id,
+    );
     emit(
       state.copyWith(
         metodoPagamentoSelecionado: event.metodoPagamento,
@@ -1120,6 +1136,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         moradaTexto: widget.moradaTexto,
         itensInput: widget.itensCarrinho,
         cotacao: widget.cotacaoInicial,
+        metodoPagamentoSelecionado: PaymentMethodType.fromCode(
+          CartService.instance.metodoPagamentoPreferido,
+        ),
       ),
     );
 
