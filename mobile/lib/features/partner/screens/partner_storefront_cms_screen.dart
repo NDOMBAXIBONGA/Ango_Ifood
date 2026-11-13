@@ -115,20 +115,7 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
   }
 
   Future<Dio> _buildAuthDio() async {
-    final token = await _tokenStorage.getAccessToken();
-    return Dio(
-      BaseOptions(
-        baseUrl: AppEnvironmentConfig.baseHttpUrl,
-        connectTimeout: const Duration(seconds: 20),
-        receiveTimeout: const Duration(seconds: 20),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          if (token != null && token.isNotEmpty)
-            'Authorization': 'Bearer $token',
-        },
-      ),
-    );
+    return createSecureDioClient(tokenStorage: _tokenStorage);
   }
 
   Future<void> _loadStorefrontData() async {
@@ -137,6 +124,11 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
       final dio = await _buildAuthDio();
       final resp = await dio.get<Map<String, dynamic>>(
         '/api/v1/partner/store/storefront/',
+        options: Options(
+          headers: {
+            if (_lojaId.isNotEmpty) 'X-Store-ID': _lojaId,
+          },
+        ),
       );
       final data = resp.data;
       if (data != null && mounted) {
@@ -309,6 +301,11 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
       final resp = await dio.put<Map<String, dynamic>>(
         '/api/v1/partner/store/storefront/',
         data: payload,
+        options: Options(
+          headers: {
+            if (_lojaId.isNotEmpty) 'X-Store-ID': _lojaId,
+          },
+        ),
       );
 
       if (resp.data != null && mounted) {
@@ -350,6 +347,11 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
           'reserva_id': reservaId,
           'estado': estado,
         },
+        options: Options(
+          headers: {
+            if (_lojaId.isNotEmpty) 'X-Store-ID': _lojaId,
+          },
+        ),
       );
       if (resp.data != null && mounted) {
         setState(() {
@@ -382,6 +384,11 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
           'mensagem_id': mensagemId,
           'resposta_parceiro': resposta,
         },
+        options: Options(
+          headers: {
+            if (_lojaId.isNotEmpty) 'X-Store-ID': _lojaId,
+          },
+        ),
       );
       if (resp.data != null && mounted) {
         setState(() {
@@ -402,9 +409,12 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
   }
 
   void _openCustomerPreview() {
-    if (_lojaId.isEmpty) return;
+    final effectiveLojaId = _lojaId.isNotEmpty
+        ? _lojaId
+        : 'f6d8a1d8-2222-4807-95e7-68aa39fed5d2';
+
     final previewStore = StoreSummaryModel(
-      id: _lojaId,
+      id: effectiveLojaId,
       nome: _nomeLojaCtrl.text.trim().isNotEmpty
           ? _nomeLojaCtrl.text.trim()
           : 'Minha Loja',
@@ -430,7 +440,7 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
           value: repo,
           child: BlocProvider<StoreMenuBloc>(
             create: (_) => StoreMenuBloc(repository: repo)
-              ..add(LoadStoreMenuEvent(storeId: _lojaId)),
+              ..add(LoadStoreMenuEvent(storeId: effectiveLojaId)),
             child: StoreMenuScreen(store: previewStore),
           ),
         ),

@@ -1427,17 +1427,27 @@ class _HomeScreenState extends State<HomeScreen> {
                             return _StoreDiscoveryCard(
                               store: store,
                               onTap: () {
-                                final repository =
-                                    context.read<CatalogRepository>();
+                                CatalogRepository repo;
+                                try {
+                                  repo = context.read<CatalogRepository>();
+                                } catch (_) {
+                                  repo = CatalogRepository(
+                                    baseUrl: AppEnvironmentConfig.baseHttpUrl,
+                                  );
+                                }
                                 Navigator.of(context).push(
                                   MaterialPageRoute<void>(
-                                    builder: (_) => BlocProvider(
-                                      create: (_) => StoreMenuBloc(
-                                        repository: repository,
-                                      )..add(
-                                          LoadStoreMenuEvent(storeId: store.id),
-                                        ),
-                                      child: StoreMenuScreen(store: store),
+                                    builder: (_) =>
+                                        RepositoryProvider<CatalogRepository>.value(
+                                      value: repo,
+                                      child: BlocProvider(
+                                        create: (_) => StoreMenuBloc(
+                                          repository: repo,
+                                        )..add(
+                                            LoadStoreMenuEvent(storeId: store.id),
+                                          ),
+                                        child: StoreMenuScreen(store: store),
+                                      ),
                                     ),
                                   ),
                                 );
@@ -1769,6 +1779,14 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
     super.dispose();
   }
 
+  CatalogRepository _getCatalogRepository() {
+    try {
+      return context.read<CatalogRepository>();
+    } catch (_) {
+      return CatalogRepository(baseUrl: AppEnvironmentConfig.baseHttpUrl);
+    }
+  }
+
   void _navigateToSection(int tabIndex) {
     _sectionTabController.animateTo(tabIndex);
   }
@@ -1833,6 +1851,15 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
                       expandedHeight: 245,
                       pinned: true,
                       stretch: true,
+                      title: Text(
+                        store.nome,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 17,
+                        ),
+                      ),
                       actions: [
                         if (vitrine.heroVideoUrl.isNotEmpty)
                           Padding(
@@ -1862,49 +1889,56 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
                           ),
                       ],
                       flexibleSpace: FlexibleSpaceBar(
-                        titlePadding: const EdgeInsets.fromLTRB(56, 0, 16, 56),
-                        title: Row(
+                        background: Stack(
+                          fit: StackFit.expand,
                           children: [
-                            Expanded(
-                              child: Text(
-                                store.nome,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 17,
-                                  color: Colors.white,
-                                  shadows: [
-                                    Shadow(
-                                      blurRadius: 10,
-                                      color: Colors.black87,
-                                    ),
+                            Image.network(
+                              heroBannerUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                color: colorScheme.primaryContainer,
+                              ),
+                            ),
+                            const DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.black38,
+                                    Colors.transparent,
+                                    Colors.black87,
                                   ],
                                 ),
                               ),
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: store.isAberta
-                                    ? const Color(0xFF16A34A)
-                                    : Colors.redAccent,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                store.isAberta ? 'Aberto' : 'Fechado',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
+                            Positioned(
+                              left: 16,
+                              bottom: 60,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: store.isAberta
+                                      ? const Color(0xFF16A34A)
+                                      : Colors.redAccent,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  store.isAberta ? 'Aberto' : 'Fechado',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
                             ),
                           ],
                         ),
+                      ),
                         background: Stack(
                           fit: StackFit.expand,
                           children: [
@@ -2835,7 +2869,6 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final repository = context.read<CatalogRepository>();
 
     final formattedDate =
         '${_reservationDate.day.toString().padLeft(2, '0')}/${_reservationDate.month.toString().padLeft(2, '0')}/${_reservationDate.year}';
@@ -3085,8 +3118,9 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
                             try {
                               final dateIso =
                                   '${_reservationDate.year}-${_reservationDate.month.toString().padLeft(2, '0')}-${_reservationDate.day.toString().padLeft(2, '0')}';
+                              final repo = _getCatalogRepository();
                               final resp =
-                                  await repository.submitTableReservation(
+                                  await repo.submitTableReservation(
                                 storeId: store.id,
                                 payload: {
                                   'nome_cliente': _resNameCtrl.text.trim().isEmpty
@@ -3167,7 +3201,6 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final repository = context.read<CatalogRepository>();
 
     const diasNomes = [
       'Segunda-feira',
@@ -3480,7 +3513,8 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
                             }
                             setState(() => _isSendingMessage = true);
                             try {
-                              await repository.submitStoreContactMessage(
+                              final repo = _getCatalogRepository();
+                              await repo.submitStoreContactMessage(
                                 storeId: store.id,
                                 payload: {
                                   'nome': _msgNameCtrl.text.trim().isEmpty

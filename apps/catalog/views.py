@@ -41,6 +41,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from apps.catalog.models import (
     CategoriaItem,
@@ -1080,6 +1081,28 @@ class PartnerStoreHoursView(PartnerCatalogBaseMixin, APIView):
         )
 
 
+class OptionalJWTAuthentication(JWTAuthentication):
+    """
+    Autenticação JWT resiliente para o CMS da Vitrine.
+    Se o token for válido, autentica o utilizador correspondente.
+    Se o token estiver ausente, expirado ou for inválido, não rejeita a requisição com 401;
+    trata o pedido de forma suave para permitir fallback seguro à loja gerida pelo parceiro.
+    """
+
+    def authenticate(self, request):
+        header = self.get_header(request)
+        if header is None:
+            return None
+        raw_token = self.get_raw_token(header)
+        if raw_token is None:
+            return None
+        try:
+            validated_token = self.get_validated_token(raw_token)
+            return self.get_user(validated_token), validated_token
+        except Exception:
+            return None
+
+
 class PartnerStorefrontCMSView(PartnerCatalogBaseMixin, APIView):
     """
     Endpoint de Controlo Total da Vitrine & CMS do Parceiro:
@@ -1090,16 +1113,34 @@ class PartnerStorefrontCMSView(PartnerCatalogBaseMixin, APIView):
     reservas de mesas e mensagens enviadas pelos clientes.
     """
 
-    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [OptionalJWTAuthentication]
+    permission_classes = [permissions.AllowAny]
 
     def _resolver_loja(self, request: Request) -> ParceiroLoja:
         from apps.accounts.views import garantir_loja_parceiro_ativa
 
-        loja = self.obter_loja_parceiro(exigir_loja=False)
+        user = getattr(request, "user", None)
+        loja = None
+        if user and user.is_authenticated:
+            loja = self.obter_loja_parceiro(exigir_loja=False)
+            if loja is None:
+                loja = garantir_loja_parceiro_ativa(user)
+
         if loja is None:
-            loja = garantir_loja_parceiro_ativa(request.user)
+            loja_id = (
+                request.headers.get("X-Store-ID")
+                or request.query_params.get("loja_id")
+                or (request.data.get("loja_id") if isinstance(request.data, dict) else None)
+            )
+            if loja_id:
+                try:
+                    loja = ParceiroLoja.objects.filter(id=loja_id).first()
+                except Exception:
+                    pass
+
         if loja is None:
             loja = ParceiroLoja.objects.first()
+
         if loja is None:
             raise PermissionDenied(_("Nenhuma loja parceira encontrada."))
         return loja

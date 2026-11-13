@@ -11,6 +11,7 @@ import 'core/localization/app_localizations_pt_ao.dart';
 import 'core/network/app_environment_config.dart';
 import 'core/theme/theme.dart';
 import 'features/auth/auth_bloc.dart';
+import 'features/catalog/customer_catalog_screens.dart';
 import 'features/splash/bloc/app_initialization_bloc.dart';
 import 'features/splash/screens/splash_screen.dart';
 
@@ -32,7 +33,7 @@ void main() {
     );
   };
 
-  // Requisito 3: Tratamento seguro de exceções de renderização sem sobreposição de ecrãs
+  // Requisito 3: Tratamento seguro de exceções de renderização sem sobreposição de ecrãs nem ecrã preto
   ErrorWidget.builder = (FlutterErrorDetails errorDetails) {
     developer.log(
       'Erro de renderização capturado: ${errorDetails.exceptionAsString()}',
@@ -43,7 +44,43 @@ void main() {
     if (kDebugMode) {
       return ErrorWidget(errorDetails.exception);
     }
-    return const SizedBox.shrink();
+    return Material(
+      color: Colors.white,
+      child: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.storefront_rounded,
+                  size: 48,
+                  color: Color(0xFFEA1D2C),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'A carregar conteúdo da loja...',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  errorDetails.exceptionAsString(),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11, color: Colors.black54),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   };
 
   // Requisito 2: Encapsulamento em runZonedGuarded para proteger o arranque do APK
@@ -117,24 +154,27 @@ class DeliveryApp extends StatelessWidget {
           )..add(const CheckAuthStatusRequested()),
         ),
       ],
-      child: MaterialApp(
-        title: 'Delivery Ango_Ifood',
-        debugShowCheckedModeBanner: false,
-        locale: AppLocalizationsPtAo.locale,
-        supportedLocales: const [
-          AppLocalizationsPtAo.locale,
-          Locale('pt', 'PT'),
-          Locale('pt', 'BR'),
-          Locale('en', 'US'),
-        ],
-        localizationsDelegates: const [
-          AppLocalizationsPtAoDelegate(),
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        theme: AppThemeData.lightTheme,
-        home: const SplashScreen(),
+      child: RepositoryProvider<CatalogRepository>.value(
+        value: CatalogRepository(baseUrl: AppEnvironmentConfig.baseHttpUrl),
+        child: MaterialApp(
+          title: 'Delivery Ango_Ifood',
+          debugShowCheckedModeBanner: false,
+          locale: AppLocalizationsPtAo.locale,
+          supportedLocales: const [
+            AppLocalizationsPtAo.locale,
+            Locale('pt', 'PT'),
+            Locale('pt', 'BR'),
+            Locale('en', 'US'),
+          ],
+          localizationsDelegates: const [
+            AppLocalizationsPtAoDelegate(),
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          theme: AppThemeData.lightTheme,
+          home: const SplashScreen(),
+        ),
       ),
     );
   }
