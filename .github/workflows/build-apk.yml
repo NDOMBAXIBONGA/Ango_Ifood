@@ -9,9 +9,10 @@ on:
       - master
   workflow_dispatch:
 
-# Permissões do GITHUB_TOKEN para leitura de código e publicação de artefactos
+# Permissões do GITHUB_TOKEN para leitura/escrita de releases e limpeza de artefactos antigos
 permissions:
-  contents: read
+  contents: write
+  actions: write
 
 jobs:
   build-apk:
@@ -24,6 +25,22 @@ jobs:
       # ==============================================================================
       - name: Checkout do Repositório
         uses: actions/checkout@v4
+
+      # ==============================================================================
+      # Passo 1b: Limpeza automática de artefactos antigos para libertar quota
+      # ==============================================================================
+      - name: Limpar Artefactos Antigos (Libertar Quota GitHub)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "A remover artefactos antigos para libertar quota de armazenamento do GitHub..."
+          gh api repos/${{ github.repository }}/actions/artifacts --paginate -q '.artifacts[].id' | while read -r id; do
+            if [ -n "$id" ]; then
+              echo "A eliminar artefacto antigo ID: $id"
+              gh api -X DELETE repos/${{ github.repository }}/actions/artifacts/"$id" || true
+            fi
+          done
 
       # ==============================================================================
       # Passo 2: Configuração do Java Development Kit (JDK 17 - Zulu)
@@ -146,13 +163,57 @@ jobs:
             --dart-define=BASE_WEBSOCKET_URL=wss://ango-ifood.onrender.com
 
       # ==============================================================================
-      # Passo 7: Upload do artefacto final compilado (app-release.apk)
+      # Passo 7: Publicação Direta nas Releases do GitHub (Sem Limite de Quota)
+      # ==============================================================================
+      - name: Publicar APK no GitHub Releases (Download Direto)
+        working-directory: mobile
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          APK_PATH="build/app/outputs/flutter-apk/app-release.apk"
+          if [ ! -f "$APK_PATH" ]; then
+            echo "Erro: APK compilado não encontrado em $APK_PATH"
+            exit 1
+          fi
+
+          echo "A publicar APK na Release oficial 'latest' do repositório..."
+          if gh release view latest >/dev/null 2>&1; then
+            gh release upload latest "$APK_PATH" --clobber
+          else
+            gh release create latest "$APK_PATH" \
+              --title "Delivery Pro - APK Release (Última Versão)" \
+              --notes "APK compilado automaticamente a partir do commit ${{ github.sha }}." \
+              --latest
+          fi
+
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/latest/app-release.apk"
+          RELEASE_PAGE="https://github.com/${{ github.repository }}/releases/tag/latest"
+
+          echo "======================================================================"
+          echo "✅ APK DISPONÍVEL PARA DOWNLOAD IMEDIATO:"
+          echo "👉 Link Direto: $DOWNLOAD_URL"
+          echo "👉 Página da Release: $RELEASE_PAGE"
+          echo "======================================================================"
+
+          {
+            echo "## 📱 Delivery Pro — APK Release Pronto!"
+            echo "O APK foi compilado com sucesso e publicado nas **Releases** do repositório (sem bloqueio de quota de armazenamento)."
+            echo ""
+            echo "- 🚀 **[Clique aqui para Descarregar o APK Diretamente (app-release.apk)]($DOWNLOAD_URL)**"
+            echo "- 📦 **[Abrir Página de Releases do GitHub]($RELEASE_PAGE)**"
+            echo "- 🔖 **Commit:** \`${{ github.sha }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # ==============================================================================
+      # Passo 8: Upload de Artefacto no Workflow (Opcional caso a quota ainda aguarde recálculo)
       # ==============================================================================
       - name: Recolher e Disponibilizar Artefacto APK
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: app-delivery-release-apk
           path: mobile/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 1
+          overwrite: true
 
