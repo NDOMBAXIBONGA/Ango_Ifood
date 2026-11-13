@@ -36,6 +36,7 @@ class CartService extends ChangeNotifier {
   double get latitude => _latitude;
   double get longitude => _longitude;
   String get preferredPaymentCode => _preferredPaymentCode;
+  String get metodoPagamentoPreferido => _preferredPaymentCode;
   String get preferredMcxPhone => _preferredMcxPhone;
 
   List<CartItemModel> get items => _items.values.toList();

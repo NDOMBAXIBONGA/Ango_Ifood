@@ -1137,7 +1137,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         itensInput: widget.itensCarrinho,
         cotacao: widget.cotacaoInicial,
         metodoPagamentoSelecionado: PaymentMethodType.fromCode(
-          CartService.instance.metodoPagamentoPreferido,
+          CartService.instance.preferredPaymentCode,
         ),
       ),
     );

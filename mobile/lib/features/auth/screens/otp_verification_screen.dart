@@ -140,17 +140,6 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     setState(() {});
   }
 
-  void _fillOtpCode(String code) {
-    final clean = code.replaceAll(RegExp(r'\D'), '');
-    for (int i = 0; i < clean.length && i < _pinLength; i++) {
-      _controllers[i].text = clean[i];
-    }
-    setState(() {});
-    if (clean.length == _pinLength) {
-      _submitOtp();
-    }
-  }
-
   String _formatTimer(int totalSeconds) {
     final minutes = totalSeconds ~/ 60;
     final seconds = totalSeconds % 60;

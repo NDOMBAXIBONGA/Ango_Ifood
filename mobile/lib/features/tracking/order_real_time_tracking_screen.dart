@@ -328,7 +328,7 @@ class TrackingBloc extends Bloc<TrackingEvent, TrackingState> {
 
   void _onLocationReceived(InternalLocationUpdatedEvent event, Emitter<TrackingState> emit) {
     final courierLatLng = event.location.toLatLng;
-    final distKm = _calcularDistanciaHaversineKm(courierLatLng, moradaCliente);
+    final distKm = calcularDistanciaHaversineKm(courierLatLng, moradaCliente);
     final eta = _calcularEtaMinutos(distKm, event.location.speed);
 
     emit(TrackingLocationUpdated(
@@ -358,7 +358,7 @@ class TrackingBloc extends Bloc<TrackingEvent, TrackingState> {
     emit(const TrackingDisconnected(motivo: 'Desconectado manualmente.'));
   }
 
-  static double _calcularDistanciaHaversineKm(LatLng p1, LatLng p2) {
+  static double calcularDistanciaHaversineKm(LatLng p1, LatLng p2) {
     const double r = 6371.0;
     final dLat = (p2.latitude - p1.latitude) * (pi / 180.0);
     final dLng = (p2.longitude - p1.longitude) * (pi / 180.0);
@@ -610,11 +610,11 @@ class _OrderRealTimeTrackingScreenState extends State<OrderRealTimeTrackingScree
             final courierPosition =
                 _currentInterpolatedLatLng ?? widget.coordenadasLoja;
 
-            final totalDistKm = GeoCalculator.distanceInKm(
+            final totalDistKm = TrackingBloc.calcularDistanciaHaversineKm(
               widget.coordenadasLoja,
               widget.coordenadasCliente,
             );
-            final remainingDistKm = GeoCalculator.distanceInKm(
+            final remainingDistKm = TrackingBloc.calcularDistanciaHaversineKm(
               courierPosition,
               widget.coordenadasCliente,
             );

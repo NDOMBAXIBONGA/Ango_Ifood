@@ -130,17 +130,6 @@ class _EmailOtpVerificationScreenState extends State<EmailOtpVerificationScreen>
     }
   }
 
-  void _fillOtpCode(String code) {
-    final clean = code.replaceAll(RegExp(r'\D'), '');
-    for (int i = 0; i < clean.length && i < _pinLength; i++) {
-      _controllers[i].text = clean[i];
-    }
-    setState(() {});
-    if (clean.length == _pinLength) {
-      _checkAndSubmitOtp();
-    }
-  }
-
   void _resendOtp() {
     if (_secondsRemaining == 0) {
       for (final controller in _controllers) {
