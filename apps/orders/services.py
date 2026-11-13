@@ -359,7 +359,7 @@ class CheckoutPricingService:
                 .prefetch_related(
                     Prefetch(
                         "grupos_opcoes",
-                        queryset=GrupoOpcao.objects.prefetch_related("opcoes"),
+                        queryset=GrupoOpcao.objects.prefetch_related("opcoes_grupo"),
                     )
                 )
                 .filter(id__in=set(item_ids_solicitados))

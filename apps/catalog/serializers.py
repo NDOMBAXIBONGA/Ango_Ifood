@@ -535,7 +535,7 @@ class PartnerItemMenuSerializer(serializers.ModelSerializer):
                     opcao_obj = OpcaoItem.objects.create(grupo=grupo_obj, **opcao_dict)
                 ids_opcoes_mantidas.append(opcao_obj.id)
 
-            grupo_obj.opcoes.exclude(id__in=ids_opcoes_mantidas).delete()
+            grupo_obj.opcoes_grupo.exclude(id__in=ids_opcoes_mantidas).delete()
 
         item.grupos_opcoes.exclude(id__in=ids_grupos_mantidos).delete()
 

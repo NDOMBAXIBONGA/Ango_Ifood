@@ -642,6 +642,11 @@ class GrupoOpcao(models.Model):
         obrigatorio_str = "Obrigatório" if self.is_obrigatorio else "Opcional"
         return f"{self.item.nome} -> {self.nome} ({obrigatorio_str}: {self.minimo_escolhas}..{self.maximo_escolhas})"
 
+    @property
+    def opcoes(self):
+        """Retorna as opções pertencentes a este grupo de opções."""
+        return self.opcoes_grupo.all()
+
 
 class OpcaoItem(models.Model):
     """

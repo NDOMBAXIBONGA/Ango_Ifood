@@ -148,7 +148,7 @@ class AdicionarItemCarrinhoSerializer(serializers.Serializer):
         try:
             item = (
                 ItemMenu.objects.select_related("loja", "categoria", "categoria__loja")
-                .prefetch_related("grupos_opcoes__opcoes")
+                .prefetch_related("grupos_opcoes__opcoes_grupo")
                 .get(pk=item_id)
             )
         except ItemMenu.DoesNotExist:

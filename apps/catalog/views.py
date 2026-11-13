@@ -326,7 +326,7 @@ class StoreDiscoveryViewSet(viewsets.ReadOnlyModelViewSet):
             queryset=ItemMenu.objects.prefetch_related(
                 Prefetch(
                     "grupos_opcoes",
-                    queryset=GrupoOpcao.objects.prefetch_related("opcoes").order_by("nome"),
+                    queryset=GrupoOpcao.objects.prefetch_related("opcoes_grupo").order_by("nome"),
                 )
             ).order_by("-is_disponivel", "nome"),
         )
@@ -355,7 +355,7 @@ class StoreDiscoveryViewSet(viewsets.ReadOnlyModelViewSet):
             .prefetch_related(
                 Prefetch(
                     "grupos_opcoes",
-                    queryset=GrupoOpcao.objects.prefetch_related("opcoes").order_by("nome"),
+                    queryset=GrupoOpcao.objects.prefetch_related("opcoes_grupo").order_by("nome"),
                 )
             )
             .order_by("-is_disponivel", "nome")
@@ -494,7 +494,7 @@ class PartnerMenuItemViewSet(PartnerCatalogBaseMixin, viewsets.ModelViewSet):
         user = self.request.user
         prefetch_grupos = Prefetch(
             "grupos_opcoes",
-            queryset=GrupoOpcao.objects.prefetch_related("opcoes").order_by("nome"),
+            queryset=GrupoOpcao.objects.prefetch_related("opcoes_grupo").order_by("nome"),
         )
         qs = ItemMenu.objects.select_related("categoria", "categoria__loja").prefetch_related(
             prefetch_grupos
