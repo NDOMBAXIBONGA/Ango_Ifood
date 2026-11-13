@@ -408,6 +408,9 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
       nome: _nomeLojaCtrl.text.trim().isNotEmpty
           ? _nomeLojaCtrl.text.trim()
           : 'Minha Loja',
+      moradaTexto: _moradaCompletaCtrl.text.trim().isNotEmpty
+          ? _moradaCompletaCtrl.text.trim()
+          : 'Luanda, Angola',
       imagemUrl: _heroImagemUrlCtrl.text.trim().isNotEmpty
           ? _heroImagemUrlCtrl.text.trim()
           : 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800',
@@ -415,7 +418,6 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
       distanciaKm: 1.2,
       etaMinutosEstimado: 25,
       taxaEntregaCentimos: 50000,
-      isEntregaGratis: false,
       scoreReputacao: 5.0,
       isPatrocinado: false,
       isAberta: true,
