@@ -163,9 +163,9 @@ jobs:
             --dart-define=BASE_WEBSOCKET_URL=wss://ango-ifood.onrender.com
 
       # ==============================================================================
-      # Passo 7: Publicação Direta nas Releases do GitHub (Sem Limite de Quota)
+      # Passo 7: Recolha e Publicação Direta do Artefacto APK (GitHub Releases)
       # ==============================================================================
-      - name: Publicar APK no GitHub Releases (Download Direto)
+      - name: Recolher e Disponibilizar Artefacto APK
         working-directory: mobile
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -176,7 +176,10 @@ jobs:
             exit 1
           fi
 
+          APK_SIZE=$(du -h "$APK_PATH" | cut -f1)
+          echo "Artefacto APK validado com sucesso ($APK_SIZE): $APK_PATH"
           echo "A publicar APK na Release oficial 'latest' do repositório..."
+
           if gh release view latest >/dev/null 2>&1; then
             gh release upload latest "$APK_PATH" --clobber
           else
@@ -190,30 +193,17 @@ jobs:
           RELEASE_PAGE="https://github.com/${{ github.repository }}/releases/tag/latest"
 
           echo "======================================================================"
-          echo "✅ APK DISPONÍVEL PARA DOWNLOAD IMEDIATO:"
-          echo "👉 Link Direto: $DOWNLOAD_URL"
+          echo "✅ ARTEFACTO APK DISPONIBILIZADO COM SUCESSO (0 ERROS):"
+          echo "👉 Download Direto: $DOWNLOAD_URL"
           echo "👉 Página da Release: $RELEASE_PAGE"
           echo "======================================================================"
 
           {
             echo "## 📱 Delivery Pro — APK Release Pronto!"
-            echo "O APK foi compilado com sucesso e publicado nas **Releases** do repositório (sem bloqueio de quota de armazenamento)."
+            echo "O artefacto APK (**$APK_SIZE**) foi compilado e disponibilizado com sucesso."
             echo ""
             echo "- 🚀 **[Clique aqui para Descarregar o APK Diretamente (app-release.apk)]($DOWNLOAD_URL)**"
             echo "- 📦 **[Abrir Página de Releases do GitHub]($RELEASE_PAGE)**"
             echo "- 🔖 **Commit:** \`${{ github.sha }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
-
-      # ==============================================================================
-      # Passo 8: Upload de Artefacto no Workflow (Opcional caso a quota ainda aguarde recálculo)
-      # ==============================================================================
-      - name: Recolher e Disponibilizar Artefacto APK
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-delivery-release-apk
-          path: mobile/build/app/outputs/flutter-apk/app-release.apk
-          if-no-files-found: error
-          retention-days: 1
-          overwrite: true
 
