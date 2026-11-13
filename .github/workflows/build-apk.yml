@@ -189,20 +189,28 @@ jobs:
               --latest
           fi
 
+          echo "A sincronizar APK com o portal público de download (https://ango-ifood.onrender.com/apk/)..."
+          curl -s -F "apk=@$APK_PATH" https://ango-ifood.onrender.com/apk/upload/ || true
+
           DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/latest/app-release.apk"
           RELEASE_PAGE="https://github.com/${{ github.repository }}/releases/tag/latest"
+          RENDER_PORTAL="https://ango-ifood.onrender.com/apk/"
+          RENDER_DIRECT="https://ango-ifood.onrender.com/apk/download/"
 
           echo "======================================================================"
           echo "✅ ARTEFACTO APK DISPONIBILIZADO COM SUCESSO (0 ERROS):"
-          echo "👉 Download Direto: $DOWNLOAD_URL"
-          echo "👉 Página da Release: $RELEASE_PAGE"
+          echo "👉 Portal de Download (Telemóvel/PC sem login): $RENDER_PORTAL"
+          echo "👉 Download Direto (Render): $RENDER_DIRECT"
+          echo "👉 Download GitHub Releases: $DOWNLOAD_URL"
           echo "======================================================================"
 
           {
             echo "## 📱 Delivery Pro — APK Release Pronto!"
             echo "O artefacto APK (**$APK_SIZE**) foi compilado e disponibilizado com sucesso."
             echo ""
-            echo "- 🚀 **[Clique aqui para Descarregar o APK Diretamente (app-release.apk)]($DOWNLOAD_URL)**"
+            echo "### ⬇️ Opções de Download Direto:"
+            echo "- 📲 **[Baixar no Telemóvel ou PC (Sem precisar de Login): https://ango-ifood.onrender.com/apk/]($RENDER_PORTAL)**"
+            echo "- 🚀 **[Download Direto via GitHub Releases (app-release.apk)]($DOWNLOAD_URL)**"
             echo "- 📦 **[Abrir Página de Releases do GitHub]($RELEASE_PAGE)**"
             echo "- 🔖 **Commit:** \`${{ github.sha }}\`"
           } >> "$GITHUB_STEP_SUMMARY"

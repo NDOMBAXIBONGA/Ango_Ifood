@@ -196,7 +196,89 @@ def health_check(request):
     )
 
 
+from django.http import FileResponse, HttpResponse
+from django.views.decorators.csrf import csrf_exempt
+
+APK_STORAGE_PATH = "/tmp/DeliveryPro.apk"
+
+
+def apk_portal_view(request):
+    """Portal web direto para download do APK Android em qualquer telemóvel ou PC."""
+    exists = os.path.exists(APK_STORAGE_PATH)
+    size_mb = round(os.path.getsize(APK_STORAGE_PATH) / (1024 * 1024), 1) if exists else 58.2
+    html = f"""<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delivery Pro — Baixar APK Oficial</title>
+<style>
+  body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }}
+  .card {{ background: #1e293b; border-radius: 24px; padding: 36px 28px; max-width: 440px; width: 100%; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.08); }}
+  .icon {{ width: 80px; height: 80px; background: linear-gradient(135deg, #ef4444, #dc2626); border-radius: 22px; display: inline-flex; align-items: center; justify-content: center; font-size: 40px; margin-bottom: 20px; box-shadow: 0 10px 25px rgba(239,68,68,0.4); }}
+  h1 {{ margin: 0 0 8px; font-size: 26px; font-weight: 800; }}
+  p {{ color: #94a3b8; margin: 0 0 28px; font-size: 15px; line-height: 1.5; }}
+  .btn {{ display: block; background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; text-decoration: none; font-weight: 700; font-size: 17px; padding: 18px 24px; border-radius: 16px; box-shadow: 0 10px 25px rgba(34,197,94,0.35); transition: transform 0.15s; }}
+  .btn:active {{ transform: scale(0.98); }}
+  .meta {{ margin-top: 20px; font-size: 13px; color: #64748b; }}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">🛵</div>
+    <h1>Delivery Pro</h1>
+    <p>Plataforma Oficial de Entregas de Angola<br>Versão Android Release ({size_mb} MB)</p>
+    <a class="btn" href="/apk/download/">⬇️ BAIXAR APK AGORA</a>
+    <div class="meta">Compatível com Android 7.0+ • Instalação Direta</div>
+  </div>
+</body>
+</html>"""
+    return HttpResponse(html, content_type="text/html; charset=utf-8")
+
+
+def apk_download_view(request):
+    """Entrega o ficheiro binário DeliveryPro.apk diretamente para instalação."""
+    if os.path.exists(APK_STORAGE_PATH):
+        return FileResponse(
+            open(APK_STORAGE_PATH, "rb"),
+            as_attachment=True,
+            filename="DeliveryPro.apk",
+            content_type="application/vnd.android.package-archive",
+        )
+    return HttpResponse(
+        "O ficheiro APK está a ser sincronizado no servidor. Aguarde alguns segundos e recarregue a página.",
+        status=404,
+        content_type="text/plain; charset=utf-8",
+    )
+
+
+@csrf_exempt
+def apk_upload_view(request):
+    """Recebe o APK compilado pelo GitHub Actions CI/CD e guarda em /tmp/DeliveryPro.apk."""
+    if request.method != "POST":
+        return JsonResponse({"detail": "Método não permitido."}, status=405)
+    apk_file = request.FILES.get("apk")
+    if not apk_file:
+        return JsonResponse({"detail": "Ficheiro 'apk' ausente."}, status=400)
+    with open(APK_STORAGE_PATH, "wb+") as dest:
+        for chunk in apk_file.chunks():
+            dest.write(chunk)
+    return JsonResponse(
+        {
+            "status": "uploaded",
+            "size_bytes": os.path.getsize(APK_STORAGE_PATH),
+            "download_url": "https://ango-ifood.onrender.com/apk/download/",
+            "portal_url": "https://ango-ifood.onrender.com/apk/",
+        },
+        status=200,
+    )
+
+
 urlpatterns = [
+    # Portal Público de Download Direto do APK Android
+    path("apk/", apk_portal_view, name="apk-portal"),
+    path("apk/download/", apk_download_view, name="apk-download"),
+    path("apk/upload/", apk_upload_view, name="apk-upload"),
     # Endpoints de Saúde e Despertar do Contentor Render (Cold Start Wake-up)
     path("api/v1/health/", health_check, name="health-check"),
     path("healthz/", health_check, name="healthz"),
