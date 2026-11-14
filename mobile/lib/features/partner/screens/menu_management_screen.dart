@@ -674,13 +674,43 @@ class _ProductCard extends StatelessWidget {
                     const SizedBox(height: 6),
 
                     // Preço Formatado em Kwanzas (RN-059)
-                    Text(
-                      CurrencyFormatter.formatKwanza(item.preco),
-                      style: const TextStyle(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF1E88E5),
-                      ),
+                    Row(
+                      children: [
+                        Text(
+                          CurrencyFormatter.formatKwanza(item.preco),
+                          style: const TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF1E88E5),
+                          ),
+                        ),
+                        if (item.isDestaque) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF9C3),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: const Color(0xFFEAB308), width: 0.8),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.star_rounded, size: 12, color: Color(0xFFCA8A04)),
+                                SizedBox(width: 2),
+                                Text(
+                                  'Destaque Home',
+                                  style: TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF854D0E),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
 
                     // Alergénios Declarados (RN-014)
@@ -723,10 +753,34 @@ class _ProductCard extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Switch.adaptive(
-                    value: isDisponivel,
-                    activeColor: const Color(0xFF16A34A),
-                    onChanged: onToggleAvailability,
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        icon: Icon(
+                          item.isDestaque ? Icons.star_rounded : Icons.star_border_rounded,
+                          color: item.isDestaque ? const Color(0xFFEAB308) : Colors.grey.shade400,
+                          size: 22,
+                        ),
+                        tooltip: item.isDestaque
+                            ? 'Remover dos Destaques da Home'
+                            : 'Destacar nos Pratos Principais da Página Inicial',
+                        onPressed: () {
+                          context.read<PartnerBloc>().add(
+                                ToggleItemHighlightRequested(
+                                  itemId: item.id,
+                                  isDestaque: !item.isDestaque,
+                                ),
+                              );
+                        },
+                      ),
+                      Switch.adaptive(
+                        value: isDisponivel,
+                        activeColor: const Color(0xFF16A34A),
+                        onChanged: onToggleAvailability,
+                      ),
+                    ],
                   ),
                   PopupMenuButton<String>(
                     icon: Icon(Icons.more_vert_rounded, size: 20, color: Colors.grey.shade600),

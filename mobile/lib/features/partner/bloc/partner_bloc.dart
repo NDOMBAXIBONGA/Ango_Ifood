@@ -58,6 +58,20 @@ class ToggleItemAvailabilityRequested extends PartnerEvent {
   List<Object?> get props => [itemId, isDisponivel];
 }
 
+/// Alterna o destaque do artigo nos Pratos Principais da Página Inicial da vitrine.
+class ToggleItemHighlightRequested extends PartnerEvent {
+  final String itemId;
+  final bool isDestaque;
+
+  const ToggleItemHighlightRequested({
+    required this.itemId,
+    required this.isDestaque,
+  });
+
+  @override
+  List<Object?> get props => [itemId, isDestaque];
+}
+
 /// Cria ou edita um item de menu (RN-014, RN-016).
 class SaveMenuItemRequested extends PartnerEvent {
   final MenuItemModel item;
@@ -269,6 +283,14 @@ class PartnerRepository {
     return MenuItemModel.fromJson(response.data as Map<String, dynamic>);
   }
 
+  Future<MenuItemModel> toggleItemHighlight(String itemId, bool isDestaque) async {
+    final response = await _dio.patch(
+      '/api/v1/partner/catalog/items/$itemId/highlight/',
+      data: {'is_destaque': isDestaque},
+    );
+    return MenuItemModel.fromJson(response.data as Map<String, dynamic>);
+  }
+
   Future<MenuItemModel> createItem(MenuItemModel item) async {
     final response = await _dio.post(
       '/api/v1/partner/catalog/items/',
@@ -320,6 +342,7 @@ class PartnerBloc extends Bloc<PartnerEvent, PartnerState> {
     on<ToggleStorePauseRequested>(_onTogglePause);
     on<SelectCategoryRequested>(_onSelectCategory);
     on<ToggleItemAvailabilityRequested>(_onToggleItemAvailability);
+    on<ToggleItemHighlightRequested>(_onToggleItemHighlight);
     on<SaveMenuItemRequested>(_onSaveMenuItem);
     on<DeleteMenuItemRequested>(_onDeleteMenuItem);
     on<CreateCategoryRequested>(_onCreateCategory);
@@ -507,6 +530,40 @@ class PartnerBloc extends Bloc<PartnerEvent, PartnerState> {
       emit(state.copyWith(
         items: itemsRevertidos,
         errorMessage: 'Não foi possível atualizar a disponibilidade do produto.',
+      ));
+    }
+  }
+
+  Future<void> _onToggleItemHighlight(
+    ToggleItemHighlightRequested event,
+    Emitter<PartnerState> emit,
+  ) async {
+    final itemsAtualizados = state.items.map((it) {
+      if (it.id == event.itemId) {
+        return it.copyWith(isDestaque: event.isDestaque);
+      }
+      return it;
+    }).toList();
+
+    emit(state.copyWith(items: itemsAtualizados, clearError: true, clearSuccess: true));
+
+    try {
+      await _repository.toggleItemHighlight(event.itemId, event.isDestaque);
+      emit(state.copyWith(
+        successMessage: event.isDestaque
+            ? 'Artigo adicionado aos Pratos em Destaque da Página Inicial com sucesso!'
+            : 'Artigo removido dos destaques da Página Inicial.',
+      ));
+    } catch (e) {
+      final itemsRevertidos = state.items.map((it) {
+        if (it.id == event.itemId) {
+          return it.copyWith(isDestaque: !event.isDestaque);
+        }
+        return it;
+      }).toList();
+      emit(state.copyWith(
+        items: itemsRevertidos,
+        errorMessage: 'Não foi possível atualizar o destaque do artigo na vitrine.',
       ));
     }
   }

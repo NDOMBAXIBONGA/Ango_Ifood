@@ -1,6 +1,9 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image_picker/image_picker.dart';
+import '../../../core/constants/environment_config.dart';
 import '../bloc/partner_bloc.dart';
 import '../models/partner_models.dart';
 
@@ -59,7 +62,9 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
   late String _categoriaSelecionadaId;
   late Set<String> _alergenosSelecionados;
   late bool _isDisponivel;
+  late bool _isDestaque;
   bool _isEditing = false;
+  bool _isUploadingImage = false;
 
   @override
   void initState() {
@@ -85,6 +90,7 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
 
     _alergenosSelecionados = Set<String>.from(widget.item?.alergenos ?? []);
     _isDisponivel = widget.item?.isDisponivel ?? true;
+    _isDestaque = widget.item?.isDestaque ?? false;
   }
 
   @override
@@ -100,6 +106,89 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
     setState(() {
       _imagemUrlController.text = url;
     });
+  }
+
+  Future<void> _pickImageFromGallery() async {
+    try {
+      final picker = ImagePicker();
+      final pickedFile = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+      if (pickedFile == null) return;
+
+      setState(() {
+        _isUploadingImage = true;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                ),
+                SizedBox(width: 12),
+                Text('A carregar imagem da galeria para o catálogo...'),
+              ],
+            ),
+            duration: Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+
+      final dio = Dio(BaseOptions(baseUrl: AppEnvironmentConfig.baseHttpUrl));
+      final formData = FormData.fromMap({
+        'arquivo': await MultipartFile.fromFile(
+          pickedFile.path,
+          filename: pickedFile.name,
+        ),
+      });
+
+      final resp = await dio.post<Map<String, dynamic>>(
+        '/api/v1/partner/store/upload/',
+        data: formData,
+      );
+
+      if (resp.data != null && resp.data!['url'] != null) {
+        final url = resp.data!['url'].toString();
+        setState(() {
+          _imagemUrlController.text = url;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Fotografia carregada com sucesso!'),
+              backgroundColor: Color(0xFF16A34A),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao enviar imagem: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploadingImage = false;
+        });
+      }
+    }
   }
 
   void _submit() {
@@ -118,6 +207,7 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
           : 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400',
       alergenos: _alergenosSelecionados.toList(),
       isDisponivel: _isDisponivel,
+      isDestaque: _isDestaque,
     );
 
     context.read<PartnerBloc>().add(
@@ -245,18 +335,39 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
                                     ),
                                     onChanged: (_) => setState(() {}),
                                   ),
-                                  const SizedBox(height: 6),
+                                  const SizedBox(height: 8),
                                   Wrap(
                                     spacing: 8,
+                                    runSpacing: 6,
+                                    crossAxisAlignment: WrapCrossAlignment.center,
                                     children: [
+                                      OutlinedButton.icon(
+                                        style: OutlinedButton.styleFrom(
+                                          visualDensity: VisualDensity.compact,
+                                          side: const BorderSide(color: Color(0xFF1E88E5)),
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                        ),
+                                        icon: _isUploadingImage
+                                            ? const SizedBox(
+                                                width: 14,
+                                                height: 14,
+                                                child: CircularProgressIndicator(strokeWidth: 2),
+                                              )
+                                            : const Icon(Icons.photo_library_rounded, size: 16, color: Color(0xFF1E88E5)),
+                                        label: Text(
+                                          _isUploadingImage ? 'A carregar...' : 'Escolher da Galeria',
+                                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1E88E5)),
+                                        ),
+                                        onPressed: _isUploadingImage ? null : _pickImageFromGallery,
+                                      ),
                                       ActionChip(
-                                        label: const Text('Exemplo Hambúrguer'),
+                                        label: const Text('Exemplo Hambúrguer', style: TextStyle(fontSize: 11)),
                                         onPressed: () => _onPickSampleImage(
                                           'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400',
                                         ),
                                       ),
                                       ActionChip(
-                                        label: const Text('Exemplo Bebida'),
+                                        label: const Text('Exemplo Bebida', style: TextStyle(fontSize: 11)),
                                         onPressed: () => _onPickSampleImage(
                                           'https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=400',
                                         ),
@@ -406,6 +517,61 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
                             ],
                           ),
                         ),
+                        const SizedBox(height: 14),
+
+                        // Switch de Destaque na Página Inicial (100% Automático)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: _isDestaque ? const Color(0xFFFEF9C3) : Colors.transparent,
+                            border: Border.all(
+                              color: _isDestaque ? const Color(0xFFEAB308) : colorScheme.outlineVariant,
+                              width: _isDestaque ? 1.5 : 1.0,
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                _isDestaque ? Icons.star_rounded : Icons.star_border_rounded,
+                                color: _isDestaque ? const Color(0xFFCA8A04) : Colors.grey,
+                                size: 26,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Pratos Principais em Destaque',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                        color: Color(0xFF0F172A),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      _isDestaque
+                                          ? 'Exibido em destaque na Página Inicial da vitrine'
+                                          : 'Artigo listado apenas no cardápio normal',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: _isDestaque ? const Color(0xFF854D0E) : Colors.grey.shade600,
+                                        fontWeight: _isDestaque ? FontWeight.w600 : FontWeight.normal,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Switch.adaptive(
+                                value: _isDestaque,
+                                activeColor: const Color(0xFFEAB308),
+                                onChanged: (novo) => setState(() => _isDestaque = novo),
+                              ),
+                            ],
+                          ),
+                        ),
                         const SizedBox(height: 24),
 
                         // 5. Grid de Chips Selecionáveis para Alergénios
@@ -504,13 +670,12 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.photo_library),
+              leading: const Icon(Icons.photo_library, color: Color(0xFF1E88E5)),
               title: const Text('Escolher da Galeria do Dispositivo'),
+              subtitle: const Text('Carregar ficheiro real a partir do telemóvel'),
               onTap: () {
                 Navigator.of(sheetCtx).pop();
-                _onPickSampleImage(
-                  'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=400',
-                );
+                _pickImageFromGallery();
               },
             ),
           ],

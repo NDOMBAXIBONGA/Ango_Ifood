@@ -547,6 +547,16 @@ class ItemMenu(models.Model):
         ),
     )
 
+    # Destaque na Página Inicial / Vitrine da Loja
+    is_destaque = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name=_("Destaque na Página Inicial"),
+        help_text=_(
+            "Se True, o artigo surge destacado na secção de 'Pratos Principais em Destaque' da Página Inicial da loja."
+        ),
+    )
+
     class Meta:
         db_table = "catalog_item_menu"
         verbose_name = _("Item do Menu")
@@ -554,6 +564,7 @@ class ItemMenu(models.Model):
         ordering = ["categoria", "nome"]
         indexes = [
             models.Index(fields=["categoria", "is_disponivel"], name="idx_item_cat_disp"),
+            models.Index(fields=["loja", "is_destaque"], name="idx_item_loja_dest"),
         ]
 
     def save(self, *args: Any, **kwargs: Any) -> None:

@@ -239,6 +239,7 @@ class MenuItemModel extends Equatable {
   final String imagemUrl;
   final List<String> alergenos;
   final bool isDisponivel;
+  final bool isDestaque;
   final List<MenuOptionGroupModel> gruposOpcoes;
 
   const MenuItemModel({
@@ -249,6 +250,7 @@ class MenuItemModel extends Equatable {
     required this.imagemUrl,
     required this.alergenos,
     required this.isDisponivel,
+    this.isDestaque = false,
     required this.gruposOpcoes,
   });
 
@@ -264,6 +266,7 @@ class MenuItemModel extends Equatable {
       imagemUrl: (json['imagem_url'] as String?) ?? '',
       alergenos: rawAlergenos.map((e) => '$e').toList(),
       isDisponivel: (json['is_disponivel'] as bool?) ?? true,
+      isDestaque: (json['is_destaque'] as bool?) ?? false,
       gruposOpcoes: rawGrupos
           .whereType<Map<String, dynamic>>()
           .map(MenuOptionGroupModel.fromJson)
@@ -280,6 +283,7 @@ class MenuItemModel extends Equatable {
         imagemUrl,
         alergenos,
         isDisponivel,
+        isDestaque,
         gruposOpcoes,
       ];
 }
@@ -1861,6 +1865,22 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
                         ),
                       ),
                       actions: [
+                        IconButton(
+                          icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+                          tooltip: 'Atualizar Cardápio e Vitrine',
+                          onPressed: () {
+                            context
+                                .read<StoreMenuBloc>()
+                                .add(LoadStoreMenuEvent(storeId: store.id));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('A atualizar cardápio e vitrine em tempo real...'),
+                                duration: Duration(seconds: 1),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          },
+                        ),
                         if (vitrine.heroVideoUrl.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(right: 8),
@@ -2341,51 +2361,116 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
           ],
         ),
         const SizedBox(height: 8),
-        if (allItems.isNotEmpty)
-          ...allItems.take(4).map(
-                (item) => _MenuItemTile(
-                  item: item,
-                  storeIsOpen: store.isAberta,
-                  quantityInCart: CartService.instance.lojaId == store.id
-                      ? CartService.instance.getQuantity(item.id)
-                      : 0,
-                  onAddPressed: () =>
-                      _handleMenuItemTap(context, store, item),
-                ),
-              )
-        else
-          ...vitrine.pratosDestaque.map(
-            (dest) => Card(
-              margin: const EdgeInsets.only(bottom: 12),
-              child: ListTile(
-                leading: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: Image.network(
-                    (dest['midia_url'] ?? '').toString(),
-                    width: 60,
-                    height: 60,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) =>
-                        const Icon(Icons.fastfood_rounded),
-                  ),
-                ),
-                title: Text(
-                  (dest['titulo'] ?? 'Prato Especial').toString(),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                subtitle: Text((dest['subtitulo'] ?? '').toString()),
-                trailing: Text(
-                  formatarMoedaUnidadesMinimas(
-                    (dest['preco'] as num?)?.toInt() ?? 0,
-                  ),
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.primary,
-                  ),
-                ),
-              ),
-            ),
-          ),
+        Builder(
+          builder: (context) {
+            final destacadas = allItems.where((i) => i.isDestaque).toList();
+            final itensExibir = destacadas.isNotEmpty ? destacadas : allItems.take(4).toList();
+
+            if (itensExibir.isNotEmpty) {
+              return Column(
+                children: itensExibir
+                    .map(
+                      (item) => _MenuItemTile(
+                        item: item,
+                        storeIsOpen: store.isAberta,
+                        quantityInCart: CartService.instance.lojaId == store.id
+                            ? CartService.instance.getQuantity(item.id)
+                            : 0,
+                        onAddPressed: () =>
+                            _handleMenuItemTap(context, store, item),
+                      ),
+                    )
+                    .toList(),
+              );
+            } else if (vitrine.pratosDestaque.isNotEmpty) {
+              return Column(
+                children: vitrine.pratosDestaque
+                    .map(
+                      (dest) => Card(
+                        elevation: 0,
+                        margin: const EdgeInsets.only(bottom: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          side: const BorderSide(
+                            color: Color(0xFFE2E8F0),
+                            width: 1.2,
+                          ),
+                        ),
+                        color: Colors.white,
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      (dest['titulo'] ?? 'Prato Especial').toString(),
+                                      style: const TextStyle(
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF0F172A),
+                                      ),
+                                    ),
+                                    if ((dest['subtitulo'] ?? '')
+                                        .toString()
+                                        .isNotEmpty) ...[
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        (dest['subtitulo'] ?? '').toString(),
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          color: Color(0xFF475569),
+                                        ),
+                                      ),
+                                    ],
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      formatarMoedaUnidadesMinimas(
+                                        (dest['preco'] as num?)?.toInt() ?? 0,
+                                      ),
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w900,
+                                        color: Color(0xFFDC2626),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: Image.network(
+                                  (dest['midia_url'] ?? '').toString(),
+                                  width: 100,
+                                  height: 88,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    width: 100,
+                                    height: 88,
+                                    color: const Color(0xFFF1F5F9),
+                                    child: const Icon(
+                                      Icons.fastfood_outlined,
+                                      color: Colors.grey,
+                                      size: 28,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              );
+            }
+            return const SizedBox.shrink();
+          },
+        ),
       ],
     );
   }
@@ -3690,56 +3775,46 @@ class _MenuItemTile extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final bool canAdd = item.isDisponivel && storeIsOpen;
+    const double imageColWidth = 100.0;
+    const double gap = 14.0;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const double imageColWidth = 100.0;
-        const double gap = 14.0;
-        const double horizontalPadding = 32.0; // 16px em cada lado do Card
-        final double maxW = constraints.maxWidth > 0
-            ? constraints.maxWidth
-            : MediaQuery.of(context).size.width - 32;
-        final double textColWidth =
-            (maxW - imageColWidth - gap - horizontalPadding).clamp(140.0, 600.0);
-
-        return Card(
-          elevation: 0,
-          margin: const EdgeInsets.only(bottom: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: const BorderSide(
-              color: Color(0xFFE2E8F0),
-              width: 1.2,
-            ),
-          ),
-          color: Colors.white,
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: canAdd ? onAddPressed : null,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 1. Coluna Textual com largura rígida pixel-perfect garantida contra colapso
-                  SizedBox(
-                    width: textColWidth,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          item.nome,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF0F172A),
-                            height: 1.25,
-                            decoration: item.isDisponivel ? null : TextDecoration.lineThrough,
-                          ),
-                        ),
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 14),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: const BorderSide(
+          color: Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
+      ),
+      color: Colors.white,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: canAdd ? onAddPressed : null,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 1. Coluna Textual com preenchimento total do espaço disponível (Expanded)
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      item.nome,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF0F172A),
+                        height: 1.25,
+                        decoration: item.isDisponivel ? null : TextDecoration.lineThrough,
+                      ),
+                    ),
                         if (!item.isDisponivel) ...[
                           const SizedBox(height: 4),
                           Container(
@@ -3920,8 +3995,6 @@ class _MenuItemTile extends StatelessWidget {
             ),
           ),
         );
-      },
-    );
   }
 }
 

@@ -7,8 +7,12 @@ Views e ViewSets da aplicação 'catalog':
    assíncrono quando `is_disponivel=False` (RN-015, RN-020).
 """
 import logging
+import os
+import uuid
 from datetime import timedelta
 from typing import Any
+
+from django.conf import settings
 
 from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point
@@ -542,6 +546,22 @@ class StoreDiscoveryViewSet(viewsets.ReadOnlyModelViewSet):
             )
 
         vitrine = obter_ou_inicializar_vitrine_loja(loja)
+
+        # Sincroniza dinamicamente os pratos_destaque da vitrine com os artigos com is_destaque=True
+        itens_destaque_qs = ItemMenu.objects.filter(loja=loja, is_destaque=True, is_disponivel=True)
+        if itens_destaque_qs.exists():
+            vitrine.setdefault("identidade_home", {})
+            vitrine["identidade_home"]["pratos_destaque"] = [
+                {
+                    "titulo": it.nome,
+                    "subtitulo": it.descricao,
+                    "preco": it.preco,
+                    "midia_url": it.imagem_url or "https://images.unsplash.com/photo-1544025162-d76694265947?w=800",
+                    "tipo_midia": "imagem",
+                }
+                for it in itens_destaque_qs[:8]
+            ]
+
         horarios_qs = loja.horarios.all().order_by("dia_semana", "hora_abertura")
         horarios_data = HorarioFuncionamentoSerializer(horarios_qs, many=True).data
 
@@ -843,6 +863,33 @@ class PartnerMenuItemViewSet(PartnerCatalogBaseMixin, viewsets.ModelViewSet):
         return context
 
     @transaction.atomic
+    def perform_create(self, serializer: PartnerItemMenuSerializer) -> None:
+        """RN-014 / RN-020: Cria item e invalida instantaneamente a cache para exibição imediata aos clientes."""
+        loja = self.obter_loja_parceiro(exigir_loja=False)
+        item = serializer.save(loja=loja)
+        loja_id = str(item.loja_id or (item.categoria.loja_id if item.categoria else ""))
+        if loja_id:
+            invalidar_cache_catalogo_imediato(
+                loja_id=loja_id,
+                item_id=str(item.id),
+                is_disponivel=item.is_disponivel,
+                motivo="item_created_rn020",
+            )
+
+    @transaction.atomic
+    def perform_update(self, serializer: PartnerItemMenuSerializer) -> None:
+        """RN-015 / RN-020: Atualiza item e sincroniza imediatamente com a vista dos clientes."""
+        item = serializer.save()
+        loja_id = str(item.loja_id or (item.categoria.loja_id if item.categoria else ""))
+        if loja_id:
+            invalidar_cache_catalogo_imediato(
+                loja_id=loja_id,
+                item_id=str(item.id),
+                is_disponivel=item.is_disponivel,
+                motivo="item_updated_rn020",
+            )
+
+    @transaction.atomic
     def perform_destroy(self, instance: ItemMenu) -> None:
         """
         RN-015 / RN-020: Ao eliminar um item do menu, invalida imediatamente a cache
@@ -896,6 +943,36 @@ class PartnerMenuItemViewSet(PartnerCatalogBaseMixin, viewsets.ModelViewSet):
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["patch"], url_path="highlight")
+    def toggle_highlight(self, request: Request, pk: str | None = None) -> Response:
+        """
+        Atalho rápido (`PATCH /api/v1/partner/catalog/items/<id>/highlight/`) para o parceiro
+        habilitar ou desabilitar o artigo nos Pratos Principais em Destaque da Página Inicial de forma 100% automática.
+        """
+        item = self.get_object()
+        novo_destaque = request.data.get("is_destaque")
+        if novo_destaque is None:
+            novo_destaque = not item.is_destaque
+        else:
+            novo_destaque = bool(novo_destaque)
+
+        serializer = self.get_serializer(
+            item,
+            data={"is_destaque": novo_destaque},
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        loja_id = str(item.loja_id or (item.categoria.loja_id if item.categoria else ""))
+        if loja_id:
+            invalidar_cache_catalogo_imediato(
+                loja_id=loja_id,
+                item_id=str(item.id),
+                motivo="item_highlight_toggled",
+            )
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -1292,5 +1369,73 @@ class PartnerStorefrontCMSView(PartnerCatalogBaseMixin, APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class PartnerMediaUploadView(APIView):
+    """
+    Endpoint de Upload de Mídia (Imagens e Vídeos) para a Vitrine e Catálogo do Parceiro:
+    `POST /api/v1/partner/store/upload/`
+    Aceita multipart/form-data com o campo 'arquivo', 'midia' ou 'file'.
+    Suporta imagens (jpg, jpeg, png, webp, gif) e vídeos (mp4, mov, webm).
+    """
+
+    authentication_classes = [OptionalJWTAuthentication]
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request: Request) -> Response:
+        arquivo = (
+            request.FILES.get("arquivo")
+            or request.FILES.get("file")
+            or request.FILES.get("midia")
+            or request.FILES.get("image")
+            or request.FILES.get("video")
+        )
+        if not arquivo:
+            return Response(
+                {"erro": _("Nenhum ficheiro enviado. Utilize o campo 'arquivo' ou 'midia'.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        nome_original = arquivo.name
+        ext = os.path.splitext(nome_original)[1].lower()
+        extensoes_permitidas = {
+            ".jpg", ".jpeg", ".png", ".webp", ".gif",
+            ".mp4", ".mov", ".webm", ".avi", ".m4v"
+        }
+        if ext not in extensoes_permitidas:
+            return Response(
+                {"erro": _(f"Extensão de ficheiro '{ext}' não suportada. Envie imagens ou vídeos válidos.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        tipo_midia = "video" if ext in {".mp4", ".mov", ".webm", ".avi", ".m4v"} else "imagem"
+        diretorio_upload = os.path.join(settings.BASE_DIR, "media", "uploads", "vitrine")
+        os.makedirs(diretorio_upload, exist_ok=True)
+
+        nome_seguro = f"{uuid.uuid4().hex[:12]}_{int(timezone.now().timestamp())}{ext}"
+        caminho_final = os.path.join(diretorio_upload, nome_seguro)
+
+        with open(caminho_final, "wb+") as destino:
+            for chunk in arquivo.chunks():
+                destino.write(chunk)
+
+        url_relativa = f"/media/uploads/vitrine/{nome_seguro}"
+        url_absoluta = request.build_absolute_uri(url_relativa)
+        if "onrender.com" in url_absoluta and url_absoluta.startswith("http://"):
+            url_absoluta = url_absoluta.replace("http://", "https://", 1)
+
+        return Response(
+            {
+                "status": "success",
+                "mensagem": _("Ficheiro carregado com sucesso!"),
+                "url": url_absoluta,
+                "relative_url": url_relativa,
+                "tipo": tipo_midia,
+                "nome_original": nome_original,
+                "tamanho_bytes": arquivo.size,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
 
 

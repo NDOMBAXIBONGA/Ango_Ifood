@@ -209,6 +209,7 @@ class MenuItemModel extends Equatable {
   final String? imagemUrl;
   final List<String> alergenos;
   final bool isDisponivel; // RN-015
+  final bool isDestaque; // Destaque na Página Inicial da vitrine
 
   const MenuItemModel({
     required this.id,
@@ -219,6 +220,7 @@ class MenuItemModel extends Equatable {
     this.imagemUrl,
     this.alergenos = const [],
     this.isDisponivel = true,
+    this.isDestaque = false,
   });
 
   MenuItemModel copyWith({
@@ -230,6 +232,7 @@ class MenuItemModel extends Equatable {
     String? imagemUrl,
     List<String>? alergenos,
     bool? isDisponivel,
+    bool? isDestaque,
   }) {
     return MenuItemModel(
       id: id ?? this.id,
@@ -240,6 +243,7 @@ class MenuItemModel extends Equatable {
       imagemUrl: imagemUrl ?? this.imagemUrl,
       alergenos: alergenos ?? this.alergenos,
       isDisponivel: isDisponivel ?? this.isDisponivel,
+      isDestaque: isDestaque ?? this.isDestaque,
     );
   }
 
@@ -273,6 +277,7 @@ class MenuItemModel extends Equatable {
       imagemUrl: json['imagem_url'] as String?,
       alergenos: listaAlergenos,
       isDisponivel: json['is_disponivel'] as bool? ?? true,
+      isDestaque: json['is_destaque'] as bool? ?? false,
     );
   }
 
@@ -284,6 +289,7 @@ class MenuItemModel extends Equatable {
         if (imagemUrl != null) 'imagem_url': imagemUrl,
         'alergenos': alergenos,
         'is_disponivel': isDisponivel,
+        'is_destaque': isDestaque,
       };
 
   @override
@@ -296,6 +302,7 @@ class MenuItemModel extends Equatable {
         imagemUrl,
         alergenos,
         isDisponivel,
+        isDestaque,
       ];
 }
 

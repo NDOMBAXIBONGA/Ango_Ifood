@@ -387,3 +387,11 @@ urlpatterns = [
     path("api/v1/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/v1/auth/token/verify/", TokenVerifyView.as_view(), name="token_verify"),
 ]
+
+# Rota para servir ficheiros de mídia (uploads de imagens e vídeos dos parceiros e vitrine)
+from django.views.static import serve
+from django.urls import re_path
+
+urlpatterns += [
+    re_path(r"^media/(?P<path>.*)$", serve, {"document_root": settings.MEDIA_ROOT}),
+]

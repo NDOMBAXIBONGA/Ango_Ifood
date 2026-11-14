@@ -441,6 +441,7 @@ class PartnerItemMenuSerializer(serializers.ModelSerializer):
             "imagem_url",
             "alergenos",
             "is_disponivel",
+            "is_destaque",
             "grupos_opcoes",
         )
         read_only_fields = ("id",)

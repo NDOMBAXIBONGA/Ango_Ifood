@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/network/app_environment_config.dart';
 import '../../auth/storage/secure_token_storage.dart';
@@ -118,6 +119,94 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
     return createSecureDioClient(tokenStorage: _tokenStorage);
   }
 
+  Future<void> _pickAndUploadMedia({
+    required bool isVideo,
+    required void Function(String url) onUploaded,
+  }) async {
+    try {
+      final picker = ImagePicker();
+      XFile? pickedFile;
+      if (isVideo) {
+        pickedFile = await picker.pickVideo(
+          source: ImageSource.gallery,
+          maxDuration: const Duration(minutes: 5),
+        );
+      } else {
+        pickedFile = await picker.pickImage(
+          source: ImageSource.gallery,
+          imageQuality: 85,
+        );
+      }
+      if (pickedFile == null) return;
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(isVideo
+                    ? 'A carregar vídeo da galeria para o servidor...'
+                    : 'A carregar fotografia da galeria para a vitrine...'),
+              ],
+            ),
+            duration: const Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+
+      final dio = Dio(BaseOptions(baseUrl: AppEnvironmentConfig.baseHttpUrl));
+      final formData = FormData.fromMap({
+        'arquivo': await MultipartFile.fromFile(
+          pickedFile.path,
+          filename: pickedFile.name,
+        ),
+      });
+
+      final resp = await dio.post<Map<String, dynamic>>(
+        '/api/v1/partner/store/upload/',
+        data: formData,
+      );
+
+      if (resp.data != null && resp.data!['url'] != null) {
+        final uploadedUrl = resp.data!['url'].toString();
+        setState(() {
+          onUploaded(uploadedUrl);
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(isVideo
+                  ? 'Vídeo da galeria carregado com sucesso!'
+                  : 'Fotografia da galeria carregada com sucesso!'),
+              backgroundColor: const Color(0xFF16A34A),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Falha ao exportar da galeria: $e'),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _loadStorefrontData() async {
     setState(() => _isLoading = true);
     try {
@@ -136,9 +225,12 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
       }
     } catch (e) {
       if (mounted) {
+        final msg = (e is DioException && e.response?.statusCode == 401)
+            ? 'Sessão de parceiro a carregar ou sem autenticação activa.'
+            : 'Aviso ao carregar vitrine: $e';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Aviso ao carregar vitrine: $e'),
+            content: Text(msg),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -322,9 +414,12 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
       }
     } catch (e) {
       if (mounted) {
+        final msg = (e is DioException && e.response?.statusCode == 401)
+            ? 'Sessão de parceiro expirada ou sem permissão. Por favor volte a iniciar sessão como parceiro.'
+            : 'Erro ao guardar alterações: ${e.toString().split("\n").first}';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro ao guardar alterações: $e'),
+            content: Text(msg),
             backgroundColor: Colors.redAccent,
             behavior: SnackBarBehavior.floating,
           ),
@@ -645,29 +740,98 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
             TextField(
               controller: _heroImagemUrlCtrl,
               onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'URL da Fotografia Principal de Capa (Hero)',
-                prefixIcon: Icon(Icons.image_rounded),
-                border: OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.image_rounded),
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.photo_library_rounded, color: Color(0xFF1E88E5)),
+                  tooltip: 'Escolher da Galeria',
+                  onPressed: () => _pickAndUploadMedia(
+                    isVideo: false,
+                    onUploaded: (url) => _heroImagemUrlCtrl.text = url,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => _pickAndUploadMedia(
+                  isVideo: false,
+                  onUploaded: (url) => _heroImagemUrlCtrl.text = url,
+                ),
+                icon: const Icon(Icons.add_photo_alternate_rounded, size: 18, color: Color(0xFF1E88E5)),
+                label: const Text(
+                  'Carregar Foto de Capa da Galeria do Telemóvel',
+                  style: TextStyle(color: Color(0xFF1E88E5), fontWeight: FontWeight.w600),
+                ),
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _heroVideoUrlCtrl,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'URL do Vídeo em Destaque dos Pratos Principais (MP4)',
-                prefixIcon: Icon(Icons.videocam_rounded),
-                border: OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.videocam_rounded),
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.video_library_rounded, color: Color(0xFFE11D48)),
+                  tooltip: 'Escolher Vídeo da Galeria',
+                  onPressed: () => _pickAndUploadMedia(
+                    isVideo: true,
+                    onUploaded: (url) => _heroVideoUrlCtrl.text = url,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => _pickAndUploadMedia(
+                  isVideo: true,
+                  onUploaded: (url) => _heroVideoUrlCtrl.text = url,
+                ),
+                icon: const Icon(Icons.video_call_rounded, size: 18, color: Color(0xFFE11D48)),
+                label: const Text(
+                  'Carregar Vídeo em Destaque da Galeria do Telemóvel',
+                  style: TextStyle(color: Color(0xFFE11D48), fontWeight: FontWeight.w600),
+                ),
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _logoUrlCtrl,
               onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'URL do Logótipo do Restaurante',
-                prefixIcon: Icon(Icons.verified_outlined),
-                border: OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.verified_outlined),
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.photo_library_rounded, color: Color(0xFF1E88E5)),
+                  tooltip: 'Escolher da Galeria',
+                  onPressed: () => _pickAndUploadMedia(
+                    isVideo: false,
+                    onUploaded: (url) => _logoUrlCtrl.text = url,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => _pickAndUploadMedia(
+                  isVideo: false,
+                  onUploaded: (url) => _logoUrlCtrl.text = url,
+                ),
+                icon: const Icon(Icons.photo_camera_back_rounded, size: 18, color: Color(0xFF1E88E5)),
+                label: const Text(
+                  'Carregar Logótipo da Galeria do Telemóvel',
+                  style: TextStyle(color: Color(0xFF1E88E5), fontWeight: FontWeight.w600),
+                ),
               ),
             ),
           ],
@@ -820,10 +984,33 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
             TextField(
               controller: _chefFotoUrlCtrl,
               onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'URL da Fotografia do Chef',
-                prefixIcon: Icon(Icons.portrait_rounded),
-                border: OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.portrait_rounded),
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.photo_library_rounded, color: Color(0xFF1E88E5)),
+                  tooltip: 'Escolher da Galeria',
+                  onPressed: () => _pickAndUploadMedia(
+                    isVideo: false,
+                    onUploaded: (url) => _chefFotoUrlCtrl.text = url,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => _pickAndUploadMedia(
+                  isVideo: false,
+                  onUploaded: (url) => _chefFotoUrlCtrl.text = url,
+                ),
+                icon: const Icon(Icons.portrait_rounded, size: 18, color: Color(0xFF1E88E5)),
+                label: const Text(
+                  'Carregar Foto do Chef da Galeria do Telemóvel',
+                  style: TextStyle(color: Color(0xFF1E88E5), fontWeight: FontWeight.w600),
+                ),
               ),
             ),
             const SizedBox(height: 12),
@@ -1365,6 +1552,46 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
                       setModalState(() => tipo = s.first),
                 ),
                 const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.photo_library_rounded, size: 16),
+                        label: const Text('Foto da Galeria', style: TextStyle(fontSize: 12)),
+                        onPressed: () async {
+                          await _pickAndUploadMedia(
+                            isVideo: false,
+                            onUploaded: (url) {
+                              setModalState(() {
+                                tipo = 'imagem';
+                                urlCtrl.text = url;
+                              });
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.video_library_rounded, size: 16),
+                        label: const Text('Vídeo da Galeria', style: TextStyle(fontSize: 12)),
+                        onPressed: () async {
+                          await _pickAndUploadMedia(
+                            isVideo: true,
+                            onUploaded: (url) {
+                              setModalState(() {
+                                tipo = 'video';
+                                urlCtrl.text = url;
+                              });
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 TextField(
                   controller: legendaCtrl,
                   decoration: const InputDecoration(
@@ -1374,8 +1601,20 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
                 const SizedBox(height: 8),
                 TextField(
                   controller: urlCtrl,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'URL da Fotografia ou Vídeo',
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.file_upload_outlined),
+                      tooltip: 'Carregar da Galeria',
+                      onPressed: () => _pickAndUploadMedia(
+                        isVideo: tipo == 'video',
+                        onUploaded: (url) {
+                          setModalState(() {
+                            urlCtrl.text = url;
+                          });
+                        },
+                      ),
+                    ),
                   ),
                 ),
               ],

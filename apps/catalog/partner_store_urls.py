@@ -4,6 +4,7 @@ Rotas do Django REST Framework para operação e status da loja do Parceiro (RN-
 from django.urls import path
 
 from apps.catalog.views import (
+    PartnerMediaUploadView,
     PartnerStoreHoursView,
     PartnerStoreStatusView,
     PartnerStorefrontCMSView,
@@ -18,5 +19,7 @@ urlpatterns = [
     path("hours/", PartnerStoreHoursView.as_view(), name="store-hours"),
     # GET/POST/PUT/PATCH /api/v1/partner/store/storefront/ (Controlo Total CMS da Vitrine, Reservas e Mensagens)
     path("storefront/", PartnerStorefrontCMSView.as_view(), name="store-cms"),
+    # POST /api/v1/partner/store/upload/ (Upload de Imagens e Vídeos da Galeria)
+    path("upload/", PartnerMediaUploadView.as_view(), name="store-upload"),
 ]
 
