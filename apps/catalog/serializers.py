@@ -462,11 +462,18 @@ class PartnerItemMenuSerializer(serializers.ModelSerializer):
             )
         return [str(a).strip() for a in value if str(a).strip()]
 
+    def to_internal_value(self, data: dict[str, Any]) -> dict[str, Any]:
+        data_copy = dict(data)
+        cat_val = data_copy.get("categoria")
+        if cat_val is None or cat_val == "" or str(cat_val).startswith("cat-"):
+            data_copy["categoria"] = None
+        return super().to_internal_value(data_copy)
+
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         """
         1. Valida que a categoria pertence à loja do parceiro autenticado.
         2. RN-017 (Paridade de preços): Se `preco_balcao_referencia` for informado, garante que
-           o preço na app não excede o preço de balcão em mais de 10%.
+           o preço na aplicação não excede o preço de balcão em mais de 10%.
         """
         categoria: CategoriaItem | None = attrs.get("categoria") or getattr(
             self.instance, "categoria", None
@@ -550,7 +557,9 @@ class PartnerItemMenuSerializer(serializers.ModelSerializer):
         tarefa assíncrona Celery (no `transaction.on_commit`) para propagar via WebSockets/Redis
         em menos de 5 minutos.
         """
-        loja_id = str(item.categoria.loja_id)
+        loja_id = str(item.loja_id or (item.categoria.loja_id if item.categoria else ""))
+        if not loja_id:
+            return
         item_id = str(item.id)
 
         # 1. Limpeza imediata e síncrona na cache Redis local
@@ -581,6 +590,13 @@ class PartnerItemMenuSerializer(serializers.ModelSerializer):
     @transaction.atomic
     def create(self, validated_data: dict[str, Any]) -> ItemMenu:
         grupos_data = validated_data.pop("grupos_opcoes", None)
+        loja_contexto = self.context.get("loja")
+        if "loja" not in validated_data:
+            if loja_contexto:
+                validated_data["loja"] = loja_contexto
+            elif validated_data.get("categoria"):
+                validated_data["loja"] = validated_data["categoria"].loja
+
         item = ItemMenu.objects.create(**validated_data)
 
         if grupos_data is not None:

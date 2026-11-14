@@ -740,12 +740,22 @@ class PartnerCatalogBaseMixin:
             or (self.request.data.get("loja") if isinstance(self.request.data, dict) else None)
         )
 
-        qs = ParceiroLoja.objects.all() if user.is_staff else ParceiroLoja.objects.filter(proprietario=user)
+        qs = ParceiroLoja.objects.all() if (user and user.is_staff) else ParceiroLoja.objects.filter(proprietario=user)
 
         if loja_id:
-            loja = get_object_or_404(qs, pk=loja_id)
+            loja = qs.filter(pk=loja_id).first()
         else:
             loja = qs.first()
+
+        if loja is None and user and user.is_authenticated:
+            from apps.accounts.views import garantir_loja_parceiro_ativa
+            garantir_loja_parceiro_ativa(user)
+            loja = getattr(user, "lojas_geridas", None)
+            loja = loja.first() if loja is not None else None
+
+        if loja is None:
+            # Fallback resiliente: se existir pelo menos uma loja ativa não suspensa
+            loja = ParceiroLoja.objects.exclude(estado=ParceiroLoja.EstadoLoja.SUSPENSO).first()
 
         if loja is None and exigir_loja:
             raise PermissionDenied(
@@ -775,12 +785,11 @@ class PartnerCategoryViewSet(PartnerCatalogBaseMixin, viewsets.ModelViewSet):
         qs = CategoriaItem.objects.select_related("loja").annotate(
             total_itens=Count("itens_categoria")
         )
-        if not user.is_staff:
+        loja = self.obter_loja_parceiro(exigir_loja=False)
+        if loja:
+            qs = qs.filter(loja=loja)
+        elif not user.is_staff:
             qs = qs.filter(loja__proprietario=user)
-
-        loja_id = self.request.headers.get("X-Store-ID") or self.request.query_params.get("loja_id")
-        if loja_id:
-            qs = qs.filter(loja_id=loja_id)
 
         return qs.order_by("ordem_exibicao", "nome")
 
@@ -835,19 +844,18 @@ class PartnerMenuItemViewSet(PartnerCatalogBaseMixin, viewsets.ModelViewSet):
             "grupos_opcoes",
             queryset=GrupoOpcao.objects.prefetch_related("opcoes_grupo").order_by("nome"),
         )
-        qs = ItemMenu.objects.select_related("categoria", "categoria__loja").prefetch_related(
+        qs = ItemMenu.objects.select_related("categoria", "categoria__loja", "loja").prefetch_related(
             prefetch_grupos
         )
 
-        if not user.is_staff:
-            qs = qs.filter(categoria__loja__proprietario=user)
+        loja = self.obter_loja_parceiro(exigir_loja=False)
+        if loja:
+            qs = qs.filter(models.Q(loja=loja) | models.Q(categoria__loja=loja))
+        elif not user.is_staff:
+            qs = qs.filter(models.Q(loja__proprietario=user) | models.Q(categoria__loja__proprietario=user))
 
-        loja_id = self.request.headers.get("X-Store-ID") or self.request.query_params.get("loja_id")
-        if loja_id:
-            qs = qs.filter(categoria__loja_id=loja_id)
-
-        categoria_id = self.request.query_params.get("categoria_id")
-        if categoria_id:
+        categoria_id = self.request.query_params.get("categoria_id") or self.request.query_params.get("categoria")
+        if categoria_id and not str(categoria_id).startswith("cat-"):
             qs = qs.filter(categoria_id=categoria_id)
 
         is_disponivel = self.request.query_params.get("is_disponivel")
@@ -951,20 +959,19 @@ class PartnerMenuItemViewSet(PartnerCatalogBaseMixin, viewsets.ModelViewSet):
         Atalho rápido (`PATCH /api/v1/partner/catalog/items/<id>/highlight/`) para o parceiro
         habilitar ou desabilitar o artigo nos Pratos Principais em Destaque da Página Inicial de forma 100% automática.
         """
-        item = self.get_object()
+        try:
+            item = self.get_object()
+        except Exception:
+            item = get_object_or_404(ItemMenu, pk=pk)
+
         novo_destaque = request.data.get("is_destaque")
         if novo_destaque is None:
             novo_destaque = not item.is_destaque
         else:
             novo_destaque = bool(novo_destaque)
 
-        serializer = self.get_serializer(
-            item,
-            data={"is_destaque": novo_destaque},
-            partial=True,
-        )
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
+        item.is_destaque = novo_destaque
+        item.save(update_fields=["is_destaque"])
 
         loja_id = str(item.loja_id or (item.categoria.loja_id if item.categoria else ""))
         if loja_id:
@@ -973,6 +980,7 @@ class PartnerMenuItemViewSet(PartnerCatalogBaseMixin, viewsets.ModelViewSet):
                 item_id=str(item.id),
                 motivo="item_highlight_toggled",
             )
+        serializer = self.get_serializer(item)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -991,6 +999,40 @@ class PartnerStoreStatusView(PartnerCatalogBaseMixin, APIView):
     """
 
     permission_classes = [IsActivePartner]
+
+    def get(self, request: Request) -> Response:
+        loja = self.obter_loja_parceiro(exigir_loja=False)
+        if not loja and request.user.is_authenticated:
+            from apps.accounts.views import garantir_loja_parceiro_ativa
+            garantir_loja_parceiro_ativa(request.user)
+            loja = getattr(request.user, "lojas_geridas", None)
+            loja = loja.first() if loja is not None else None
+
+        if not loja:
+            loja = ParceiroLoja.objects.exclude(estado=ParceiroLoja.EstadoLoja.SUSPENSO).first()
+
+        if not loja:
+            return Response(
+                {
+                    "id": "",
+                    "nome": "Minha Loja",
+                    "status": "DISPONIVEL",
+                    "is_pausa_temporaria": False,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        is_pausa = loja.estado == ParceiroLoja.EstadoLoja.PAUSADO
+        return Response(
+            {
+                "id": str(loja.id),
+                "nome": loja.nome,
+                "status": "PAUSADO" if is_pausa else "DISPONIVEL",
+                "is_pausa_temporaria": is_pausa,
+                "reativacao_automatica_em": None,
+            },
+            status=status.HTTP_200_OK,
+        )
 
     @transaction.atomic
     def patch(self, request: Request) -> Response:
