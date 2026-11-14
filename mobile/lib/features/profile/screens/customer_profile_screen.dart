@@ -188,21 +188,21 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                   _buildSettingsTile(
                     context,
                     icon: Icons.location_on_outlined,
-                    title: 'Moradas de Entrega (RN-005)',
+                    title: 'Moradas de Entrega',
                     subtitle: '${cart.moradaLabel} • ${cart.moradaTexto}',
                     onTap: () => showCustomerAddressSelectionSheet(context),
                   ),
                   _buildSettingsTile(
                     context,
                     icon: Icons.payment_outlined,
-                    title: 'Meios de Pagamento (RN-065)',
+                    title: 'Meios de Pagamento',
                     subtitle: _paymentDisplayLabel(cart.preferredPaymentCode),
                     onTap: () => _openPaymentMethodsSheet(context),
                   ),
                   _buildSettingsTile(
                     context,
                     icon: Icons.notifications_none_rounded,
-                    title: 'Notificações & Privacidade (RN-004)',
+                    title: 'Notificações & Privacidade',
                     subtitle: _marketing
                         ? 'Alertas de pedidos e promoções ativos'
                         : 'Apenas alertas essenciais de estado do pedido',
@@ -223,7 +223,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                   _buildSettingsTile(
                     context,
                     icon: Icons.support_agent_rounded,
-                    title: 'Ajuda, Suporte & Disputas (RN-138)',
+                    title: 'Ajuda, Suporte & Disputas',
                     subtitle:
                         'Abrir reclamação de pedido, consultar tickets e FAQ',
                     onTap: () => _openSupportAndDisputesSheet(context),
@@ -462,7 +462,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'Meios de Pagamento (RN-065)',
+                    'Meios de Pagamento',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -576,7 +576,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'Notificações & Privacidade (RN-004)',
+                    'Notificações & Privacidade',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -1012,7 +1012,7 @@ class _CustomerSupportAndDisputesSheetState
     }
     if (_motivoController.text.trim().length < 10) {
       setState(() => _errorMsg =
-          'Descreva o problema com pelo menos 10 caracteres (RN-138).');
+          'Descreva o problema com pelo menos 10 caracteres.');
       return;
     }
 
@@ -1067,38 +1067,53 @@ class _CustomerSupportAndDisputesSheetState
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.85,
-        ),
-        child: ListView(
-          shrinkWrap: true,
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    _showCreateTicket
-                        ? 'Abrir Ticket de Disputa'
-                        : 'Central de Ajuda & Disputas',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
+      child: SizedBox(
+        width: double.infinity,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minWidth: double.infinity,
+            maxHeight: MediaQuery.of(context).size.height * 0.85,
+          ),
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _showCreateTicket
+                          ? 'Abrir Ticket de Disputa'
+                          : 'Central de Ajuda & Disputas',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                ),
+                  IconButton(
+                    icon: Icon(_showCreateTicket ? Icons.arrow_back : Icons.close),
+                    onPressed: () {
+                      if (_showCreateTicket) {
+                        setState(() => _showCreateTicket = false);
+                      } else {
+                        Navigator.of(context).pop();
+                      }
+                    },
+                  ),
+                ],
+              ),
+              if (!_showCreateTicket) ...[
+                const SizedBox(height: 8),
                 FilledButton.tonalIcon(
-                  onPressed: () =>
-                      setState(() => _showCreateTicket = !_showCreateTicket),
-                  icon: Icon(_showCreateTicket
-                      ? Icons.close
-                      : Icons.report_problem_outlined),
-                  label: Text(_showCreateTicket ? 'Voltar' : 'Reportar Problema'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(42),
+                  ),
+                  onPressed: () => setState(() => _showCreateTicket = true),
+                  icon: const Icon(Icons.report_problem_outlined, size: 20),
+                  label: const Text('Reportar Problema / Disputa'),
                 ),
               ],
-            ),
-            const SizedBox(height: 12),
+              const SizedBox(height: 12),
             if (_errorMsg != null) ...[
               Container(
                 padding: const EdgeInsets.all(10),
@@ -1145,7 +1160,7 @@ class _CustomerSupportAndDisputesSheetState
                 DropdownButtonFormField<String>(
                   value: _selectedIncidentType,
                   decoration: const InputDecoration(
-                    labelText: 'Tipo de Incidente (RN-138)',
+                    labelText: 'Tipo de Incidente',
                     prefixIcon: Icon(Icons.category_outlined),
                   ),
                   items: const [
@@ -1240,7 +1255,7 @@ class _CustomerSupportAndDisputesSheetState
                 const SizedBox(height: 8),
                 const ExpansionTile(
                   leading: Icon(Icons.pin_outlined),
-                  title: Text('O que é o PIN de Entrega de 4 dígitos (RN-094)?'),
+                  title: Text('O que é o PIN de Entrega de 4 dígitos?'),
                   children: [
                     Padding(
                       padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -1283,7 +1298,8 @@ class _CustomerSupportAndDisputesSheetState
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 

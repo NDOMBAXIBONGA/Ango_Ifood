@@ -1102,7 +1102,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'Filtros de Descoberta (RN-028)',
+                    'Filtros de Descoberta',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -1140,7 +1140,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Avaliação 4.5+ ★'),
-                    subtitle: const Text('Parceiros com excelente reputação (RN-019)'),
+                    subtitle: const Text('Parceiros com excelente reputação'),
                     value: (tempMinRating ?? 0) >= 4.5,
                     onChanged: (v) =>
                         setModalState(() => tempMinRating = v ? 4.5 : null),
@@ -1386,7 +1386,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                                 const SizedBox(height: 12),
                                 Text(
-                                  'Nenhuma loja encontrada com cobertura para esta morada ou filtros selecionados (RN-025).',
+                                  'Nenhuma loja encontrada com cobertura para esta morada ou filtros selecionados.',
                                   textAlign: TextAlign.center,
                                   style: textTheme.bodyLarge?.copyWith(
                                     color: colorScheme.onSurfaceVariant,
@@ -2327,24 +2327,14 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
           ...allItems.take(4).map(
                 (item) => Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      side: BorderSide(color: colorScheme.outlineVariant),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: _MenuItemTile(
-                        item: item,
-                        storeIsOpen: store.isAberta,
-                        quantityInCart: CartService.instance.lojaId == store.id
-                            ? CartService.instance.getQuantity(item.id)
-                            : 0,
-                        onAddPressed: () =>
-                            _handleMenuItemTap(context, store, item),
-                      ),
-                    ),
+                  child: _MenuItemTile(
+                    item: item,
+                    storeIsOpen: store.isAberta,
+                    quantityInCart: CartService.instance.lojaId == store.id
+                        ? CartService.instance.getQuantity(item.id)
+                        : 0,
+                    onAddPressed: () =>
+                        _handleMenuItemTap(context, store, item),
                   ),
                 ),
               )
@@ -2496,7 +2486,7 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
                   itemBuilder: (context, catIdx) {
                     final category = filteredCategories[catIdx];
                     return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -2525,7 +2515,7 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
                               ? cart.getQuantity(item.id)
                               : 0;
                           return Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
+                            padding: const EdgeInsets.only(bottom: 12),
                             child: _MenuItemTile(
                               item: item,
                               storeIsOpen: store.isAberta,
@@ -3629,7 +3619,7 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
       final confirmClear = await showDialog<bool>(
         context: context,
         builder: (dialogCtx) => AlertDialog(
-          title: const Text('Limpar sacola atual? (RN-040)'),
+          title: const Text('Limpar sacola atual?'),
           content: Text(
             'A sua sacola já contém itens de "${cart.lojaNome ?? 'outra loja'}". '
             'Deseja limpar a sacola atual e iniciar um novo pedido em "${store.nome}"?',
@@ -3686,162 +3676,203 @@ class _MenuItemTile extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    // RN-015: Só permite adicionar se o item estiver disponível e a loja aberta
     final bool canAdd = item.isDisponivel && storeIsOpen;
 
-    return Opacity(
-      opacity: item.isDisponivel ? 1.0 : 0.48,
-      child: AbsorbPointer(
-        absorbing: !canAdd,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: canAdd ? onAddPressed : null,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Informações Textuais do Item (Nome, Descrição, Alergénios e Preço)
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
+    return SizedBox(
+      width: double.infinity,
+      child: Material(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        elevation: 0,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: colorScheme.outlineVariant.withOpacity(0.6),
+            ),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: canAdd ? onAddPressed : null,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Informações Textuais do Item (Nome, Descrição, Alergénios e Preço)
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.nome,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            decoration: item.isDisponivel
+                                ? null
+                                : TextDecoration.lineThrough,
+                          ),
+                        ),
+                        if (!item.isDisponivel) ...[
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colorScheme.errorContainer.withOpacity(0.6),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
                             child: Text(
-                              item.nome,
-                              style: textTheme.titleMedium?.copyWith(
+                              'Esgotado',
+                              style: textTheme.labelSmall?.copyWith(
+                                color: colorScheme.error,
                                 fontWeight: FontWeight.bold,
-                                decoration: item.isDisponivel
-                                    ? null
-                                    : TextDecoration.lineThrough,
                               ),
                             ),
                           ),
+                        ],
+                        if (item.descricao.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            item.descricao,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                        if (item.alergenos.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: item.alergenos.map((alergeno) {
+                              return Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: colorScheme.surfaceContainerHighest.withOpacity(0.5),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  alergeno,
+                                  style: textTheme.labelSmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                        const SizedBox(height: 10),
+                        Text(
+                          formatarMoedaUnidadesMinimas(item.preco),
+                          style: textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: item.isDisponivel
+                                ? colorScheme.primary
+                                : colorScheme.outline,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+
+                  // Imagem do Item e Botão de Adição
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Stack(
+                        clipBehavior: Clip.none,
+                        alignment: Alignment.center,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: item.imagemUrl.isNotEmpty
+                                ? Image.network(
+                                    item.imagemUrl,
+                                    width: 88,
+                                    height: 88,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Container(
+                                      width: 88,
+                                      height: 88,
+                                      color: colorScheme.surfaceContainerHighest,
+                                      child: const Icon(Icons.fastfood_outlined),
+                                    ),
+                                  )
+                                : Container(
+                                    width: 88,
+                                    height: 88,
+                                    color: colorScheme.surfaceContainerHighest,
+                                    child: const Icon(Icons.fastfood_outlined),
+                                  ),
+                          ),
                           if (!item.isDisponivel)
                             Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
+                              width: 88,
+                              height: 88,
                               decoration: BoxDecoration(
-                                color: colorScheme.surfaceContainerHighest,
-                                borderRadius: BorderRadius.circular(6),
+                                color: Colors.black.withOpacity(0.4),
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                              child: Text(
-                                'Indisponível',
-                                style: textTheme.labelSmall?.copyWith(
+                              alignment: Alignment.center,
+                              child: const Text(
+                                'ESGOTADO',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
                                   fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
                                 ),
                               ),
                             ),
                         ],
                       ),
-                      if (item.descricao.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          item.descricao,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                      if (item.alergenos.isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 4,
-                          children: item.alergenos.map((alergeno) {
-                            return Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                  color: colorScheme.outlineVariant,
+                      const SizedBox(height: 8),
+                      // Botão de Adicionar / Contador
+                      if (canAdd)
+                        quantityInCart > 0
+                            ? Container(
+                                height: 32,
+                                padding: const EdgeInsets.symmetric(horizontal: 10),
+                                decoration: BoxDecoration(
+                                  color: colorScheme.primary,
+                                  borderRadius: BorderRadius.circular(16),
                                 ),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                'Alergénio: $alergeno',
-                                style: textTheme.labelSmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
+                                alignment: Alignment.center,
+                                child: Text(
+                                  '$quantityInCart no cesto',
+                                  style: TextStyle(
+                                    color: colorScheme.onPrimary,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              )
+                            : SizedBox(
+                                height: 32,
+                                child: FilledButton.tonal(
+                                  style: FilledButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  onPressed: onAddPressed,
+                                  child: const Text('Adicionar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                                 ),
                               ),
-                            );
-                          }).toList(),
-                        ),
-                      ],
-                      const SizedBox(height: 10),
-                      Text(
-                        formatarMoedaUnidadesMinimas(item.preco),
-                        style: textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: item.isDisponivel
-                              ? colorScheme.primary
-                              : colorScheme.outline,
-                        ),
-                      ),
                     ],
                   ),
-                ),
-                const SizedBox(width: 16),
-
-                // Imagem do Item (em escala de cinzentos se indisponível) + Botão de Adicionar (RN-015)
-                Column(
-                  children: [
-                    if (item.imagemUrl.isNotEmpty)
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: ColorFiltered(
-                          colorFilter: item.isDisponivel
-                              ? const ColorFilter.mode(
-                                  Colors.transparent,
-                                  BlendMode.multiply,
-                                )
-                              : const ColorFilter.matrix(<double>[
-                                  0.2126, 0.7152, 0.0722, 0, 0,
-                                  0.2126, 0.7152, 0.0722, 0, 0,
-                                  0.2126, 0.7152, 0.0722, 0, 0,
-                                  0,      0,      0,      1, 0,
-                                ]),
-                          child: Image.network(
-                            item.imagemUrl,
-                            width: 88,
-                            height: 88,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              width: 88,
-                              height: 88,
-                              color: colorScheme.surfaceContainerHighest,
-                              child: const Icon(Icons.fastfood_outlined),
-                            ),
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 8),
-                    FilledButton.tonalIcon(
-                      // RN-015: `onPressed: null` quando `canAdd == false`
-                      onPressed: canAdd ? onAddPressed : null,
-                      icon: Icon(
-                        canAdd ? Icons.add_rounded : Icons.block_rounded,
-                        size: 18,
-                      ),
-                      label: Text(
-                        !item.isDisponivel
-                            ? 'Esgotado'
-                            : (quantityInCart > 0
-                                ? 'Adicionado ($quantityInCart)'
-                                : 'Adicionar'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -3943,14 +3974,14 @@ class _ItemCustomizationSheetState extends State<_ItemCustomizationSheet> {
       if (count < minRequired) {
         setState(() {
           _validationError =
-              'Selecione pelo menos $minRequired opção(ões) em "${group.nome}" (RN-014).';
+              'Selecione pelo menos $minRequired opção(ões) em "${group.nome}".';
         });
         return false;
       }
       if (group.maximoEscolhas > 0 && count > group.maximoEscolhas) {
         setState(() {
           _validationError =
-              'Máximo de ${group.maximoEscolhas} opção(ões) permitido em "${group.nome}" (RN-014).';
+              'Máximo de ${group.maximoEscolhas} opção(ões) permitido em "${group.nome}".';
         });
         return false;
       }
@@ -4191,7 +4222,7 @@ class _ItemCustomizationSheetState extends State<_ItemCustomizationSheet> {
                   ],
                   const SizedBox(height: 16),
                   Text(
-                    'Observações para a cozinha (RN-045)',
+                    'Observações para a cozinha',
                     style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
@@ -4589,32 +4620,40 @@ class _CustomerAddressSelectionSheetState
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.85,
-        ),
-        child: ListView(
-          shrinkWrap: true,
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  _showForm
-                      ? 'Nova Morada de Entrega'
-                      : 'Morada de Entrega (RN-005)',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
+      child: SizedBox(
+        width: double.infinity,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minWidth: double.infinity,
+            maxHeight: MediaQuery.of(context).size.height * 0.85,
+          ),
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _showForm
+                          ? 'Nova Morada de Entrega'
+                          : 'Moradas de Entrega',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
-                ),
-                TextButton.icon(
-                  onPressed: () => setState(() => _showForm = !_showForm),
-                  icon: Icon(_showForm ? Icons.close : Icons.add_location_alt),
-                  label: Text(_showForm ? 'Voltar' : 'Nova Morada'),
-                ),
-              ],
-            ),
+                  TextButton.icon(
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    ),
+                    onPressed: () => setState(() => _showForm = !_showForm),
+                    icon: Icon(_showForm ? Icons.close : Icons.add_location_alt, size: 18),
+                    label: Text(_showForm ? 'Voltar' : 'Nova Morada'),
+                  ),
+                ],
+              ),
             const SizedBox(height: 12),
             if (_errorMsg != null) ...[
               Container(
@@ -4800,6 +4839,7 @@ class _CustomerAddressSelectionSheetState
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

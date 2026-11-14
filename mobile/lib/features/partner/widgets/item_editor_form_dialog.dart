@@ -136,12 +136,14 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
     final colorScheme = theme.colorScheme;
 
     return Dialog(
+      backgroundColor: colorScheme.surface,
+      surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 680, maxHeight: 850),
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(20),
           child: Form(
             key: _formKey,
             child: Column(
@@ -151,28 +153,32 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: colorScheme.primaryContainer,
-                            borderRadius: BorderRadius.circular(12),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: colorScheme.primaryContainer,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              _isEditing ? Icons.edit_note_rounded : Icons.add_circle_outline_rounded,
+                              color: colorScheme.onPrimaryContainer,
+                              size: 24,
+                            ),
                           ),
-                          child: Icon(
-                            _isEditing ? Icons.edit_note_rounded : Icons.add_circle_outline_rounded,
-                            color: colorScheme.onPrimaryContainer,
-                            size: 24,
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Text(
+                              _isEditing ? 'Editar Produto do Menu' : 'Novo Produto do Menu',
+                              style: theme.textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 14),
-                        Text(
-                          _isEditing ? 'Editar Produto do Menu' : 'Novo Produto do Menu',
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close),
@@ -180,9 +186,9 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
                 const Divider(height: 1),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
 
                 // Corpo do Formulário com Scroll
                 Expanded(
@@ -192,7 +198,7 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
                       children: [
                         // 1. Fotografia do Produto (Upload / Captura / URL)
                         Text(
-                          'Fotografia do Produto (RN-014)',
+                          'Fotografia do Produto',
                           style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 8),
@@ -205,7 +211,7 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
                               child: Container(
                                 width: 90,
                                 height: 90,
-                                color: colorScheme.surfaceVariant,
+                                color: colorScheme.surfaceContainerHighest,
                                 child: _imagemUrlController.text.isNotEmpty
                                     ? Image.network(
                                         _imagemUrlController.text,
@@ -262,74 +268,62 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 18),
 
-                        // 2. Dados Gerais: Nome e Categoria
-                        Row(
-                          children: [
-                            // Nome do Produto
-                            Expanded(
-                              flex: 3,
-                              child: TextFormField(
-                                controller: _nomeController,
-                                decoration: const InputDecoration(
-                                  labelText: 'Nome do Produto *',
-                                  hintText: 'Ex.: Hambúrguer Duplo Artesanal',
-                                  prefixIcon: Icon(Icons.restaurant_menu),
-                                  border: OutlineInputBorder(),
-                                ),
-                                validator: (val) {
-                                  if (val == null || val.trim().isEmpty) {
-                                    return 'O nome do produto é obrigatório.';
-                                  }
-                                  if (val.trim().length < 3) {
-                                    return 'O nome deve ter no mínimo 3 caracteres.';
-                                  }
-                                  if (val.trim().length > 100) {
-                                    return 'O nome não pode exceder 100 caracteres.';
-                                  }
-                                  return null;
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-
-                            // Categoria
-                            Expanded(
-                              flex: 2,
-                              child: DropdownButtonFormField<String>(
-                                value: _categoriaSelecionadaId.isNotEmpty
-                                    ? _categoriaSelecionadaId
-                                    : null,
-                                decoration: const InputDecoration(
-                                  labelText: 'Categoria *',
-                                  prefixIcon: Icon(Icons.category),
-                                  border: OutlineInputBorder(),
-                                ),
-                                items: widget.categories.map((cat) {
-                                  return DropdownMenuItem<String>(
-                                    value: cat.id,
-                                    child: Text(cat.nome),
-                                  );
-                                }).toList(),
-                                onChanged: (novoId) {
-                                  if (novoId != null) {
-                                    setState(() {
-                                      _categoriaSelecionadaId = novoId;
-                                    });
-                                  }
-                                },
-                                validator: (val) {
-                                  if (val == null || val.isEmpty) {
-                                    return 'Selecione uma categoria.';
-                                  }
-                                  return null;
-                                },
-                              ),
-                            ),
-                          ],
+                        // 2. Dados Gerais: Nome e Categoria (Em formato vertical responsivo)
+                        TextFormField(
+                          controller: _nomeController,
+                          decoration: const InputDecoration(
+                            labelText: 'Nome do Produto *',
+                            hintText: 'Ex.: Hambúrguer Duplo Artesanal',
+                            prefixIcon: Icon(Icons.restaurant_menu),
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: (val) {
+                            if (val == null || val.trim().isEmpty) {
+                              return 'O nome do produto é obrigatório.';
+                            }
+                            if (val.trim().length < 3) {
+                              return 'O nome deve ter no mínimo 3 caracteres.';
+                            }
+                            if (val.trim().length > 100) {
+                              return 'O nome não pode exceder 100 caracteres.';
+                            }
+                            return null;
+                          },
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 14),
+
+                        DropdownButtonFormField<String>(
+                          value: _categoriaSelecionadaId.isNotEmpty
+                              ? _categoriaSelecionadaId
+                              : null,
+                          decoration: const InputDecoration(
+                            labelText: 'Categoria *',
+                            prefixIcon: Icon(Icons.category),
+                            border: OutlineInputBorder(),
+                          ),
+                          items: widget.categories.map((cat) {
+                            return DropdownMenuItem<String>(
+                              value: cat.id,
+                              child: Text(cat.nome),
+                            );
+                          }).toList(),
+                          onChanged: (novoId) {
+                            if (novoId != null) {
+                              setState(() {
+                                _categoriaSelecionadaId = novoId;
+                              });
+                            }
+                          },
+                          validator: (val) {
+                            if (val == null || val.isEmpty) {
+                              return 'Selecione uma categoria.';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 14),
 
                         // 3. Descrição Detalhada
                         TextFormField(
@@ -344,87 +338,79 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
                           ),
                           maxLength: 500,
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 14),
 
-                        // 4. Preço e Disponibilidade Imediata
-                        Row(
-                          children: [
-                            // Preço com máscara anti-letras e não negativos (RN-016, RN-059)
-                            Expanded(
-                              child: TextFormField(
-                                controller: _precoController,
-                                keyboardType: TextInputType.number,
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.digitsOnly,
-                                ],
-                                decoration: const InputDecoration(
-                                  labelText: 'Preço Final de Venda *',
-                                  suffixText: 'Kz',
-                                  prefixIcon: Icon(Icons.payments_outlined),
-                                  helperText: 'Valor em Kwanzas inteiros (RN-016 / RN-059)',
-                                  border: OutlineInputBorder(),
-                                ),
-                                validator: (val) {
-                                  if (val == null || val.trim().isEmpty) {
-                                    return 'O preço é obrigatório.';
-                                  }
-                                  final n = int.tryParse(val.trim());
-                                  if (n == null || n <= 0) {
-                                    return 'Insira um valor positivo superior a 0 Kz.';
-                                  }
-                                  return null;
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 16),
+                        // 4. Preço e Disponibilidade Imediata (Vertical)
+                        TextFormField(
+                          controller: _precoController,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          decoration: const InputDecoration(
+                            labelText: 'Preço Final de Venda *',
+                            suffixText: 'Kz',
+                            prefixIcon: Icon(Icons.payments_outlined),
+                            helperText: 'Valor em Kwanzas inteiros (Kz)',
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: (val) {
+                            if (val == null || val.trim().isEmpty) {
+                              return 'O preço é obrigatório.';
+                            }
+                            final n = int.tryParse(val.trim());
+                            if (n == null || n <= 0) {
+                              return 'Insira um valor positivo superior a 0 Kz.';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 14),
 
-                            // Switch de Disponibilidade de Stock (RN-015)
-                            Expanded(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: colorScheme.outlineVariant),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Row(
+                        // Switch de Disponibilidade de Stock
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: colorScheme.outlineVariant),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            'Disponível em Stock',
-                                            style: theme.textTheme.bodyMedium?.copyWith(
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                          Text(
-                                            _isDisponivel ? 'Visível aos clientes' : 'Oculto / Esgotado',
-                                            style: theme.textTheme.bodySmall?.copyWith(
-                                              color: _isDisponivel
-                                                  ? const Color(0xFF2E7D32)
-                                                  : const Color(0xFFC62828),
-                                            ),
-                                          ),
-                                        ],
+                                    Text(
+                                      'Disponível em Stock',
+                                      style: theme.textTheme.bodyMedium?.copyWith(
+                                        fontWeight: FontWeight.bold,
                                       ),
                                     ),
-                                    Switch.adaptive(
-                                      value: _isDisponivel,
-                                      activeColor: const Color(0xFF2E7D32),
-                                      onChanged: (novo) => setState(() => _isDisponivel = novo),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      _isDisponivel ? 'Visível aos clientes para encomenda imediata' : 'Oculto / Esgotado temporariamente',
+                                      style: theme.textTheme.bodySmall?.copyWith(
+                                        color: _isDisponivel
+                                            ? const Color(0xFF2E7D32)
+                                            : const Color(0xFFC62828),
+                                      ),
                                     ),
                                   ],
                                 ),
                               ),
-                            ),
-                          ],
+                              Switch.adaptive(
+                                value: _isDisponivel,
+                                activeColor: const Color(0xFF2E7D32),
+                                onChanged: (novo) => setState(() => _isDisponivel = novo),
+                              ),
+                            ],
+                          ),
                         ),
                         const SizedBox(height: 24),
 
-                        // 5. Grid de Chips Selecionáveis para Alergénios (RN-014)
+                        // 5. Grid de Chips Selecionáveis para Alergénios
                         Text(
-                          'Declaração Obrigatória de Alergénios (RN-014)',
+                          'Declaração de Alergénios',
                           style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 4),

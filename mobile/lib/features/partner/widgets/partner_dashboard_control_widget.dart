@@ -24,9 +24,9 @@ class PartnerDashboardControlWidget extends StatelessWidget {
 
         final statusColor = isPausada ? const Color(0xFFE65100) : const Color(0xFF2E7D32);
         final statusBgColor = isPausada ? const Color(0xFFFFF3E0) : const Color(0xFFE8F5E9);
-        final statusText = isPausada ? 'Pausa Temporária' : 'Loja Aberta & Disponível';
+        final statusText = isPausada ? 'Pausa' : 'Aberta';
         final statusDesc = isPausada
-            ? 'A receção de novos pedidos está pausada (RN-013).'
+            ? 'A receção de novos pedidos está pausada temporariamente.'
             : 'A loja está apta a receber pedidos de clientes.';
 
         return Container(
@@ -78,35 +78,19 @@ class PartnerDashboardControlWidget extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Text(
-                              storeStatus?.nome ?? 'A Minha Loja',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: statusBgColor,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: statusColor.withOpacity(0.5)),
-                              ),
-                              child: Text(
-                                statusText,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: statusColor,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
+                        Text(
+                          storeStatus?.nome ?? 'A Minha Loja',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 2),
                         Text(
                           statusDesc,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: colorScheme.onSurfaceVariant,
                           ),
@@ -114,10 +98,12 @@ class PartnerDashboardControlWidget extends StatelessWidget {
                       ],
                     ),
                   ),
+                  const SizedBox(width: 8),
 
                   // Controlo Switch: Aberta (ON) vs Pausa (OFF)
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Switch.adaptive(
                         value: !isPausada,
@@ -131,16 +117,25 @@ class PartnerDashboardControlWidget extends StatelessWidget {
                                   const ToggleStorePauseRequested(isPausaTemporaria: false),
                                 );
                           } else {
-                            // Abrir diálogo de seleção de tempo de pausa (RN-013)
+                            // Abrir diálogo de seleção de tempo de pausa
                             _exibirDialogoPausa(context);
                           }
                         },
                       ),
-                      Text(
-                        !isPausada ? 'Disponível' : 'Pausada',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: !isPausada ? const Color(0xFF2E7D32) : const Color(0xFFE65100),
-                          fontWeight: FontWeight.bold,
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: statusBgColor,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: statusColor.withOpacity(0.4)),
+                        ),
+                        child: Text(
+                          !isPausada ? 'Disponível' : 'Pausada',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: statusColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 10,
+                          ),
                         ),
                       ),
                     ],

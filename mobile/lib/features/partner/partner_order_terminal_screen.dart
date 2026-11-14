@@ -281,7 +281,7 @@ class PartnerTerminalBloc extends Bloc<PartnerTerminalEvent, PartnerTerminalStat
       pedidosAtivos: atualizados,
       clearModal: true,
       isProcessingAction: false,
-      feedbackMessage: 'Pedido aceite com tempo estimado de ${event.tempoPreparacaoMinutos} min (RN-077).',
+      feedbackMessage: 'Pedido aceite com tempo estimado de ${event.tempoPreparacaoMinutos} min.',
     ));
   }
 
@@ -421,7 +421,7 @@ class _PartnerOrderTerminalScreenState extends State<PartnerOrderTerminalScreen>
                     ),
                   ),
                   Text(
-                    'Terminal KDS em tempo real (RN-075)',
+                    'Terminal KDS em tempo real',
                     style: TextStyle(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w500,
@@ -899,11 +899,11 @@ class _ModalNovoPedidoPendenteState extends State<_ModalNovoPedidoPendente> {
           ),
           const Divider(height: 24),
 
-          // Ajuste de Tempo Estimado de Preparação (RN-077)
+          // Ajuste de Tempo Estimado de Preparação
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Tempo Estimado de Cozinha (RN-077):', style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+              Text('Tempo Estimado de Cozinha:', style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
               Row(
                 children: [
                   IconButton.filledTonal(
@@ -924,7 +924,7 @@ class _ModalNovoPedidoPendenteState extends State<_ModalNovoPedidoPendente> {
           ),
           const SizedBox(height: 20),
 
-          // Botões de Ação: "Rejeitar" (RN-076) e "Aceitar Pedido" (RN-077)
+          // Botões de Ação: "Rejeitar" e "Aceitar Pedido"
           Row(
             children: [
               Expanded(
@@ -936,7 +936,7 @@ class _ModalNovoPedidoPendenteState extends State<_ModalNovoPedidoPendente> {
                     side: BorderSide(color: colorScheme.error),
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
-                  child: const Text('Rejeitar (RN-076)', style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: const Text('Rejeitar', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
               const SizedBox(width: 12),
@@ -947,7 +947,7 @@ class _ModalNovoPedidoPendenteState extends State<_ModalNovoPedidoPendente> {
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
-                  child: const Text('Aceitar Pedido (RN-077)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  child: const Text('Aceitar Pedido', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 ),
               ),
             ],
@@ -967,7 +967,7 @@ class _ModalNovoPedidoPendenteState extends State<_ModalNovoPedidoPendente> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('Rejeitar Pedido (RN-076)', style: TextStyle(fontWeight: FontWeight.bold)),
+              title: const Text('Rejeitar Pedido', style: TextStyle(fontWeight: FontWeight.bold)),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
