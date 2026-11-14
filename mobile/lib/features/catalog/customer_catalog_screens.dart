@@ -2309,22 +2309,34 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
         // 3. Pratos Assinatura em Destaque na Home
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Expanded(
+            const Expanded(
               child: Text(
-                'Pratos em Destaque',
-                style: textTheme.titleMedium?.copyWith(
+                'Pratos Principais em Destaque',
+                style: TextStyle(
+                  fontSize: 18,
                   fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A),
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-            TextButton(
-              style: TextButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+            InkWell(
+              onTap: () => _navigateToSection(1),
+              borderRadius: BorderRadius.circular(8),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                child: Text(
+                  'Ver Cardápio Completo',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFFDC2626),
+                  ),
+                ),
               ),
-              onPressed: () => _navigateToSection(1),
-              child: const Text('Ver Tudo →', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -3681,31 +3693,35 @@ class _MenuItemTile extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        const double imageColWidth = 96.0;
+        const double imageColWidth = 100.0;
         const double gap = 14.0;
-        const double horizontalPadding = 28.0; // 14px em cada lado
-        final double maxW = constraints.maxWidth > 0 ? constraints.maxWidth : MediaQuery.of(context).size.width - 32;
-        final double textColWidth = (maxW - imageColWidth - gap - horizontalPadding).clamp(140.0, 600.0);
+        const double horizontalPadding = 32.0; // 16px em cada lado do Card
+        final double maxW = constraints.maxWidth > 0
+            ? constraints.maxWidth
+            : MediaQuery.of(context).size.width - 32;
+        final double textColWidth =
+            (maxW - imageColWidth - gap - horizontalPadding).clamp(140.0, 600.0);
 
         return Card(
           elevation: 0,
-          margin: const EdgeInsets.only(bottom: 12),
+          margin: const EdgeInsets.only(bottom: 14),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(
-              color: colorScheme.outlineVariant.withOpacity(0.7),
+            borderRadius: BorderRadius.circular(20),
+            side: const BorderSide(
+              color: Color(0xFFE2E8F0),
+              width: 1.2,
             ),
           ),
-          color: colorScheme.surface,
+          color: Colors.white,
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: canAdd ? onAddPressed : null,
             child: Padding(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(16),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. Coluna Textual com largura rígida garantida contra qualquer colapso
+                  // 1. Coluna Textual com largura rígida pixel-perfect garantida contra colapso
                   SizedBox(
                     width: textColWidth,
                     child: Column(
@@ -3716,8 +3732,11 @@ class _MenuItemTile extends StatelessWidget {
                           item.nome,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF0F172A),
+                            height: 1.25,
                             decoration: item.isDisponivel ? null : TextDecoration.lineThrough,
                           ),
                         ),
@@ -3726,50 +3745,72 @@ class _MenuItemTile extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
-                              color: colorScheme.errorContainer.withOpacity(0.6),
+                              color: const Color(0xFFFEE2E2),
                               borderRadius: BorderRadius.circular(6),
                             ),
-                            child: Text(
+                            child: const Text(
                               'Esgotado',
-                              style: textTheme.labelSmall?.copyWith(
-                                color: colorScheme.error,
+                              style: TextStyle(
+                                color: Color(0xFFDC2626),
                                 fontWeight: FontWeight.bold,
+                                fontSize: 11,
                               ),
                             ),
                           ),
                         ],
                         if (item.descricao.isNotEmpty) ...[
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 6),
                           Text(
                             item.descricao,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              height: 1.3,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Color(0xFF475569),
+                              height: 1.35,
                             ),
                           ),
                         ],
                         if (item.alergenos.isNotEmpty) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            'Contém: ${item.alergenos.join(", ")}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: textTheme.labelSmall?.copyWith(
-                              color: colorScheme.outline,
-                              fontSize: 11,
-                            ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: item.alergenos
+                                .map(
+                                  (alergeno) => Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 3.5,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF6ECEC),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      alergeno,
+                                      style: const TextStyle(
+                                        color: Color(0xFF4A3E3D),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
                           ),
                         ],
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 12),
                         Text(
                           formatarMoedaUnidadesMinimas(item.preco),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: item.isDisponivel ? colorScheme.primary : colorScheme.outline,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            color: item.isDisponivel
+                                ? const Color(0xFFDC2626)
+                                : const Color(0xFF94A3B8),
                           ),
                         ),
                       ],
@@ -3777,68 +3818,99 @@ class _MenuItemTile extends StatelessWidget {
                   ),
                   const SizedBox(width: gap),
 
-                  // 2. Coluna da Imagem e Botão de Ação com largura estrita (96px)
+                  // 2. Coluna da Imagem e Botão de Ação (Pílula Vermelha)
                   SizedBox(
                     width: imageColWidth,
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(16),
                           child: Container(
                             width: imageColWidth,
-                            height: 86,
-                            color: colorScheme.surfaceContainerHighest,
+                            height: 88,
+                            color: const Color(0xFFF1F5F9),
                             child: item.imagemUrl.isNotEmpty
                                 ? Image.network(
                                     item.imagemUrl,
                                     width: imageColWidth,
-                                    height: 86,
+                                    height: 88,
                                     fit: BoxFit.cover,
                                     errorBuilder: (_, __, ___) => const Center(
-                                      child: Icon(Icons.fastfood_outlined, color: Colors.grey, size: 28),
+                                      child: Icon(
+                                        Icons.fastfood_outlined,
+                                        color: Colors.grey,
+                                        size: 28,
+                                      ),
                                     ),
                                   )
                                 : const Center(
-                                    child: Icon(Icons.fastfood_outlined, color: Colors.grey, size: 28),
+                                    child: Icon(
+                                      Icons.fastfood_outlined,
+                                      color: Colors.grey,
+                                      size: 28,
+                                    ),
                                   ),
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 10),
                         if (canAdd)
                           SizedBox(
                             width: imageColWidth,
-                            height: 32,
+                            height: 36,
                             child: quantityInCart > 0
                                 ? Container(
                                     decoration: BoxDecoration(
-                                      color: colorScheme.primary,
-                                      borderRadius: BorderRadius.circular(16),
+                                      color: const Color(0xFFDC2626),
+                                      borderRadius: BorderRadius.circular(20),
                                     ),
                                     alignment: Alignment.center,
                                     child: Text(
                                       '$quantityInCart no cesto',
-                                      style: TextStyle(
-                                        color: colorScheme.onPrimary,
-                                        fontSize: 11,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
                                   )
-                                : FilledButton.tonal(
-                                    style: FilledButton.styleFrom(
-                                      padding: EdgeInsets.zero,
-                                      visualDensity: VisualDensity.compact,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(16),
+                                : InkWell(
+                                    onTap: onAddPressed,
+                                    borderRadius: BorderRadius.circular(20),
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFDC2626),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: const Text(
+                                        'Adicionar',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                     ),
-                                    onPressed: onAddPressed,
-                                    child: const Text(
-                                      'Adicionar',
-                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                                    ),
                                   ),
+                          )
+                        else
+                          Container(
+                            width: imageColWidth,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE2E8F0),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              !item.isDisponivel ? 'Esgotado' : 'Fechado',
+                              style: const TextStyle(
+                                color: Color(0xFF64748B),
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
                       ],
                     ),
