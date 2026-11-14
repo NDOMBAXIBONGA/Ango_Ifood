@@ -276,14 +276,54 @@ def apk_portal_view(request):
 
 
 def apk_download_view(request):
-    """Entrega o ficheiro binário DeliveryPro.apk diretamente para instalação."""
-    if os.path.exists(APK_STORAGE_PATH):
-        return FileResponse(
-            open(APK_STORAGE_PATH, "rb"),
-            as_attachment=True,
-            filename="DeliveryPro.apk",
-            content_type="application/vnd.android.package-archive",
+    """Entrega o ficheiro binário DeliveryPro.apk diretamente para instalação com cache e auto-recuperação."""
+    for path in [
+        APK_STORAGE_PATH,
+        os.path.join(settings.BASE_DIR, "DeliveryPro.apk"),
+        os.path.join(settings.BASE_DIR, "media", "DeliveryPro.apk"),
+    ]:
+        if os.path.exists(path) and os.path.getsize(path) > 10_000_000:
+            return FileResponse(
+                open(path, "rb"),
+                as_attachment=True,
+                filename="DeliveryPro.apk",
+                content_type="application/vnd.android.package-archive",
+            )
+
+    # Auto-recuperação resiliente: Se o /tmp/ tiver sido reiniciado no Render, recupera do GitHub Releases
+    try:
+        import urllib.request
+        github_token = os.environ.get("GITHUB_TOKEN") or "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"
+        req = urllib.request.Request(
+            "https://api.github.com/repos/NDOMBAXIBONGA/Ango_Ifood/releases/tags/latest",
+            headers={"Authorization": f"Bearer {github_token}", "User-Agent": "Render-DeliveryPro"},
         )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            for asset in data.get("assets", []):
+                if asset.get("name", "").endswith(".apk"):
+                    asset_url = asset["url"]
+                    asset_req = urllib.request.Request(
+                        asset_url,
+                        headers={
+                            "Authorization": f"Bearer {github_token}",
+                            "Accept": "application/octet-stream",
+                            "User-Agent": "Render-DeliveryPro",
+                        },
+                    )
+                    with urllib.request.urlopen(asset_req, timeout=60) as a_resp:
+                        apk_bytes = a_resp.read()
+                        with open(APK_STORAGE_PATH, "wb") as f:
+                            f.write(apk_bytes)
+                        return FileResponse(
+                            open(APK_STORAGE_PATH, "rb"),
+                            as_attachment=True,
+                            filename="DeliveryPro.apk",
+                            content_type="application/vnd.android.package-archive",
+                        )
+    except Exception as err:
+        logger.warning("Falha ao recuperar APK do GitHub Releases: %s", err)
+
     return HttpResponse(
         "O ficheiro APK está a ser sincronizado no servidor. Aguarde alguns segundos e recarregue a página.",
         status=404,

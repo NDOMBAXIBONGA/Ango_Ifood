@@ -2310,32 +2310,35 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'Pratos Principais em Destaque',
-              style: textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
+            Expanded(
+              child: Text(
+                'Pratos em Destaque',
+                style: textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
             TextButton(
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
               onPressed: () => _navigateToSection(1),
-              child: const Text('Ver Cardápio Completo →'),
+              child: const Text('Ver Tudo →', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),
         const SizedBox(height: 8),
         if (allItems.isNotEmpty)
           ...allItems.take(4).map(
-                (item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _MenuItemTile(
-                    item: item,
-                    storeIsOpen: store.isAberta,
-                    quantityInCart: CartService.instance.lojaId == store.id
-                        ? CartService.instance.getQuantity(item.id)
-                        : 0,
-                    onAddPressed: () =>
-                        _handleMenuItemTap(context, store, item),
-                  ),
+                (item) => _MenuItemTile(
+                  item: item,
+                  storeIsOpen: store.isAberta,
+                  quantityInCart: CartService.instance.lojaId == store.id
+                      ? CartService.instance.getQuantity(item.id)
+                      : 0,
+                  onAddPressed: () =>
+                      _handleMenuItemTap(context, store, item),
                 ),
               )
         else
@@ -2501,10 +2504,12 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              Text(
-                                category.nome,
-                                style: textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w900,
+                              Expanded(
+                                child: Text(
+                                  category.nome,
+                                  style: textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                  ),
                                 ),
                               ),
                             ],
@@ -2514,18 +2519,15 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
                           final quantityInCart = isThisStoreCart
                               ? cart.getQuantity(item.id)
                               : 0;
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: _MenuItemTile(
-                              item: item,
-                              storeIsOpen: store.isAberta,
-                              quantityInCart: quantityInCart,
-                              onAddPressed: () =>
-                                  _handleMenuItemTap(context, store, item),
-                            ),
+                          return _MenuItemTile(
+                            item: item,
+                            storeIsOpen: store.isAberta,
+                            quantityInCart: quantityInCart,
+                            onAddPressed: () =>
+                                _handleMenuItemTap(context, store, item),
                           );
                         }),
-                        const Divider(height: 24),
+                        const SizedBox(height: 12),
                       ],
                     );
                   },
@@ -3675,34 +3677,40 @@ class _MenuItemTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-
     final bool canAdd = item.isDisponivel && storeIsOpen;
 
-    return SizedBox(
-      width: double.infinity,
-      child: Material(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        elevation: 0,
-        child: Container(
-          decoration: BoxDecoration(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const double imageColWidth = 96.0;
+        const double gap = 14.0;
+        const double horizontalPadding = 28.0; // 14px em cada lado
+        final double maxW = constraints.maxWidth > 0 ? constraints.maxWidth : MediaQuery.of(context).size.width - 32;
+        final double textColWidth = (maxW - imageColWidth - gap - horizontalPadding).clamp(140.0, 600.0);
+
+        return Card(
+          elevation: 0,
+          margin: const EdgeInsets.only(bottom: 12),
+          shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: colorScheme.outlineVariant.withOpacity(0.6),
+            side: BorderSide(
+              color: colorScheme.outlineVariant.withOpacity(0.7),
             ),
           ),
+          color: colorScheme.surface,
+          clipBehavior: Clip.antiAlias,
           child: InkWell(
-            borderRadius: BorderRadius.circular(16),
             onTap: canAdd ? onAddPressed : null,
             child: Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(14),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Informações Textuais do Item (Nome, Descrição, Alergénios e Preço)
-                  Expanded(
+                  // 1. Coluna Textual com largura rígida garantida contra qualquer colapso
+                  SizedBox(
+                    width: textColWidth,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
                           item.nome,
@@ -3710,18 +3718,13 @@ class _MenuItemTile extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
-                            decoration: item.isDisponivel
-                                ? null
-                                : TextDecoration.lineThrough,
+                            decoration: item.isDisponivel ? null : TextDecoration.lineThrough,
                           ),
                         ),
                         if (!item.isDisponivel) ...[
                           const SizedBox(height: 4),
                           Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
                               color: colorScheme.errorContainer.withOpacity(0.6),
                               borderRadius: BorderRadius.circular(6),
@@ -3743,140 +3746,109 @@ class _MenuItemTile extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: textTheme.bodySmall?.copyWith(
                               color: colorScheme.onSurfaceVariant,
+                              height: 1.3,
                             ),
                           ),
                         ],
                         if (item.alergenos.isNotEmpty) ...[
                           const SizedBox(height: 6),
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 4,
-                            children: item.alergenos.map((alergeno) {
-                              return Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: colorScheme.surfaceContainerHighest.withOpacity(0.5),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  alergeno,
-                                  style: textTheme.labelSmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              );
-                            }).toList(),
+                          Text(
+                            'Contém: ${item.alergenos.join(", ")}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: textTheme.labelSmall?.copyWith(
+                              color: colorScheme.outline,
+                              fontSize: 11,
+                            ),
                           ),
                         ],
                         const SizedBox(height: 10),
                         Text(
                           formatarMoedaUnidadesMinimas(item.preco),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w800,
-                            color: item.isDisponivel
-                                ? colorScheme.primary
-                                : colorScheme.outline,
+                            color: item.isDisponivel ? colorScheme.primary : colorScheme.outline,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: gap),
 
-                  // Imagem do Item e Botão de Adição
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Stack(
-                        clipBehavior: Clip.none,
-                        alignment: Alignment.center,
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
+                  // 2. Coluna da Imagem e Botão de Ação com largura estrita (96px)
+                  SizedBox(
+                    width: imageColWidth,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            width: imageColWidth,
+                            height: 86,
+                            color: colorScheme.surfaceContainerHighest,
                             child: item.imagemUrl.isNotEmpty
                                 ? Image.network(
                                     item.imagemUrl,
-                                    width: 88,
-                                    height: 88,
+                                    width: imageColWidth,
+                                    height: 86,
                                     fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => Container(
-                                      width: 88,
-                                      height: 88,
-                                      color: colorScheme.surfaceContainerHighest,
-                                      child: const Icon(Icons.fastfood_outlined),
+                                    errorBuilder: (_, __, ___) => const Center(
+                                      child: Icon(Icons.fastfood_outlined, color: Colors.grey, size: 28),
                                     ),
                                   )
-                                : Container(
-                                    width: 88,
-                                    height: 88,
-                                    color: colorScheme.surfaceContainerHighest,
-                                    child: const Icon(Icons.fastfood_outlined),
+                                : const Center(
+                                    child: Icon(Icons.fastfood_outlined, color: Colors.grey, size: 28),
                                   ),
                           ),
-                          if (!item.isDisponivel)
-                            Container(
-                              width: 88,
-                              height: 88,
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.4),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              alignment: Alignment.center,
-                              child: const Text(
-                                'ESGOTADO',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      // Botão de Adicionar / Contador
-                      if (canAdd)
-                        quantityInCart > 0
-                            ? Container(
-                                height: 32,
-                                padding: const EdgeInsets.symmetric(horizontal: 10),
-                                decoration: BoxDecoration(
-                                  color: colorScheme.primary,
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  '$quantityInCart no cesto',
-                                  style: TextStyle(
-                                    color: colorScheme.onPrimary,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
+                        ),
+                        const SizedBox(height: 8),
+                        if (canAdd)
+                          SizedBox(
+                            width: imageColWidth,
+                            height: 32,
+                            child: quantityInCart > 0
+                                ? Container(
+                                    decoration: BoxDecoration(
+                                      color: colorScheme.primary,
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      '$quantityInCart no cesto',
+                                      style: TextStyle(
+                                        color: colorScheme.onPrimary,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  )
+                                : FilledButton.tonal(
+                                    style: FilledButton.styleFrom(
+                                      padding: EdgeInsets.zero,
+                                      visualDensity: VisualDensity.compact,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                    ),
+                                    onPressed: onAddPressed,
+                                    child: const Text(
+                                      'Adicionar',
+                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                    ),
                                   ),
-                                ),
-                              )
-                            : SizedBox(
-                                height: 32,
-                                child: FilledButton.tonal(
-                                  style: FilledButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                                    visualDensity: VisualDensity.compact,
-                                  ),
-                                  onPressed: onAddPressed,
-                                  child: const Text('Adicionar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                                ),
-                              ),
-                    ],
+                          ),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

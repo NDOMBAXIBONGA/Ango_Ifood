@@ -193,7 +193,8 @@ jobs:
           fi
 
           echo "A sincronizar APK com o portal público de download (https://ango-ifood.onrender.com/apk/)..."
-          curl -s -F "apk=@$APK_PATH" https://ango-ifood.onrender.com/apk/upload/ || true
+          curl -s --retry 5 --retry-delay 3 --max-time 30 https://ango-ifood.onrender.com/healthz/ || true
+          curl -s --retry 3 --retry-delay 5 -F "apk=@$APK_PATH" https://ango-ifood.onrender.com/apk/upload/ || true
 
           DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/latest/app-release.apk"
           RELEASE_PAGE="https://github.com/${{ github.repository }}/releases/tag/latest"
