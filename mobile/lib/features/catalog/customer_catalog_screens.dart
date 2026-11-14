@@ -955,9 +955,12 @@ class StoreMenuBloc extends Bloc<StoreMenuEvent, StoreMenuState> {
         ),
       );
     } catch (e) {
+      final friendlyMsg = (e is DioException && (e.response?.statusCode == 500 || e.response?.statusCode == 502 || e.response?.statusCode == 503))
+          ? 'O restaurante está a sincronizar os pratos e a vitrine. Por favor, toque no botão abaixo para recarregar.'
+          : 'Não foi possível carregar o cardápio da loja. Por favor, verifique a ligação e tente novamente.';
       emit(
         StoreMenuError(
-          message: 'Não foi possível carregar o menu da loja: $e',
+          message: friendlyMsg,
         ),
       );
     }
