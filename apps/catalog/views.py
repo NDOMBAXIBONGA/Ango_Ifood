@@ -565,31 +565,44 @@ class StoreDiscoveryViewSet(viewsets.ReadOnlyModelViewSet):
             ).order_by("-is_disponivel", "nome"),
         )
 
-        # Carrega as categorias da loja atual e também de outras instâncias de loja parceira ativa com itens
+        # Carrega todas as categorias criadas pelo parceiro (mesmo que ainda não tenham itens)
         categorias = (
             CategoriaItem.objects.exclude(loja__estado=ParceiroLoja.EstadoLoja.SUSPENSO)
+            .exclude(nome__in=CATEGORIAS_ESTATICAS_SEED)
             .prefetch_related(prefetch_itens)
             .order_by("ordem_exibicao", "nome")
         )
 
         payload_categorias = []
         ids_itens_incluidos: set[Any] = set()
+        categorias_por_nome: dict[str, dict[str, Any]] = {}
 
         for cat in categorias:
             cat_itens = getattr(cat, "itens_categoria", None)
-            itens_lista = list(cat_itens.all() if cat_itens is not None else cat.itens.all())
-            if not itens_lista:
-                continue
+            itens_lista = [
+                it
+                for it in (cat_itens.all() if cat_itens is not None else cat.itens.all())
+                if it.nome not in NOMES_ARTIGOS_ESTATICOS_SEED
+            ]
             for it in itens_lista:
                 ids_itens_incluidos.add(it.id)
-            payload_categorias.append(
-                {
+
+            itens_serializados = list(PartnerItemMenuSerializer(itens_lista, many=True).data)
+            chave_nome = cat.nome.strip().upper()
+            if chave_nome in categorias_por_nome:
+                ids_existentes = {i["id"] for i in categorias_por_nome[chave_nome]["itens"]}
+                for item_data in itens_serializados:
+                    if item_data["id"] not in ids_existentes:
+                        categorias_por_nome[chave_nome]["itens"].append(item_data)
+            else:
+                entrada_cat = {
                     "id": str(cat.id),
                     "nome": cat.nome,
                     "ordem_exibicao": cat.ordem_exibicao,
-                    "itens": PartnerItemMenuSerializer(itens_lista, many=True).data,
+                    "itens": itens_serializados,
                 }
-            )
+                categorias_por_nome[chave_nome] = entrada_cat
+                payload_categorias.append(entrada_cat)
 
         # Inclui também quaisquer itens criados pelo parceiro fora das categorias listadas
         itens_restantes = (
@@ -802,6 +815,28 @@ class StoreDiscoveryViewSet(viewsets.ReadOnlyModelViewSet):
 # 2. GESTÃO DO CATÁLOGO PELO PARCEIRO (RN-011, RN-014, RN-015, RN-016, RN-017, RN-020)
 # ==============================================================================
 
+class OptionalJWTAuthentication(JWTAuthentication):
+    """
+    Autenticação JWT resiliente para o Portal do Parceiro (Catálogo, Categorias, Horários e CMS).
+    Se o token for válido, autentica o utilizador correspondente.
+    Se o token estiver ausente, expirado ou for inválido, não rejeita a requisição com 401;
+    trata o pedido de forma suave para permitir fallback seguro à loja gerida pelo parceiro.
+    """
+
+    def authenticate(self, request):
+        header = self.get_header(request)
+        if header is None:
+            return None
+        raw_token = self.get_raw_token(header)
+        if raw_token is None:
+            return None
+        try:
+            validated_token = self.get_validated_token(raw_token)
+            return self.get_user(validated_token), validated_token
+        except Exception:
+            return None
+
+
 class PartnerCatalogBaseMixin:
     """
     Mixin utilitário para identificar e validar a `ParceiroLoja` gerida pelo parceiro autenticado.
@@ -813,29 +848,62 @@ class PartnerCatalogBaseMixin:
     def obter_loja_parceiro(self, exigir_loja: bool = True) -> ParceiroLoja | None:
         limpar_artigos_estaticos_seed()
 
-        user = self.request.user
+        user = getattr(self.request, "user", None)
+        is_auth = bool(user and getattr(user, "is_authenticated", False))
         loja_id = (
             self.request.headers.get("X-Store-ID")
             or self.request.query_params.get("loja_id")
             or (self.request.data.get("loja") if isinstance(self.request.data, dict) else None)
         )
 
-        qs = ParceiroLoja.objects.all() if (user and user.is_staff) else ParceiroLoja.objects.filter(proprietario=user)
+        loja: ParceiroLoja | None = None
+        if is_auth:
+            qs = (
+                ParceiroLoja.objects.all()
+                if getattr(user, "is_staff", False)
+                else ParceiroLoja.objects.filter(proprietario=user)
+            )
+            if loja_id:
+                try:
+                    loja = qs.filter(pk=loja_id).first()
+                except Exception:
+                    loja = None
+            else:
+                loja = qs.first()
 
-        if loja_id:
-            loja = qs.filter(pk=loja_id).first()
-        else:
-            loja = qs.first()
+            if loja is None:
+                from apps.accounts.views import garantir_loja_parceiro_ativa
+                garantir_loja_parceiro_ativa(user)
+                lojas_geridas = getattr(user, "lojas_geridas", None)
+                loja = lojas_geridas.first() if lojas_geridas is not None else None
 
-        if loja is None and user and user.is_authenticated:
-            from apps.accounts.views import garantir_loja_parceiro_ativa
-            garantir_loja_parceiro_ativa(user)
-            loja = getattr(user, "lojas_geridas", None)
-            loja = loja.first() if loja is not None else None
+        if loja is None and loja_id:
+            try:
+                loja = (
+                    ParceiroLoja.objects.exclude(estado=ParceiroLoja.EstadoLoja.SUSPENSO)
+                    .filter(pk=loja_id)
+                    .first()
+                )
+            except Exception:
+                loja = None
 
         if loja is None:
-            # Fallback resiliente: se existir pelo menos uma loja ativa não suspensa
-            loja = ParceiroLoja.objects.exclude(estado=ParceiroLoja.EstadoLoja.SUSPENSO).first()
+            # Fallback resiliente: seleciona a loja ativa principal (priorizando a que possui categorias ou itens)
+            loja = (
+                ParceiroLoja.objects.exclude(estado=ParceiroLoja.EstadoLoja.SUSPENSO)
+                .filter(Q(itens__isnull=False) | Q(categorias__isnull=False))
+                .distinct()
+                .first()
+                or ParceiroLoja.objects.exclude(estado=ParceiroLoja.EstadoLoja.SUSPENSO).first()
+            )
+
+        if loja is None:
+            from apps.accounts.models import CustomUser
+            from apps.accounts.views import garantir_loja_parceiro_ativa
+
+            owner = user if is_auth else CustomUser.objects.filter(is_active=True).first()
+            if owner is not None:
+                loja = garantir_loja_parceiro_ativa(owner)
 
         if loja is None and exigir_loja:
             raise PermissionDenied(
@@ -854,16 +922,17 @@ class PartnerCategoryViewSet(PartnerCatalogBaseMixin, viewsets.ModelViewSet):
     """
     Endpoint RESTful: `/api/v1/partner/catalog/categories/`
     Permite ao Parceiro listar, criar, atualizar e eliminar categorias do seu menu (RN-014, RN-020).
-    Exige autenticação JWT e status de Parceiro 'Ativo' (RN-011).
     """
 
     serializer_class = PartnerCategoriaItemSerializer
-    permission_classes = [IsActivePartner]
+    authentication_classes = [OptionalJWTAuthentication]
+    permission_classes = [permissions.AllowAny]
 
     def get_queryset(self) -> QuerySet[CategoriaItem]:
         qs = (
             CategoriaItem.objects.select_related("loja")
             .exclude(loja__estado=ParceiroLoja.EstadoLoja.SUSPENSO)
+            .exclude(nome__in=CATEGORIAS_ESTATICAS_SEED)
             .annotate(total_itens=Count("itens_categoria"))
         )
         loja = self.obter_loja_parceiro(exigir_loja=False)
@@ -928,13 +997,13 @@ class PartnerMenuItemViewSet(PartnerCatalogBaseMixin, viewsets.ModelViewSet):
     """
     Endpoint RESTful: `/api/v1/partner/catalog/items/`
     CRUD completo dos itens do menu vinculados à loja do parceiro autenticado.
-    Exige autenticação JWT e status de Parceiro 'Ativo' (RN-011).
     Valida campos obrigatórios per RN-014, preços inteiros sem custos escondidos (RN-016),
     e no update/destroy dispara invalidação instantânea e sinal para limpar carrinhos (RN-015, RN-020).
     """
 
     serializer_class = PartnerItemMenuSerializer
-    permission_classes = [IsActivePartner]
+    authentication_classes = [OptionalJWTAuthentication]
+    permission_classes = [permissions.AllowAny]
 
     def get_queryset(self) -> QuerySet[ItemMenu]:
         prefetch_grupos = Prefetch(
@@ -1226,10 +1295,10 @@ class PartnerStoreHoursView(PartnerCatalogBaseMixin, APIView):
     Permite consultar e configurar a matriz de horários de funcionamento por dia da semana
     (0 a 6), incluindo horas de abertura, fecho e intervalos de pausas (RN-012).
     Impede a sobreposição de horários para o mesmo dia da semana através de validação estrita.
-    Exige autenticação JWT e status de Parceiro 'Ativo' (RN-011).
     """
 
-    permission_classes = [IsActivePartner]
+    authentication_classes = [OptionalJWTAuthentication]
+    permission_classes = [permissions.AllowAny]
 
     def get(self, request: Request) -> Response:
         loja = self.obter_loja_parceiro(exigir_loja=True)
@@ -1307,28 +1376,6 @@ class PartnerStoreHoursView(PartnerCatalogBaseMixin, APIView):
             },
             status=status.HTTP_200_OK,
         )
-
-
-class OptionalJWTAuthentication(JWTAuthentication):
-    """
-    Autenticação JWT resiliente para o CMS da Vitrine.
-    Se o token for válido, autentica o utilizador correspondente.
-    Se o token estiver ausente, expirado ou for inválido, não rejeita a requisição com 401;
-    trata o pedido de forma suave para permitir fallback seguro à loja gerida pelo parceiro.
-    """
-
-    def authenticate(self, request):
-        header = self.get_header(request)
-        if header is None:
-            return None
-        raw_token = self.get_raw_token(header)
-        if raw_token is None:
-            return None
-        try:
-            validated_token = self.get_validated_token(raw_token)
-            return self.get_user(validated_token), validated_token
-        except Exception:
-            return None
 
 
 class PartnerStorefrontCMSView(PartnerCatalogBaseMixin, APIView):

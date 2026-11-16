@@ -556,11 +556,37 @@ class PartnerBloc extends Bloc<PartnerEvent, PartnerState> {
   ) async {
     emit(state.copyWith(isSavingItem: true, clearError: true, clearSuccess: true));
     try {
+      MenuItemModel itemParaGuardar = event.item;
+      String? novoSelectedCategoryId = state.selectedCategoryId;
+
+      // Se a categoria selecionada tiver sido criada localmente (id temporário "cat-..."),
+      // sincroniza-a primeiro no servidor para obter o UUID real da categoria (ex.: "PIZZA")
+      if (itemParaGuardar.categoriaId.startsWith('cat-') ||
+          itemParaGuardar.categoriaId == 'geral' ||
+          itemParaGuardar.categoriaId.isEmpty) {
+        final catLocal = state.categories
+            .where((c) => c.id == itemParaGuardar.categoriaId)
+            .firstOrNull;
+        final nomeCat = (catLocal?.nome ?? '').trim();
+        if (nomeCat.isNotEmpty) {
+          try {
+            final catServidor = await _repository.createCategory(
+              nomeCat,
+              catLocal?.ordemExibicao ?? (state.categories.length + 1),
+            );
+            itemParaGuardar = itemParaGuardar.copyWith(categoriaId: catServidor.id);
+            if (state.selectedCategoryId == catLocal?.id) {
+              novoSelectedCategoryId = catServidor.id;
+            }
+          } catch (_) {}
+        }
+      }
+
       final MenuItemModel savedItem;
       if (event.isEditing) {
-        savedItem = await _repository.updateItem(event.item);
+        savedItem = await _repository.updateItem(itemParaGuardar);
       } else {
-        savedItem = await _repository.createItem(event.item);
+        savedItem = await _repository.createItem(itemParaGuardar);
       }
 
       final List<MenuItemModel> novosItens;
@@ -577,6 +603,7 @@ class PartnerBloc extends Bloc<PartnerEvent, PartnerState> {
       emit(state.copyWith(
         isSavingItem: false,
         categories: categoriasAtualizadas,
+        selectedCategoryId: novoSelectedCategoryId,
         items: novosItens,
         successMessage: event.isEditing
             ? 'Item atualizado com sucesso e sincronizado com o cardápio do cliente!'
@@ -599,7 +626,13 @@ class PartnerBloc extends Bloc<PartnerEvent, PartnerState> {
     emit(state.copyWith(items: novos, clearError: true));
     try {
       await _repository.deleteItem(event.itemId);
-      emit(state.copyWith(successMessage: 'Produto removido com sucesso.'));
+      final categoriasAtualizadas = await _repository
+          .getCategories()
+          .catchError((_) => state.categories);
+      emit(state.copyWith(
+        categories: categoriasAtualizadas,
+        successMessage: 'Produto removido com sucesso.',
+      ));
     } catch (e) {
       emit(state.copyWith(items: anteriores, errorMessage: 'Erro ao remover produto.'));
     }
@@ -614,11 +647,17 @@ class PartnerBloc extends Bloc<PartnerEvent, PartnerState> {
         event.nome,
         state.categories.length + 1,
       );
-      final novasCategorias = [...state.categories, novaCat];
+      final categoriasServidor = await _repository
+          .getCategories()
+          .catchError((_) => [...state.categories, novaCat]);
+      final existeNaLista = categoriasServidor.any((c) => c.id == novaCat.id);
+      final novasCategorias = existeNaLista
+          ? categoriasServidor
+          : [...categoriasServidor, novaCat];
       emit(state.copyWith(
         categories: novasCategorias,
         selectedCategoryId: novaCat.id,
-        successMessage: 'Categoria "${event.nome}" criada com sucesso!',
+        successMessage: 'Categoria "${event.nome}" criada e publicada na vitrine com sucesso!',
       ));
     } catch (e) {
       final fallbackCat = MenuCategory(

@@ -645,7 +645,6 @@ class CatalogRepository {
     final categories = rawCategories
         .whereType<Map<String, dynamic>>()
         .map(MenuCategoryModel.fromJson)
-        .where((cat) => cat.itens.isNotEmpty)
         .toList();
 
     final vitrineMap = data['vitrine'] is Map<String, dynamic>
@@ -2476,7 +2475,7 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
             itens: matchedItems,
           );
         })
-        .where((cat) => cat.itens.isNotEmpty)
+        .where((cat) => _menuSearchQuery.trim().isEmpty || cat.itens.isNotEmpty)
         .toList();
 
     return Column(
@@ -2571,18 +2570,34 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
                             ],
                           ),
                         ),
-                        ...category.itens.map((item) {
-                          final quantityInCart = isThisStoreCart
-                              ? cart.getQuantity(item.id)
-                              : 0;
-                          return _MenuItemTile(
-                            item: item,
-                            storeIsOpen: store.isAberta,
-                            quantityInCart: quantityInCart,
-                            onAddPressed: () =>
-                                _handleMenuItemTap(context, store, item),
-                          );
-                        }),
+                        if (category.itens.isEmpty)
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: colorScheme.outlineVariant),
+                            ),
+                            child: Text(
+                              'Nenhum artigo disponível nesta categoria no momento.',
+                              style: textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          )
+                        else
+                          ...category.itens.map((item) {
+                            final quantityInCart = isThisStoreCart
+                                ? cart.getQuantity(item.id)
+                                : 0;
+                            return _MenuItemTile(
+                              item: item,
+                              storeIsOpen: store.isAberta,
+                              quantityInCart: quantityInCart,
+                              onAddPressed: () =>
+                                  _handleMenuItemTap(context, store, item),
+                            );
+                          }),
                         const SizedBox(height: 12),
                       ],
                     );

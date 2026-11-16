@@ -465,6 +465,7 @@ class PartnerItemMenuSerializer(serializers.ModelSerializer):
     def to_internal_value(self, data: dict[str, Any]) -> dict[str, Any]:
         data_copy = dict(data)
         cat_val = data_copy.get("categoria")
+        self._categoria_nome_hint = str(data_copy.get("categoria_nome") or "").strip()
         if (
             cat_val is None
             or cat_val == ""
@@ -472,6 +473,16 @@ class PartnerItemMenuSerializer(serializers.ModelSerializer):
             or str(cat_val).startswith("cat-")
         ):
             data_copy["categoria"] = None
+        else:
+            try:
+                if not CategoriaItem.objects.filter(pk=cat_val).exists():
+                    if not self._categoria_nome_hint and not str(cat_val).startswith("cat-"):
+                        self._categoria_nome_hint = str(cat_val).strip()
+                    data_copy["categoria"] = None
+            except Exception:
+                if not self._categoria_nome_hint and not str(cat_val).startswith("cat-"):
+                    self._categoria_nome_hint = str(cat_val).strip()
+                data_copy["categoria"] = None
         return super().to_internal_value(data_copy)
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
@@ -604,15 +615,28 @@ class PartnerItemMenuSerializer(serializers.ModelSerializer):
                 validated_data["loja"] = validated_data["categoria"].loja
 
         loja_efetiva = validated_data.get("loja")
+        nome_hint = getattr(self, "_categoria_nome_hint", "")
         if validated_data.get("categoria") is None and loja_efetiva is not None:
-            cat_existente = CategoriaItem.objects.filter(loja=loja_efetiva).order_by("ordem_exibicao", "nome").first()
-            if cat_existente is None:
-                cat_existente, _ = CategoriaItem.objects.get_or_create(
-                    loja=loja_efetiva,
-                    nome="Cardápio Principal",
-                    defaults={"ordem_exibicao": 0},
-                )
-            validated_data["categoria"] = cat_existente
+            if nome_hint:
+                cat_existente = CategoriaItem.objects.filter(
+                    loja=loja_efetiva, nome__iexact=nome_hint
+                ).first()
+                if cat_existente is None:
+                    cat_existente = CategoriaItem.objects.create(
+                        loja=loja_efetiva,
+                        nome=nome_hint,
+                        ordem_exibicao=CategoriaItem.objects.filter(loja=loja_efetiva).count() + 1,
+                    )
+                validated_data["categoria"] = cat_existente
+            else:
+                cat_existente = CategoriaItem.objects.filter(loja=loja_efetiva).order_by("ordem_exibicao", "nome").first()
+                if cat_existente is None:
+                    cat_existente, _ = CategoriaItem.objects.get_or_create(
+                        loja=loja_efetiva,
+                        nome="Cardápio Principal",
+                        defaults={"ordem_exibicao": 0},
+                    )
+                validated_data["categoria"] = cat_existente
 
         item = ItemMenu.objects.create(**validated_data)
 
@@ -634,6 +658,24 @@ class PartnerItemMenuSerializer(serializers.ModelSerializer):
         preco_anterior = instance.preco
 
         grupos_data = validated_data.pop("grupos_opcoes", None)
+
+        nome_hint = getattr(self, "_categoria_nome_hint", "")
+        loja_efetiva = (
+            instance.loja
+            or self.context.get("loja")
+            or (instance.categoria.loja if instance.categoria else None)
+        )
+        if validated_data.get("categoria") is None and nome_hint and loja_efetiva is not None:
+            cat_existente = CategoriaItem.objects.filter(
+                loja=loja_efetiva, nome__iexact=nome_hint
+            ).first()
+            if cat_existente is None:
+                cat_existente = CategoriaItem.objects.create(
+                    loja=loja_efetiva,
+                    nome=nome_hint,
+                    ordem_exibicao=CategoriaItem.objects.filter(loja=loja_efetiva).count() + 1,
+                )
+            validated_data["categoria"] = cat_existente
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
