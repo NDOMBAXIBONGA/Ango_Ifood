@@ -328,13 +328,27 @@ class PartnerRepository {
   Future<List<BusinessHourSlot>> getBusinessHours() async {
     final response = await _dio.get('/api/v1/partner/store/hours/');
     final dynamic data = response.data;
-    final List<dynamic> list = data is Map ? (data['results'] as List? ?? []) : (data as List? ?? []);
+    List<dynamic> list = [];
+    if (data is Map) {
+      list = (data['horarios'] ?? data['results'] ?? []) as List;
+    } else if (data is List) {
+      list = data;
+    }
     return list.map((e) => BusinessHourSlot.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<void> saveBusinessHours(List<BusinessHourSlot> slots) async {
-    for (final slot in slots) {
-      if (slot.isAtivo) {
+    final activeSlots = slots.where((s) => s.isAtivo).toList();
+    final matrixPayload = {
+      'horarios': activeSlots.map((s) => s.toJson()).toList(),
+    };
+
+    try {
+      // 1. Tenta envio da matriz completa via PUT (RN-012)
+      await _dio.put('/api/v1/partner/store/hours/', data: matrixPayload);
+    } catch (_) {
+      // 2. Se falhar, tenta via POST individual com tratamento de idempotência
+      for (final slot in activeSlots) {
         await _dio.post('/api/v1/partner/store/hours/', data: slot.toJson());
       }
     }

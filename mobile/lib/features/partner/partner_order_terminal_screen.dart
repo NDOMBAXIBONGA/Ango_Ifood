@@ -435,37 +435,6 @@ class _PartnerOrderTerminalScreenState extends State<PartnerOrderTerminalScreen>
     } catch (_) {}
   }
 
-  void _simularEntradaPedidoTeste() {
-    final numAleatorio = (1000 + DateTime.now().millisecond).toString();
-    final pedidoExemplo = IncomingPartnerOrder(
-      pedidoId: 'ped-${DateTime.now().millisecondsSinceEpoch}',
-      numeroPedidoExibicao: numAleatorio,
-      nomeCliente: 'Mário Silva',
-      recebidoEm: DateTime.now(),
-      expiraEm: DateTime.now().add(const Duration(minutes: 3)),
-      tempoPreparacaoPadraoMinutos: 25,
-      subtotalCentimos: 750000,
-      itens: const [
-        TerminalOrderItem(
-          id: 'it-1',
-          nome: 'Hambúrguer Artesanal Duplo com Bacon',
-          quantidade: 2,
-          precoUnitarioCentimos: 300000,
-          opcoesPersonalizadas: ['Ponto: Bem Passado', 'Sem Cebola', 'Dose Extra de Cheddar'],
-          notas: 'Por favor, molho à parte.',
-        ),
-        TerminalOrderItem(
-          id: 'it-2',
-          nome: 'Batata Rústica com Alecrim e Parmesão',
-          quantidade: 1,
-          precoUnitarioCentimos: 150000,
-          opcoesPersonalizadas: ['Molho de Alho Suave'],
-        ),
-      ],
-    );
-    _terminalBloc.add(NewOrderReceivedEvent(pedidoExemplo));
-  }
-
   @override
   void dispose() {
     _pollingTimer?.cancel();
@@ -550,9 +519,9 @@ class _PartnerOrderTerminalScreenState extends State<PartnerOrderTerminalScreen>
                     ),
                   ),
                 IconButton(
-                  tooltip: 'Simular Pedido de Teste',
-                  icon: const Icon(Icons.playlist_add_rounded, color: Color(0xFF1E88E5)),
-                  onPressed: _simularEntradaPedidoTeste,
+                  tooltip: 'Atualizar Pedidos',
+                  icon: const Icon(Icons.refresh_rounded, color: Color(0xFF1E88E5)),
+                  onPressed: () => _carregarPedidosDoServidor(showLoading: true),
                 ),
               ],
             ),
@@ -597,19 +566,27 @@ class _PartnerOrderTerminalScreenState extends State<PartnerOrderTerminalScreen>
                             ),
                           ),
                           const SizedBox(height: 24),
-                          OutlinedButton.icon(
-                            onPressed: _simularEntradaPedidoTeste,
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF1E88E5),
-                              side: const BorderSide(color: Color(0xFF93C5FD)),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
                             ),
-                            icon: const Icon(Icons.add_alert_rounded, size: 18),
-                            label: const Text(
-                              'Simular Entrada de Pedido',
-                              style: TextStyle(fontWeight: FontWeight.bold),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.wifi_tethering_rounded, size: 16, color: Color(0xFF16A34A)),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Sincronização Ativa • Pedidos Oficiais de Clientes',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF475569),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],

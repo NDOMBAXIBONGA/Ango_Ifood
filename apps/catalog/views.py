@@ -1371,23 +1371,35 @@ class PartnerStoreHoursView(PartnerCatalogBaseMixin, APIView):
 
     @transaction.atomic
     def post(self, request: Request) -> Response:
-        """Adiciona um novo turno de horário validando sobreposição no mesmo dia (RN-012)."""
+        """Adiciona ou atualiza um turno de horário validando sobreposição no mesmo dia (RN-012)."""
         loja = self.obter_loja_parceiro(exigir_loja=True)
+
+        # Suporte a envio da matriz semanal completa via POST (compatibilidade cliente mobile)
+        if isinstance(request.data, list) or (isinstance(request.data, dict) and "horarios" in request.data):
+            return self.put(request)
+
+        dia_semana = request.data.get("dia_semana")
+        horario_existente = None
+        if dia_semana is not None:
+            horario_existente = loja.horarios.filter(dia_semana=dia_semana).first()
+
         serializer = HorarioFuncionamentoSerializer(
+            instance=horario_existente,
             data=request.data,
             context={"loja": loja},
+            partial=bool(horario_existente),
         )
         serializer.is_valid(raise_exception=True)
         horario = serializer.save(loja=loja)
 
         invalidar_cache_catalogo_imediato(
             loja_id=str(loja.id),
-            motivo="store_hours_added_rn012",
+            motivo="store_hours_updated_rn012",
         )
 
         return Response(
             HorarioFuncionamentoSerializer(horario).data,
-            status=status.HTTP_201_CREATED,
+            status=status.HTTP_200_OK if horario_existente else status.HTTP_201_CREATED,
         )
 
     @transaction.atomic
@@ -1754,11 +1766,20 @@ class MediaStreamView(APIView):
 
         content_type, _ = mimetypes.guess_type(caminho_ficheiro)
         if not content_type:
-            if caminho_ficheiro.lower().endswith(".mp4"):
+            lower_name = caminho_ficheiro.lower()
+            if lower_name.endswith((".jpg", ".jpeg")):
+                content_type = "image/jpeg"
+            elif lower_name.endswith(".png"):
+                content_type = "image/png"
+            elif lower_name.endswith(".webp"):
+                content_type = "image/webp"
+            elif lower_name.endswith(".gif"):
+                content_type = "image/gif"
+            elif lower_name.endswith(".mp4"):
                 content_type = "video/mp4"
-            elif caminho_ficheiro.lower().endswith(".webm"):
+            elif lower_name.endswith(".webm"):
                 content_type = "video/webm"
-            elif caminho_ficheiro.lower().endswith(".mov"):
+            elif lower_name.endswith(".mov"):
                 content_type = "video/quicktime"
             else:
                 content_type = "application/octet-stream"
@@ -1770,6 +1791,7 @@ class MediaStreamView(APIView):
             resp = HttpResponse(dados, content_type=content_type)
             resp["Content-Length"] = str(tamanho_total)
             resp["Accept-Ranges"] = "bytes"
+            resp["Access-Control-Allow-Origin"] = "*"
             return resp
 
         range_match = re.match(r"bytes=(\d+)-(\d*)", range_header)
@@ -1779,6 +1801,7 @@ class MediaStreamView(APIView):
             resp = HttpResponse(dados, content_type=content_type)
             resp["Content-Length"] = str(tamanho_total)
             resp["Accept-Ranges"] = "bytes"
+            resp["Access-Control-Allow-Origin"] = "*"
             return resp
 
         inicio = int(range_match.group(1))
@@ -1795,6 +1818,7 @@ class MediaStreamView(APIView):
         resp["Content-Range"] = f"bytes {inicio}-{fim}/{tamanho_total}"
         resp["Content-Length"] = str(comprimento)
         resp["Accept-Ranges"] = "bytes"
+        resp["Access-Control-Allow-Origin"] = "*"
         return resp
 
 

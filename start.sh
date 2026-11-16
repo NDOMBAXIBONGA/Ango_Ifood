@@ -66,6 +66,11 @@ for parceiro in CustomUser.objects.filter(tipo_utilizador=CustomUser.TipoUtiliza
 # Garante que qualquer loja parceira no estado PENDENTE seja ativada
 ParceiroLoja.objects.filter(estado=ParceiroLoja.EstadoLoja.PENDENTE).update(estado=ParceiroLoja.EstadoLoja.ATIVO)
 
+# Reset incondicional de artigos do cardápio e pratos em destaque da vitrine
+from apps.catalog.models import ItemMenu
+total_reset, _ = ItemMenu.objects.all().delete()
+print(f'--> [SUCESSO] Limpos {total_reset} artigos de cardápio e vitrine!')
+
 print(f'--> [SUCESSO] Sincronizadas {total_parceiros} contas de parceiros e ativadas as respetivas lojas!')
 " || true
 

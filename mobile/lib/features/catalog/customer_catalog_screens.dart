@@ -3652,151 +3652,207 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
     required bool isVideo,
     required String subtitle,
   }) {
+    bool isPlaying = false;
+    final String targetImageUrl = !isVideo
+        ? (mediaUrl.isNotEmpty ? mediaUrl : fallbackImageUrl)
+        : (fallbackImageUrl.isNotEmpty ? fallbackImageUrl : mediaUrl);
+
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  isVideo
-                      ? Icons.videocam_rounded
-                      : Icons.photo_camera_back_rounded,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(18),
-              child: AspectRatio(
-                aspectRatio: 16 / 9,
-                child: Stack(
-                  fit: StackFit.expand,
+                Row(
                   children: [
-                    Image.network(
-                      fallbackImageUrl.isNotEmpty ? fallbackImageUrl : mediaUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: const Color(0xFF0F172A),
-                        child: const Icon(Icons.movie_creation_outlined, color: Colors.white70, size: 48),
+                    Icon(
+                      isVideo
+                          ? Icons.videocam_rounded
+                          : Icons.photo_camera_back_rounded,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w900,
+                            ),
                       ),
                     ),
-                    if (isVideo) ...[
-                      Container(
-                        color: Colors.black.withOpacity(0.35),
-                      ),
-                      Center(
-                        child: Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFDC2626).withOpacity(0.92),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.3),
-                                blurRadius: 16,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.play_arrow_rounded,
-                            size: 42,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 10,
-                        left: 12,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.7),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.hd_rounded, color: Colors.white, size: 16),
-                              SizedBox(width: 4),
-                              Text(
-                                'HD 1080p • Transmissão Ativa',
-                                style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
                   ],
                 ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(subtitle),
-            if (isVideo && mediaUrl.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () {
-                        Clipboard.setData(ClipboardData(text: mediaUrl));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Link do vídeo copiado para a área de transferência!'),
-                            behavior: SnackBarBehavior.floating,
-                            backgroundColor: Color(0xFF16A34A),
+                const SizedBox(height: 12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (isVideo)
+                          Image.network(
+                            targetImageUrl.isNotEmpty
+                                ? targetImageUrl
+                                : 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800',
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: const Color(0xFF0F172A),
+                              child: const Icon(Icons.movie_creation_outlined, color: Colors.white70, size: 48),
+                            ),
+                          )
+                        else
+                          InteractiveViewer(
+                            maxScale: 4.0,
+                            child: Image.network(
+                              targetImageUrl.isNotEmpty
+                                  ? targetImageUrl
+                                  : 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800',
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Image.network(
+                                'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800',
+                                fit: BoxFit.cover,
+                              ),
+                            ),
                           ),
-                        );
-                      },
-                      style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFFDC2626),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      icon: const Icon(Icons.play_circle_filled_rounded),
-                      label: const Text('Reproduzir Vídeo HD', style: TextStyle(fontWeight: FontWeight.bold)),
+                        if (isVideo) ...[
+                          Container(
+                            color: isPlaying ? Colors.black.withOpacity(0.15) : Colors.black.withOpacity(0.38),
+                          ),
+                          Center(
+                            child: GestureDetector(
+                              onTap: () {
+                                setModalState(() {
+                                  isPlaying = !isPlaying;
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: isPlaying ? const Color(0xFF16A34A).withOpacity(0.92) : const Color(0xFFDC2626).withOpacity(0.92),
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.3),
+                                      blurRadius: 16,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Icon(
+                                  isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                                  size: 42,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 10,
+                            left: 12,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.75),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    isPlaying ? Icons.stream_rounded : Icons.hd_rounded,
+                                    color: isPlaying ? const Color(0xFF4ADE80) : Colors.white,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    isPlaying ? 'A Reproduzir Vídeo HD (Stream 206)' : 'HD 1080p • Transmissão Ativa',
+                                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          if (isPlaying)
+                            Positioned(
+                              bottom: 0,
+                              left: 0,
+                              right: 0,
+                              child: LinearProgressIndicator(
+                                valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFDC2626)),
+                                backgroundColor: Colors.white.withOpacity(0.3),
+                              ),
+                            ),
+                        ],
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  IconButton.filledTonal(
-                    onPressed: () {
-                      Clipboard.setData(ClipboardData(text: mediaUrl));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('URL direta copiada!'),
-                          behavior: SnackBarBehavior.floating,
+                ),
+                const SizedBox(height: 12),
+                Text(subtitle),
+                if (isVideo && mediaUrl.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: () {
+                            setModalState(() {
+                              isPlaying = !isPlaying;
+                            });
+                            Clipboard.setData(ClipboardData(text: mediaUrl));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(isPlaying
+                                    ? 'A reproduzir vídeo HD! Link copiado para a área de transferência.'
+                                    : 'Vídeo em pausa.'),
+                                behavior: SnackBarBehavior.floating,
+                                backgroundColor: const Color(0xFF16A34A),
+                              ),
+                            );
+                          },
+                          style: FilledButton.styleFrom(
+                            backgroundColor: isPlaying ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          icon: Icon(isPlaying ? Icons.pause_circle_filled_rounded : Icons.play_circle_filled_rounded),
+                          label: Text(
+                            isPlaying ? 'Pausar Reprodução' : 'Reproduzir Vídeo HD',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
                         ),
-                      );
-                    },
-                    icon: const Icon(Icons.copy_rounded),
-                    tooltip: 'Copiar Link',
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton.filledTonal(
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: mediaUrl));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('URL direta copiada!'),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.copy_rounded),
+                        tooltip: 'Copiar Link',
+                      ),
+                    ],
                   ),
                 ],
-              ),
-            ],
-          ],
-        ),
+              ],
+            ),
+          );
+        },
       ),
     );
+  }
   }
 
   Future<void> _handleMenuItemTap(

@@ -585,13 +585,18 @@ class PartnerOrderViewSet(viewsets.ViewSet):
         loja_id = request.headers.get("X-Store-ID") or request.query_params.get("loja_id")
         if loja_id:
             try:
-                return ParceiroLoja.objects.filter(pk=loja_id).first()
+                loja = ParceiroLoja.objects.filter(pk=loja_id).first()
+                if loja:
+                    return loja
             except Exception:
                 pass
         if request.user and request.user.is_authenticated:
-            loja = getattr(request.user, "loja", None) or getattr(request.user, "loja_parceiro", None)
-            if loja:
-                return loja
+            try:
+                loja = request.user.lojas_geridas.first()
+                if loja:
+                    return loja
+            except Exception:
+                pass
         return ParceiroLoja.objects.first()
 
     def list(self, request: Request) -> Response:
