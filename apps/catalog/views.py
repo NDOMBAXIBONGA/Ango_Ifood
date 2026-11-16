@@ -1175,6 +1175,43 @@ class PartnerMenuItemViewSet(PartnerCatalogBaseMixin, viewsets.ModelViewSet):
         serializer = self.get_serializer(item)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    @action(detail=False, methods=["post", "delete"], url_path="reset-all")
+    def reset_all_items(self, request: Request) -> Response:
+        """
+        Elimina todos os artigos do catálogo da loja e limpa os pratos de destaque da vitrine (RN-020).
+        """
+        loja = self.obter_loja_parceiro(exigir_loja=False)
+        if loja:
+            ItemMenu.objects.filter(
+                models.Q(loja=loja) | models.Q(categoria__loja=loja)
+            ).delete()
+            dados = dict(loja.dados_bancarios or {})
+            vitrine = dados.get("vitrine_cms")
+            if isinstance(vitrine, dict):
+                home = vitrine.get("identidade_home")
+                if isinstance(home, dict):
+                    home["pratos_destaque"] = []
+                    loja.dados_bancarios = dados
+                    loja.save(update_fields=["dados_bancarios"])
+            invalidar_cache_catalogo_imediato(loja_id=str(loja.id), motivo="items_reset_all")
+        else:
+            ItemMenu.objects.all().delete()
+            for l in ParceiroLoja.objects.all():
+                dados = dict(l.dados_bancarios or {})
+                vitrine = dados.get("vitrine_cms")
+                if isinstance(vitrine, dict):
+                    home = vitrine.get("identidade_home")
+                    if isinstance(home, dict):
+                        home["pratos_destaque"] = []
+                        l.dados_bancarios = dados
+                        l.save(update_fields=["dados_bancarios"])
+            invalidar_cache_catalogo_imediato(motivo="items_reset_all_global")
+
+        return Response(
+            {"mensagem": _("Todos os artigos do cardápio e da vitrine foram eliminados com sucesso.")},
+            status=status.HTTP_200_OK,
+        )
+
 
 # ==============================================================================
 # 3. OPERAÇÃO INTERNA DO PORTAL DO PARCEIRO (STATUS E HORÁRIOS - RN-012, RN-013)
@@ -1608,17 +1645,33 @@ class PartnerMediaUploadView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        nome_original = arquivo.name
+        nome_original = getattr(arquivo, "name", "upload.bin")
         ext = os.path.splitext(nome_original)[1].lower()
+        content_type = getattr(arquivo, "content_type", "").lower()
+
         extensoes_permitidas = {
             ".jpg", ".jpeg", ".png", ".webp", ".gif",
             ".mp4", ".mov", ".webm", ".avi", ".m4v"
         }
+
+        # Dedução resiliente a partir do content_type se a extensão estiver ausente ou incorreta
         if ext not in extensoes_permitidas:
-            return Response(
-                {"erro": _(f"Extensão de ficheiro '{ext}' não suportada. Envie imagens ou vídeos válidos.")},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            if "video/mp4" in content_type or "mp4" in content_type:
+                ext = ".mp4"
+            elif "video/webm" in content_type:
+                ext = ".webm"
+            elif "video/quicktime" in content_type:
+                ext = ".mov"
+            elif "image/png" in content_type:
+                ext = ".png"
+            elif "image/webp" in content_type:
+                ext = ".webp"
+            elif "image/jpeg" in content_type or "image/jpg" in content_type:
+                ext = ".jpg"
+            elif "video" in content_type:
+                ext = ".mp4"
+            else:
+                ext = ".jpg"
 
         tipo_midia = "video" if ext in {".mp4", ".mov", ".webm", ".avi", ".m4v"} else "imagem"
         diretorio_upload = os.path.join(settings.BASE_DIR, "media", "uploads", "vitrine")
@@ -1636,10 +1689,33 @@ class PartnerMediaUploadView(APIView):
         if "onrender.com" in url_absoluta and url_absoluta.startswith("http://"):
             url_absoluta = url_absoluta.replace("http://", "https://", 1)
 
+        # Se houver loja associada, assegura a persistência fiel imediata dos dados
+        try:
+            loja = None
+            loja_id = request.headers.get("X-Store-ID") or request.data.get("loja_id")
+            if loja_id:
+                loja = ParceiroLoja.objects.filter(pk=loja_id).first()
+            if not loja and request.user and request.user.is_authenticated:
+                loja = getattr(request.user, "loja", None) or getattr(request.user, "loja_parceiro", None)
+            if not loja:
+                loja = ParceiroLoja.objects.first()
+
+            if loja and tipo_midia == "video":
+                vitrine = obter_ou_inicializar_vitrine_loja(loja)
+                vitrine.setdefault("identidade_home", {})
+                vitrine["identidade_home"]["hero_video_url"] = url_absoluta
+                dados = dict(loja.dados_bancarios or {})
+                dados["vitrine_cms"] = vitrine
+                loja.dados_bancarios = dados
+                loja.save(update_fields=["dados_bancarios"])
+                invalidar_cache_catalogo_imediato(loja_id=str(loja.id), motivo="video_uploaded_saved")
+        except Exception:
+            pass
+
         return Response(
             {
                 "status": "success",
-                "mensagem": _("Ficheiro carregado com sucesso!"),
+                "mensagem": _("Ficheiro carregado e guardado fielmente com sucesso!"),
                 "url": url_absoluta,
                 "relative_url": url_relativa,
                 "tipo": tipo_midia,
@@ -1648,6 +1724,76 @@ class PartnerMediaUploadView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
+
+class MediaStreamView(APIView):
+    """
+    Serve ficheiros de mídia estáticos e uploads com suporte a HTTP 206 Partial Content
+    e cabeçalhos 'Range', permitindo reprodução de vídeo fluida em Android/iOS e navegadores.
+    """
+
+    authentication_classes = [OptionalJWTAuthentication]
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request: Request, path: str) -> HttpResponse:
+        caminho_base = os.path.join(settings.BASE_DIR, "media")
+        caminho_ficheiro = os.path.abspath(os.path.join(caminho_base, path))
+
+        # Proteção contra Directory Traversal
+        if not caminho_ficheiro.startswith(os.path.abspath(caminho_base)) or not os.path.isfile(caminho_ficheiro):
+            from django.http import Http404
+            raise Http404(_("Ficheiro de mídia não encontrado."))
+
+        tamanho_total = os.path.getsize(caminho_ficheiro)
+        import mimetypes
+        import re
+        from django.http import HttpResponse
+
+        content_type, _ = mimetypes.guess_type(caminho_ficheiro)
+        if not content_type:
+            if caminho_ficheiro.lower().endswith(".mp4"):
+                content_type = "video/mp4"
+            elif caminho_ficheiro.lower().endswith(".webm"):
+                content_type = "video/webm"
+            elif caminho_ficheiro.lower().endswith(".mov"):
+                content_type = "video/quicktime"
+            else:
+                content_type = "application/octet-stream"
+
+        range_header = request.headers.get("Range") or request.META.get("HTTP_RANGE")
+        if not range_header:
+            with open(caminho_ficheiro, "rb") as f:
+                dados = f.read()
+            resp = HttpResponse(dados, content_type=content_type)
+            resp["Content-Length"] = str(tamanho_total)
+            resp["Accept-Ranges"] = "bytes"
+            return resp
+
+        range_match = re.match(r"bytes=(\d+)-(\d*)", range_header)
+        if not range_match:
+            with open(caminho_ficheiro, "rb") as f:
+                dados = f.read()
+            resp = HttpResponse(dados, content_type=content_type)
+            resp["Content-Length"] = str(tamanho_total)
+            resp["Accept-Ranges"] = "bytes"
+            return resp
+
+        inicio = int(range_match.group(1))
+        fim_str = range_match.group(2)
+        fim = int(fim_str) if fim_str else tamanho_total - 1
+        fim = min(fim, tamanho_total - 1)
+        comprimento = (fim - inicio) + 1
+
+        with open(caminho_ficheiro, "rb") as f:
+            f.seek(inicio)
+            dados = f.read(comprimento)
+
+        resp = HttpResponse(dados, status=206, content_type=content_type)
+        resp["Content-Range"] = f"bytes {inicio}-{fim}/{tamanho_total}"
+        resp["Content-Length"] = str(comprimento)
+        resp["Accept-Ranges"] = "bytes"
+        return resp
+
 
 
 

@@ -1,7 +1,8 @@
 """
 Rotas do Django REST Framework para operação e status da loja do Parceiro (RN-012, RN-013).
 """
-from django.urls import path
+from django.urls import include, path
+from rest_framework.routers import DefaultRouter
 
 from apps.catalog.views import (
     PartnerMediaUploadView,
@@ -9,8 +10,12 @@ from apps.catalog.views import (
     PartnerStoreStatusView,
     PartnerStorefrontCMSView,
 )
+from apps.orders.views import PartnerOrderViewSet
 
 app_name = "partner-store"
+
+partner_order_router = DefaultRouter()
+partner_order_router.register(r"orders", PartnerOrderViewSet, basename="partner-store-orders")
 
 urlpatterns = [
     # PATCH /api/v1/partner/store/status/ (RN-013: Pausa temporária e reativação automática)
@@ -21,5 +26,7 @@ urlpatterns = [
     path("storefront/", PartnerStorefrontCMSView.as_view(), name="store-cms"),
     # POST /api/v1/partner/store/upload/ (Upload de Imagens e Vídeos da Galeria)
     path("upload/", PartnerMediaUploadView.as_view(), name="store-upload"),
+    # Endpoints do Terminal KDS de Gestão de Pedidos do Parceiro (GET list, POST accept, ready, reject)
+    path("", include(partner_order_router.urls)),
 ]
 

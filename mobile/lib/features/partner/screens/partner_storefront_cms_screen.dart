@@ -164,7 +164,11 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
         );
       }
 
-      final dio = Dio(BaseOptions(baseUrl: AppEnvironmentConfig.baseHttpUrl));
+      final authDio = await _buildAuthDio();
+      authDio.options.connectTimeout = const Duration(seconds: 120);
+      authDio.options.sendTimeout = const Duration(seconds: 180);
+      authDio.options.receiveTimeout = const Duration(seconds: 120);
+
       final formData = FormData.fromMap({
         'arquivo': await MultipartFile.fromFile(
           pickedFile.path,
@@ -172,9 +176,14 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
         ),
       });
 
-      final resp = await dio.post<Map<String, dynamic>>(
+      final resp = await authDio.post<Map<String, dynamic>>(
         '/api/v1/partner/store/upload/',
         data: formData,
+        options: Options(
+          headers: {
+            if (_lojaId.isNotEmpty) 'X-Store-ID': _lojaId,
+          },
+        ),
       );
 
       if (resp.data != null && resp.data!['url'] != null) {
@@ -182,12 +191,14 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
         setState(() {
           onUploaded(uploadedUrl);
         });
+        // Salva e sincroniza automaticamente a nova mídia na base de dados
+        await _saveAllChanges();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(isVideo
-                  ? 'Vídeo da galeria carregado com sucesso!'
-                  : 'Fotografia da galeria carregada com sucesso!'),
+                  ? 'Vídeo carregado e guardado fielmente na base de dados!'
+                  : 'Fotografia carregada e guardada fielmente na vitrine!'),
               backgroundColor: const Color(0xFF16A34A),
               behavior: SnackBarBehavior.floating,
             ),

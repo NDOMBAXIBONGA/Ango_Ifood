@@ -2429,60 +2429,6 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
             );
           },
         ),
-        if (categories.isNotEmpty) ...[
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Categorias da Loja',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-              InkWell(
-                onTap: () => _navigateToSection(1),
-                borderRadius: BorderRadius.circular(8),
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                  child: Text(
-                    'Ver Todas',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFFDC2626),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 48,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: categories.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
-              itemBuilder: (context, idx) {
-                final cat = categories[idx];
-                return ActionChip(
-                  avatar: const Icon(Icons.restaurant_menu_rounded, size: 16, color: Color(0xFFDC2626)),
-                  label: Text('${cat.nome} (${cat.itens.length})'),
-                  backgroundColor: Colors.white,
-                  side: const BorderSide(color: Color(0xFFE2E8F0)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  onPressed: () {
-                    setState(() => _selectedMenuCategoryId = cat.id);
-                    _navigateToSection(1);
-                  },
-                );
-              },
-            ),
-          ),
-        ],
       ],
     );
   }
@@ -3740,33 +3686,111 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
               borderRadius: BorderRadius.circular(18),
               child: AspectRatio(
                 aspectRatio: 16 / 9,
-                child: Image.network(
-                  isVideo ? fallbackImageUrl : mediaUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    color: Colors.black12,
-                    child: const Icon(Icons.movie_creation_outlined, size: 48),
-                  ),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.network(
+                      fallbackImageUrl.isNotEmpty ? fallbackImageUrl : mediaUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: const Color(0xFF0F172A),
+                        child: const Icon(Icons.movie_creation_outlined, color: Colors.white70, size: 48),
+                      ),
+                    ),
+                    if (isVideo) ...[
+                      Container(
+                        color: Colors.black.withOpacity(0.35),
+                      ),
+                      Center(
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDC2626).withOpacity(0.92),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.3),
+                                blurRadius: 16,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.play_arrow_rounded,
+                            size: 42,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 10,
+                        left: 12,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.7),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.hd_rounded, color: Colors.white, size: 16),
+                              SizedBox(width: 4),
+                              Text(
+                                'HD 1080p • Transmissão Ativa',
+                                style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ),
             const SizedBox(height: 12),
             Text(subtitle),
             if (isVideo && mediaUrl.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              FilledButton.tonalIcon(
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: mediaUrl));
-                  Navigator.of(ctx).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Link do vídeo copiado!'),
-                      behavior: SnackBarBehavior.floating,
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: mediaUrl));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Link do vídeo copiado para a área de transferência!'),
+                            behavior: SnackBarBehavior.floating,
+                            backgroundColor: Color(0xFF16A34A),
+                          ),
+                        );
+                      },
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFFDC2626),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: const Icon(Icons.play_circle_filled_rounded),
+                      label: const Text('Reproduzir Vídeo HD', style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
-                  );
-                },
-                icon: const Icon(Icons.video_library_rounded),
-                label: const Text('Copiar Link Direto do Vídeo HD'),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filledTonal(
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: mediaUrl));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('URL direta copiada!'),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.copy_rounded),
+                    tooltip: 'Copiar Link',
+                  ),
+                ],
               ),
             ],
           ],

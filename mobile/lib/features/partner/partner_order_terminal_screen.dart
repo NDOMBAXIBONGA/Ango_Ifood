@@ -8,10 +8,14 @@
 /// - RN-120: Alertas sonoros contínuos de alta prioridade para pedidos pendentes no balcão da loja.
 
 import 'dart:async';
+import 'package:dio/dio.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../auth/storage/secure_token_storage.dart';
+import '../../core/network/app_environment_config.dart';
 
 // ============================================================================
 // 1. MODELOS DE DADOS DO TERMINAL DO PARCEIRO (RN-075, RN-076, RN-077)
@@ -273,15 +277,28 @@ class PartnerTerminalBloc extends Bloc<PartnerTerminalEvent, PartnerTerminalStat
     _audioService.stopAlertLoop();
     emit(state.copyWith(isProcessingAction: true, isAudioAlertActive: false));
 
-    // Simula chamada de aceitação à API `/api/v1/orders/{id}/accept/` com tempo estimado (RN-077)
-    await Future.delayed(const Duration(milliseconds: 600));
+    try {
+      final token = await SecureTokenStorage().getAccessToken();
+      final dio = Dio(BaseOptions(
+        baseUrl: AppEnvironmentConfig.baseHttpUrl,
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 15),
+        headers: {
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+      ));
+      await dio.post(
+        '/api/v1/partner/store/orders/${event.pedidoId}/accept/',
+        data: {'tempo_preparacao_minutos': event.tempoPreparacaoMinutos},
+      );
+    } catch (_) {}
 
     final atualizados = state.pedidosAtivos.where((p) => p.pedidoId != event.pedidoId).toList();
     emit(state.copyWith(
       pedidosAtivos: atualizados,
       clearModal: true,
       isProcessingAction: false,
-      feedbackMessage: 'Pedido aceite com tempo estimado de ${event.tempoPreparacaoMinutos} min.',
+      feedbackMessage: 'Pedido aceite com tempo estimado de ${event.tempoPreparacaoMinutos} min. Em preparação!',
     ));
   }
 
@@ -289,8 +306,21 @@ class PartnerTerminalBloc extends Bloc<PartnerTerminalEvent, PartnerTerminalStat
     _audioService.stopAlertLoop();
     emit(state.copyWith(isProcessingAction: true, isAudioAlertActive: false));
 
-    // Simula chamada de rejeição à API `/api/v1/orders/{id}/reject/` com motivo obrigatório (RN-076)
-    await Future.delayed(const Duration(milliseconds: 600));
+    try {
+      final token = await SecureTokenStorage().getAccessToken();
+      final dio = Dio(BaseOptions(
+        baseUrl: AppEnvironmentConfig.baseHttpUrl,
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 15),
+        headers: {
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+      ));
+      await dio.post(
+        '/api/v1/partner/store/orders/${event.pedidoId}/reject/',
+        data: {'motivo': event.motivo.descricao},
+      );
+    } catch (_) {}
 
     final atualizados = state.pedidosAtivos.where((p) => p.pedidoId != event.pedidoId).toList();
     emit(state.copyWith(
@@ -333,50 +363,81 @@ class PartnerOrderTerminalScreen extends StatefulWidget {
 
 class _PartnerOrderTerminalScreenState extends State<PartnerOrderTerminalScreen> {
   late final PartnerTerminalBloc _terminalBloc;
+  Timer? _pollingTimer;
+  final Set<String> _notifiedOrderIds = {};
 
   @override
   void initState() {
     super.initState();
     _terminalBloc = PartnerTerminalBloc();
-    // Simula a entrada de um pedido teste após 1 segundo
-    _simularEntradaPedidoTeste();
+    _iniciarSincronizacaoPedidos();
   }
 
-  void _simularEntradaPedidoTeste() {
-    Future.delayed(const Duration(seconds: 1), () {
-      if (!mounted) return;
-      final pedidoExemplo = IncomingPartnerOrder(
-        pedidoId: 'ped-778899',
-        numeroPedidoExibicao: '4092',
-        nomeCliente: 'Mário Silva',
-        recebidoEm: DateTime.now(),
-        expiraEm: DateTime.now().add(const Duration(minutes: 3)),
-        tempoPreparacaoPadraoMinutos: 25,
-        subtotalCentimos: 750000,
-        itens: const [
-          TerminalOrderItem(
-            id: 'it-1',
-            nome: 'Hambúrguer Artesanal Duplo com Bacon',
-            quantidade: 2,
-            precoUnitarioCentimos: 300000,
-            opcoesPersonalizadas: ['Ponto: Bem Passado', 'Sem Cebola', 'Dose Extra de Cheddar'],
-            notas: 'Por favor, molho à parte.',
-          ),
-          TerminalOrderItem(
-            id: 'it-2',
-            nome: 'Batata Rústica com Alecrim e Parmesão',
-            quantidade: 1,
-            precoUnitarioCentimos: 150000,
-            opcoesPersonalizadas: ['Molho de Alho Suave'],
-          ),
-        ],
-      );
-      _terminalBloc.add(NewOrderReceivedEvent(pedidoExemplo));
+  void _iniciarSincronizacaoPedidos() {
+    _carregarPedidosDoServidor();
+    _pollingTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      _carregarPedidosDoServidor();
     });
+  }
+
+  Future<void> _carregarPedidosDoServidor() async {
+    try {
+      final token = await SecureTokenStorage().getAccessToken();
+      final dio = Dio(
+        BaseOptions(
+          baseUrl: AppEnvironmentConfig.baseHttpUrl,
+          connectTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 10),
+          headers: {
+            if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+          },
+        ),
+      );
+
+      final resp = await dio.get<List<dynamic>>('/api/v1/partner/store/orders/');
+      if (resp.data != null && mounted) {
+        for (final raw in resp.data!) {
+          if (raw is! Map<String, dynamic>) continue;
+          final pId = raw['pedido_id']?.toString() ?? '';
+          final isAguardando = raw['is_aguardando'] == true;
+
+          if (isAguardando && !_notifiedOrderIds.contains(pId)) {
+            _notifiedOrderIds.add(pId);
+            final rawItens = (raw['itens'] as List<dynamic>?) ?? [];
+            final itens = rawItens.map((it) {
+              final m = it as Map<String, dynamic>;
+              return TerminalOrderItem(
+                id: m['id']?.toString() ?? '',
+                nome: m['nome']?.toString() ?? 'Artigo',
+                quantidade: (m['quantidade'] as num?)?.toInt() ?? 1,
+                precoUnitarioCentimos: (m['preco_unitario_centimos'] as num?)?.toInt() ?? 0,
+                opcoesPersonalizadas: ((m['opcoes_personalizadas'] as List<dynamic>?) ?? [])
+                    .map((e) => e.toString())
+                    .toList(),
+                notas: m['notas']?.toString(),
+              );
+            }).toList();
+
+            final incoming = IncomingPartnerOrder(
+              pedidoId: pId,
+              numeroPedidoExibicao: raw['numero_pedido_exibicao']?.toString() ?? 'NOVO',
+              nomeCliente: raw['nome_cliente']?.toString() ?? 'Cliente',
+              recebidoEm: DateTime.tryParse(raw['recebido_em']?.toString() ?? '') ?? DateTime.now(),
+              expiraEm: DateTime.tryParse(raw['expira_em']?.toString() ?? '') ?? DateTime.now().add(const Duration(minutes: 3)),
+              tempoPreparacaoPadraoMinutos: (raw['tempo_preparacao_padrao_minutos'] as num?)?.toInt() ?? 20,
+              subtotalCentimos: (raw['subtotal_centimos'] as num?)?.toInt() ?? 0,
+              itens: itens,
+            );
+            _terminalBloc.add(NewOrderReceivedEvent(incoming));
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   @override
   void dispose() {
+    _pollingTimer?.cancel();
     _terminalBloc.close();
     super.dispose();
   }

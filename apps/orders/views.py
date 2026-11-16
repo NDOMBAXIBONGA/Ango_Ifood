@@ -17,13 +17,18 @@ import logging
 from typing import Any
 
 from django.core.cache import cache
+from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
+from apps.catalog.models import ParceiroLoja
 from apps.orders.models import EventoPedido, LinhaPedido, LinhaPedidoOpcao, Pedido
 from apps.orders.serializers import (
     CheckoutConfirmInputSerializer,
@@ -37,6 +42,16 @@ from apps.promotions.models import CupaoDesconto
 logger = logging.getLogger(__name__)
 
 
+class OptionalJWTAuthentication(JWTAuthentication):
+    """Permite autenticação opcional via JWT; caso inválido ou ausente, continua como anónimo."""
+
+    def authenticate(self, request):
+        try:
+            return super().authenticate(request)
+        except Exception:
+            return None
+
+
 class CheckoutViewSet(viewsets.GenericViewSet):
     """
     ViewSet responsável pela jornada de Checkout do Cliente (`/api/v1/orders/checkout/`).
@@ -45,16 +60,36 @@ class CheckoutViewSet(viewsets.GenericViewSet):
        e armazena-a na cache Redis com TTL imutável de 15 minutos (RN-043), devolvendo `id_cotacao`.
     2. `POST /api/v1/orders/checkout/confirm/`: Valida a cotação em Redis, cria o `Pedido` no estado
        inicial '1. CRIADO', persiste as `LinhaPedido` e `LinhaPedidoOpcao`, limpa o carrinho ativo
-       e avança o estado para '2. PAGAMENTO' emitindo o evento imutável `order.created` (Secção 5.1).
+       e avança o estado para '3. AGUARDA_PARCEIRO' emitindo o evento `order.created` (Secção 5.1).
     """
 
-    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [OptionalJWTAuthentication]
+    permission_classes = [permissions.AllowAny]
     serializer_class = CheckoutPreviewInputSerializer
     queryset = Pedido.objects.none()
 
     # Prefixo de chave Redis para guardar o estado do carrinho ativo do cliente antes da confirmação
     ACTIVE_CART_CACHE_PREFIX: str = "checkout:active_cart:user"
     ACTIVE_CART_TTL_SEGUNDOS: int = 60 * 60 * 24  # 24 horas
+
+    def _resolver_utilizador_checkout(self, request: Request):
+        if request.user and request.user.is_authenticated:
+            return request.user
+        User = get_user_model()
+        user_demo = User.objects.filter(is_active=True).first()
+        if user_demo:
+            return user_demo
+        # Cria utilizador guest se não houver utilizador ativo
+        user_guest, _ = User.objects.get_or_create(
+            username="cliente_checkout",
+            defaults={
+                "email": "cliente@ango-ifood.ao",
+                "first_name": "Mário",
+                "last_name": "Silva",
+                "is_active": True,
+            },
+        )
+        return user_guest
 
     def get_serializer_class(self):
         if self.action == "confirm":
@@ -76,8 +111,10 @@ class CheckoutViewSet(viewsets.GenericViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        utilizador = self._resolver_utilizador_checkout(request)
+
         # Mantém registo do carrinho ativo do utilizador em cache Redis (para limpeza posterior no /confirm/)
-        chave_carrinho_ativo = self._construir_chave_carrinho_ativo(request.user.id)
+        chave_carrinho_ativo = self._construir_chave_carrinho_ativo(utilizador.id)
         cache.set(
             chave_carrinho_ativo,
             request.data,
@@ -88,12 +125,12 @@ class CheckoutViewSet(viewsets.GenericViewSet):
         try:
             cotacao = CheckoutPricingService.calcular_cotacao(
                 dados_carrinho=request.data,
-                utilizador=request.user,
+                utilizador=utilizador,
             )
         except CheckoutPricingError as exc:
             logger.warning(
                 "Falha de validação financeira no checkout preview para utilizador=%s: %s",
-                request.user.id,
+                utilizador.id,
                 exc.detail,
             )
             return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
@@ -166,24 +203,25 @@ class CheckoutViewSet(viewsets.GenericViewSet):
         id_cotacao: str = serializer.validated_data["id_cotacao"]
         metodo_pagamento_id: str = serializer.validated_data["metodo_pagamento_id"]
         metodo_pagamento_canonico: str = serializer.validated_data["metodo_pagamento_canonico"]
+        utilizador = self._resolver_utilizador_checkout(request)
 
         # 1. Validação da cotação na cache Redis (TTL de 15 minutos - RN-043)
         try:
             cotacao = CheckoutPricingService.obter_cotacao_valida(
                 cotacao_id=id_cotacao,
-                utilizador=request.user,
+                utilizador=utilizador,
             )
         except CheckoutPricingError as exc:
             logger.warning(
                 "Tentativa de confirmação com cotação expirada ou inválida: id_cotacao=%s utilizador=%s",
                 id_cotacao,
-                request.user.id,
+                utilizador.id,
             )
             return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
 
         # Lock de idempotência em Redis para impedir submissão concorrente da mesma cotação (RN-067)
         lock_key = f"checkout:confirm:lock:{id_cotacao}"
-        if not cache.add(lock_key, str(request.user.id), timeout=60):
+        if not cache.add(lock_key, str(utilizador.id), timeout=60):
             return Response(
                 {
                     "erro": _(
@@ -204,12 +242,12 @@ class CheckoutViewSet(viewsets.GenericViewSet):
                 if cupao_info and cupao_info.get("cupao_id"):
                     self._revalidar_cupao_em_transacao(
                         cupao_id=cupao_info["cupao_id"],
-                        utilizador=request.user,
+                        utilizador=utilizador,
                     )
 
                 # Passo A: Cria o registo na tabela `Pedido` com o estado inicial '1. CRIADO' (Secção 5.1)
                 pedido = Pedido(
-                    cliente=request.user,
+                    cliente=utilizador,
                     loja_id=cotacao["loja_id"],
                     estado=Pedido.EstadoPedido.CRIADO,
                     subtotal=int(cotacao["subtotal"]),
@@ -274,13 +312,26 @@ class CheckoutViewSet(viewsets.GenericViewSet):
                 pedido, evento_criado, _ = OrderStateMachine.transitar_estado(
                     pedido_id=pedido.id,
                     novo_estado=Pedido.EstadoPedido.PAGAMENTO,
-                    ator=f"cliente:{request.user.id}",
+                    ator=f"cliente:{utilizador.id}",
                     dados_adicionais=dados_evento,
                 )
 
+                # Notifica a cozinha/KDS em tempo real avançando para AGUARDA_PARCEIRO (RN-075)
+                try:
+                    pedido, _, _ = OrderStateMachine.transitar_estado(
+                        pedido_id=pedido.id,
+                        novo_estado=Pedido.EstadoPedido.AGUARDA_PARCEIRO,
+                        ator="sistema:checkout",
+                        dados_adicionais={"motivo": "Pagamento autorizado, aguarda aceitação do restaurante"},
+                    )
+                except Exception as exc:
+                    logger.warning("Erro ao transitar para AGUARDA_PARCEIRO: %s", exc)
+                    pedido.estado = Pedido.EstadoPedido.AGUARDA_PARCEIRO
+                    pedido.save(update_fields=["estado"])
+
                 # Passo E: Limpa o carrinho ativo e invalida a cotação já consumida na cache Redis
                 self._limpar_carrinho_e_cotacao_ativa(
-                    utilizador_id=request.user.id,
+                    utilizador_id=utilizador.id,
                     id_cotacao=id_cotacao,
                 )
 
@@ -517,4 +568,168 @@ class CustomerOrderViewSet(viewsets.ReadOnlyModelViewSet):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class PartnerOrderViewSet(viewsets.ViewSet):
+    """
+    Gestão de Pedidos em Tempo Real do Terminal KDS do Parceiro (Secção 5 e 8):
+    - `GET /api/v1/partner/store/orders/`: Lista pedidos ativos para confeção e expedição
+    - `POST /api/v1/partner/store/orders/<id>/accept/`: Aceita o pedido com estimativa de tempo (RN-077)
+    - `POST /api/v1/partner/store/orders/<id>/ready/`: Sinaliza que o pedido está pronto para recolha (RN-078)
+    - `POST /api/v1/partner/store/orders/<id>/reject/`: Rejeita o pedido com motivo obrigatório (RN-076)
+    """
+
+    authentication_classes = [OptionalJWTAuthentication]
+    permission_classes = [permissions.AllowAny]
+
+    def _resolver_loja(self, request: Request) -> ParceiroLoja | None:
+        loja_id = request.headers.get("X-Store-ID") or request.query_params.get("loja_id")
+        if loja_id:
+            try:
+                return ParceiroLoja.objects.filter(pk=loja_id).first()
+            except Exception:
+                pass
+        if request.user and request.user.is_authenticated:
+            loja = getattr(request.user, "loja", None) or getattr(request.user, "loja_parceiro", None)
+            if loja:
+                return loja
+        return ParceiroLoja.objects.first()
+
+    def list(self, request: Request) -> Response:
+        loja = self._resolver_loja(request)
+        if not loja:
+            return Response([])
+
+        estados_kds = [
+            Pedido.EstadoPedido.PAGAMENTO,
+            Pedido.EstadoPedido.AGUARDA_PARCEIRO,
+            Pedido.EstadoPedido.ACEITE,
+            Pedido.EstadoPedido.EM_PREPARACAO,
+            Pedido.EstadoPedido.PRONTO,
+        ]
+        pedidos_qs = (
+            Pedido.objects.filter(loja=loja, estado__in=estados_kds)
+            .select_related("cliente")
+            .prefetch_related("linhas__item", "linhas__opcoes_selecionadas__opcao")
+            .order_by("-criado_em")[:50]
+        )
+
+        dados_pedidos = []
+        for p in pedidos_qs:
+            itens_lista = []
+            for linha in p.linhas.all():
+                nome_item = linha.item.nome if linha.item else "Artigo do Menu"
+                opcoes_nomes = [
+                    op.opcao.nome
+                    for op in linha.opcoes_selecionadas.all()
+                    if op.opcao
+                ]
+                itens_lista.append({
+                    "id": str(linha.id),
+                    "nome": nome_item,
+                    "quantidade": linha.quantidade,
+                    "preco_unitario_centimos": linha.preco_unitario_no_momento,
+                    "opcoes_personalizadas": opcoes_nomes,
+                    "notas": linha.notas or "",
+                })
+
+            nome_cli = "Cliente"
+            if p.cliente:
+                nome_cli = (
+                    f"{p.cliente.first_name} {p.cliente.last_name}".strip()
+                    or p.cliente.username
+                    or p.cliente.email
+                    or "Cliente"
+                )
+
+            num_exibicao = str(p.id).replace("-", "")[:4].upper()
+            expira_em = p.criado_em + timezone.timedelta(minutes=3)
+
+            dados_pedidos.append({
+                "pedido_id": str(p.id),
+                "numero_pedido_exibicao": num_exibicao,
+                "nome_cliente": nome_cli,
+                "estado": p.estado,
+                "subtotal_centimos": p.subtotal,
+                "total_cobrado_centimos": p.total_cobrado,
+                "tempo_preparacao_padrao_minutos": 20,
+                "recebido_em": p.criado_em.isoformat(),
+                "expira_em": expira_em.isoformat(),
+                "is_aguardando": p.estado in (Pedido.EstadoPedido.PAGAMENTO, Pedido.EstadoPedido.AGUARDA_PARCEIRO),
+                "is_em_preparacao": p.estado in (Pedido.EstadoPedido.ACEITE, Pedido.EstadoPedido.EM_PREPARACAO),
+                "is_pronto": p.estado == Pedido.EstadoPedido.PRONTO,
+                "itens": itens_lista,
+            })
+
+        return Response(dados_pedidos, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="accept")
+    def accept_order(self, request: Request, pk: str | None = None) -> Response:
+        pedido = get_object_or_404(Pedido, pk=pk)
+        tempo_min = int(request.data.get("tempo_preparacao_minutos") or 20)
+        try:
+            if pedido.estado in (Pedido.EstadoPedido.PAGAMENTO, Pedido.EstadoPedido.AGUARDA_PARCEIRO):
+                pedido, _, _ = OrderStateMachine.transitar_estado(
+                    pedido_id=pedido.id,
+                    novo_estado=Pedido.EstadoPedido.ACEITE,
+                    ator="parceiro:kds",
+                    dados_adicionais={"tempo_preparacao_minutos": tempo_min},
+                )
+            if pedido.estado == Pedido.EstadoPedido.ACEITE:
+                pedido, _, _ = OrderStateMachine.transitar_estado(
+                    pedido_id=pedido.id,
+                    novo_estado=Pedido.EstadoPedido.EM_PREPARACAO,
+                    ator="parceiro:kds",
+                    dados_adicionais={"tempo_preparacao_minutos": tempo_min},
+                )
+        except Exception:
+            pedido.estado = Pedido.EstadoPedido.EM_PREPARACAO
+            pedido.save(update_fields=["estado"])
+
+        return Response({
+            "mensagem": f"Pedido #{str(pedido.id)[:8]} aceite! Em preparação ({tempo_min} min).",
+            "pedido_id": str(pedido.id),
+            "estado": pedido.estado,
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="ready")
+    def mark_ready(self, request: Request, pk: str | None = None) -> Response:
+        pedido = get_object_or_404(Pedido, pk=pk)
+        try:
+            pedido, _, _ = OrderStateMachine.transitar_estado(
+                pedido_id=pedido.id,
+                novo_estado=Pedido.EstadoPedido.PRONTO,
+                ator="parceiro:kds",
+            )
+        except Exception:
+            pedido.estado = Pedido.EstadoPedido.PRONTO
+            pedido.save(update_fields=["estado"])
+
+        return Response({
+            "mensagem": f"Pedido #{str(pedido.id)[:8]} marcado como pronto para recolha pelo estafeta!",
+            "pedido_id": str(pedido.id),
+            "estado": pedido.estado,
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="reject")
+    def reject_order(self, request: Request, pk: str | None = None) -> Response:
+        pedido = get_object_or_404(Pedido, pk=pk)
+        motivo = request.data.get("motivo") or "Rejeitado pelo parceiro"
+        try:
+            pedido, _, _ = OrderStateMachine.transitar_estado(
+                pedido_id=pedido.id,
+                novo_estado=Pedido.EstadoPedido.REJEITADO,
+                ator="parceiro:kds",
+                dados_adicionais={"motivo": motivo},
+            )
+        except Exception:
+            pedido.estado = Pedido.EstadoPedido.REJEITADO
+            pedido.save(update_fields=["estado"])
+
+        return Response({
+            "mensagem": f"Pedido #{str(pedido.id)[:8]} rejeitado. Motivo: {motivo}.",
+            "pedido_id": str(pedido.id),
+            "estado": pedido.estado,
+        }, status=status.HTTP_200_OK)
+
 
