@@ -20,6 +20,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../auth/storage/secure_token_storage.dart';
+
 // ============================================================================
 // 1. UTILITÁRIO DE FORMATAÇÃO MONETÁRIA INTEIRA (RN-059)
 // ============================================================================
@@ -214,6 +216,7 @@ abstract class ICourierRepository {
 
   Future<CourierProfileModel> getProfile(String courierId);
   Future<bool> setOnlineAvailability(String courierId, bool online, double lat, double lng);
+  CourierProfileModel mockApprovedProfile();
 }
 
 class CourierRepository implements ICourierRepository {
@@ -308,7 +311,7 @@ class CourierRepository implements ICourierRepository {
         );
       }
     } catch (_) {}
-    return _mockApprovedProfile();
+    return mockApprovedProfile();
   }
 
   @override
@@ -353,7 +356,8 @@ class CourierRepository implements ICourierRepository {
     );
   }
 
-  CourierProfileModel _mockApprovedProfile() {
+  @override
+  CourierProfileModel mockApprovedProfile() {
     return const CourierProfileModel(
       id: 'est-uuid-42',
       nome: 'Mateus Gaspar',
@@ -520,7 +524,7 @@ class CourierBloc extends Bloc<CourierEvent, CourierState> {
         emit(CourierActiveLoaded(profile: profile));
       }
     } catch (_) {
-      final fallback = _mockApprovedProfile();
+      final fallback = _repository.mockApprovedProfile();
       emit(CourierActiveLoaded(profile: fallback));
     }
   }

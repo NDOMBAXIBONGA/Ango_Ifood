@@ -3857,7 +3857,6 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
       ),
     );
   }
-  }
 
   Future<void> _handleMenuItemTap(
     BuildContext context,
@@ -4640,7 +4639,7 @@ class _CustomerAddressSelectionSheetState
   final _andarPortaController = TextEditingController();
   final _instrucoesController = TextEditingController();
   final _municipioController = TextEditingController();
-  int _selectedPresetIndex = 0;
+  final int _selectedPresetIndex = 0;
   String _selectedProvince = 'Luanda';
 
   static const List<String> _todasProvinciasAngola = [
