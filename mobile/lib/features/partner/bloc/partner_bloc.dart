@@ -383,6 +383,17 @@ class PartnerRepository {
     return list.map((e) => BusinessHourSlot.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  Future<void> saveBusinessHours(List<BusinessHourSlot> hours) async {
+    final activeHours = hours.where((h) => h.isAtivo).toList();
+    final listToSend = activeHours.isNotEmpty ? activeHours : hours;
+    await _dio.put(
+      '/api/v1/partner/store/hours/',
+      data: {
+        'horarios': listToSend.map((h) => h.toJson()).toList(),
+      },
+    );
+  }
+
   Future<PartnerFinancesModel> fetchFinances() async {
     final response = await _dio.get('/api/v1/partner/store/finances/');
     return PartnerFinancesModel.fromJson(response.data as Map<String, dynamic>);

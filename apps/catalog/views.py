@@ -1416,7 +1416,10 @@ class PartnerStoreHoursView(PartnerCatalogBaseMixin, APIView):
         Valida que nenhum turno colide no mesmo dia da semana.
         """
         loja = self.obter_loja_parceiro(exigir_loja=True)
-        serializer = PartnerStoreHoursMatrixSerializer(data=request.data)
+        payload = request.data
+        if isinstance(payload, list):
+            payload = {"horarios": payload}
+        serializer = PartnerStoreHoursMatrixSerializer(data=payload)
         serializer.is_valid(raise_exception=True)
 
         horarios_data = serializer.validated_data["horarios"]

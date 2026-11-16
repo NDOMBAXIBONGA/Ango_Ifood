@@ -829,9 +829,7 @@ class PartnerStoreHoursMatrixSerializer(serializers.Serializer):
         com outro no mesmo dia da semana.
         """
         if not value:
-            raise serializers.ValidationError(
-                _("RN-012: A matriz semanal de horários não pode estar vazia.")
-            )
+            return []
 
         horarios_por_dia: dict[int, list[dict[str, Any]]] = {}
         for h in value:

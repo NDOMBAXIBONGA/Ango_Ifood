@@ -282,10 +282,15 @@ class CourierWalletRepository implements ICourierWalletRepository {
         return CourierWalletModel(
           courierId: courierId,
           saldoDisponivelCentimos: saldoDisponivel,
-          ganhosHojeCentimos: ganhosHoje,
-          corridasConcluidasHoje: corridasHoje,
+          saldoPendenteCentimos: 0,
+          repassesAcumuladosMesCentimos: 0,
+          taxaAntecipacaoPercentagem: 2.5,
+          taxaFixaAntecipacaoCentimos: 20000,
+          proximoRepasseRegularData: 'Terça-feira (Sem Taxa)',
+          ibanDestinoMascarado: 'AO06 0040 **** **** **** 9012 3',
+          bancoNome: 'Banco Angolano de Investimentos (BAI)',
+          produtividadeSemanal: const [],
           historicoCorridas: corridas,
-          historicoRepasses: const [],
         );
       }
     } catch (_) {}

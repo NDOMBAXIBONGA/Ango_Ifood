@@ -1054,8 +1054,6 @@ class _PartnerOrderTerminalScreenState extends State<PartnerOrderTerminalScreen>
       ),
     );
   }
-    );
-  }
 
   void _abrirModalDestaquePedido(BuildContext context, IncomingPartnerOrder pedido) {
     showModalBottomSheet<void>(

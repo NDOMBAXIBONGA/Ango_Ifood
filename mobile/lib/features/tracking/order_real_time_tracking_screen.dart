@@ -436,7 +436,7 @@ class _OrderRealTimeTrackingScreenState extends State<OrderRealTimeTrackingScree
   // Interpolação de animação do Marcador do Estafeta e Pulso de Radar
   late final AnimationController _animController;
   Timer? _demoSimulationTimer;
-  double _simulatedRouteProgress = 0.22;
+  final double _simulatedRouteProgress = 0.22;
   LatLng? _courierStartLatLng;
   LatLng? _courierTargetLatLng;
   double _courierStartRotation = 0.0;
