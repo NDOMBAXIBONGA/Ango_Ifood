@@ -68,8 +68,11 @@ ParceiroLoja.objects.filter(estado=ParceiroLoja.EstadoLoja.PENDENTE).update(esta
 
 # Reset incondicional de artigos do cardápio e pratos em destaque da vitrine
 from apps.catalog.models import ItemMenu
+from apps.orders.models import Pedido
 total_reset, _ = ItemMenu.objects.all().delete()
-print(f'--> [SUCESSO] Limpos {total_reset} artigos de cardápio e vitrine!')
+total_pedidos_limpos, _ = Pedido.objects.filter(linhas__item__isnull=True).delete()
+Pedido.objects.filter(id__istartswith='B9B202A3').delete()
+print(f'--> [SUCESSO] Limpos {total_reset} artigos de cardápio e {total_pedidos_limpos} pedidos de teste!')
 
 print(f'--> [SUCESSO] Sincronizadas {total_parceiros} contas de parceiros e ativadas as respetivas lojas!')
 " || true
