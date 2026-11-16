@@ -6,6 +6,8 @@ Views e ViewSets da aplicação 'catalog':
    com validação de preços não negativos (RN-016), paridade (RN-017) e invalidação instantânea de cache + evento
    assíncrono quando `is_disponivel=False` (RN-015, RN-020).
 """
+from __future__ import annotations
+
 import logging
 import os
 import uuid
@@ -13,6 +15,7 @@ from datetime import timedelta
 from typing import Any
 
 from django.conf import settings
+from django.http import Http404, HttpResponse
 
 from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point

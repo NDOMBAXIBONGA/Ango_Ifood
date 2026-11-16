@@ -186,26 +186,23 @@ def gerar_tokens_jwt_para_utilizador(user: CustomUser) -> dict[str, str]:
     injetando claims adicionais para controlo de sessão e identificação rápida.
     Garante resiliência automática se as tabelas de token_blacklist ainda não estiverem migradas.
     """
+    from rest_framework_simplejwt.settings import api_settings
+
     try:
         refresh = RefreshToken.for_user(user)
     except Exception as e:
-        err_msg = str(e).lower()
-        if "token_blacklist" in err_msg or "does not exist" in err_msg or "relation" in err_msg:
-            try:
-                from django.core.management import call_command
-                call_command("migrate", "token_blacklist", interactive=False)
-                refresh = RefreshToken.for_user(user)
-            except Exception:
-                # Fallback gerando token Refresh diretamente sem persistência imediata em blacklist
-                refresh = RefreshToken()
-                refresh[refresh.user_id_field] = str(user.pk)
-        else:
+        logger.warning("Aviso ao gerar RefreshToken.for_user: %s. Utilizando fallback resiliente.", e)
+        try:
+            refresh = RefreshToken()
+            refresh[api_settings.USER_ID_CLAIM] = str(user.pk)
+        except Exception as fallback_err:
+            logger.error("Erro no fallback de RefreshToken: %s", fallback_err)
             raise
 
-    refresh["telemovel"] = user.telemovel or ""
-    refresh["email"] = user.email or ""
-    refresh["estado"] = user.estado
-    refresh["nome"] = user.nome
+    refresh["telemovel"] = getattr(user, "telemovel", "") or ""
+    refresh["email"] = getattr(user, "email", "") or ""
+    refresh["estado"] = getattr(user, "estado", "") or ""
+    refresh["nome"] = getattr(user, "nome", "") or ""
     refresh["tipo_utilizador"] = getattr(user, "tipo_utilizador", CustomUser.TipoUtilizador.CLIENTE)
     refresh["role"] = getattr(user, "tipo_utilizador", CustomUser.TipoUtilizador.CLIENTE).lower()
     return {
@@ -959,13 +956,24 @@ class EmailVerifyOTPView(APIView):
         utilizador = CustomUser.objects.filter(email__iexact=email).first()
         if utilizador is not None and utilizador.estado != CustomUser.EstadoConta.SUSPENSO and utilizador.is_active:
             tokens = gerar_tokens_jwt_para_utilizador(utilizador)
+            try:
+                perfil_data = UtilizadorResumoSerializer(utilizador).data
+            except Exception:
+                perfil_data = {
+                    "id": str(utilizador.id),
+                    "email": getattr(utilizador, "email", "") or "",
+                    "telemovel": getattr(utilizador, "telemovel", "") or "",
+                    "nome": getattr(utilizador, "nome", "") or "",
+                    "tipo_utilizador": getattr(utilizador, "tipo_utilizador", CustomUser.TipoUtilizador.CLIENTE),
+                    "estado": getattr(utilizador, "estado", ""),
+                }
             return Response(
                 {
                     "sucesso": True,
                     "mensagem": _("Autenticação realizada com sucesso."),
                     "registo_pendente": False,
                     "tokens": tokens,
-                    "perfil": UtilizadorResumoSerializer(utilizador).data,
+                    "perfil": perfil_data,
                     "is_verificado": True,
                 },
                 status=status.HTTP_200_OK,
@@ -1277,7 +1285,10 @@ class EmailPasswordLoginView(APIView):
 
             # Auto-provisionamento resiliente de perfil de Loja ou Estafeta se ainda não existirem
             if user.tipo_utilizador == CustomUser.TipoUtilizador.PARCEIRO:
-                garantir_loja_parceiro_ativa(user)
+                try:
+                    garantir_loja_parceiro_ativa(user)
+                except Exception as e_loja:
+                    logger.warning("Aviso ao garantir loja parceiro ativa no login: %s", e_loja)
 
             if user.tipo_utilizador == CustomUser.TipoUtilizador.ESTAFETA and not hasattr(user, "perfil_estafeta"):
                 try:
@@ -1292,6 +1303,19 @@ class EmailPasswordLoginView(APIView):
 
             tokens = gerar_tokens_jwt_para_utilizador(user)
 
+            try:
+                perfil_data = UtilizadorResumoSerializer(user).data
+            except Exception as e_perfil:
+                logger.warning("Aviso ao serializar perfil de utilizador no login: %s", e_perfil)
+                perfil_data = {
+                    "id": str(user.id),
+                    "email": getattr(user, "email", "") or "",
+                    "telemovel": getattr(user, "telemovel", "") or "",
+                    "nome": getattr(user, "nome", "") or "",
+                    "tipo_utilizador": getattr(user, "tipo_utilizador", CustomUser.TipoUtilizador.CLIENTE),
+                    "estado": getattr(user, "estado", ""),
+                }
+
             logger.info(
                 "Utilizador autenticado com sucesso via palavra-passe: %s (id=%s)",
                 user.email or user.telemovel,
@@ -1303,7 +1327,7 @@ class EmailPasswordLoginView(APIView):
                     "mensagem": _("Autenticação realizada com sucesso."),
                     "registo_pendente": False,
                     "tokens": tokens,
-                    "perfil": UtilizadorResumoSerializer(user).data,
+                    "perfil": perfil_data,
                 },
                 status=status.HTTP_200_OK,
             )

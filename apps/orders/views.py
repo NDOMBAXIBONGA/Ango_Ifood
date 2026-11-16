@@ -81,11 +81,10 @@ class CheckoutViewSet(viewsets.GenericViewSet):
             return user_demo
         # Cria utilizador guest se não houver utilizador ativo
         user_guest, _ = User.objects.get_or_create(
-            username="cliente_checkout",
+            telemovel="+244900000000",
             defaults={
                 "email": "cliente@ango-ifood.ao",
-                "first_name": "Mário",
-                "last_name": "Silva",
+                "nome": "Mário Silva",
                 "is_active": True,
             },
         )
@@ -636,9 +635,9 @@ class PartnerOrderViewSet(viewsets.ViewSet):
             nome_cli = "Cliente"
             if p.cliente:
                 nome_cli = (
-                    f"{p.cliente.first_name} {p.cliente.last_name}".strip()
-                    or p.cliente.username
-                    or p.cliente.email
+                    getattr(p.cliente, "nome", None)
+                    or getattr(p.cliente, "email", None)
+                    or getattr(p.cliente, "telemovel", None)
                     or "Cliente"
                 )
 
