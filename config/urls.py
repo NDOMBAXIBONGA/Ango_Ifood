@@ -368,6 +368,8 @@ urlpatterns = [
     path("auth/", include(("apps.accounts.urls", "accounts"), namespace="accounts-auth-alias")),
     # Endpoints de Descoberta Geoespacial de Lojas (RN-025 a RN-030)
     path("api/v1/catalog/", include("apps.catalog.urls", namespace="catalog")),
+    # Endpoints de Cobertura Geográfica e Expansão Nacional de Angola (18 Províncias e Municípios)
+    path("api/v1/geo/", include("apps.catalog.geo_urls", namespace="geo")),
     # Endpoints de Gestão do Catálogo pelo Parceiro (RN-014, RN-015, RN-016, RN-017, RN-020)
     path("api/v1/partner/catalog/", include((partner_catalog_router.urls, "partner-catalog"))),
     # Endpoints de Operação e Horários da Loja pelo Parceiro (RN-012, RN-013)

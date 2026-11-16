@@ -487,6 +487,13 @@ class StoreDiscoveryViewSet(viewsets.ReadOnlyModelViewSet):
                 | Q(nome__icontains=termo_categoria)
             ).distinct()
 
+        provincia_filtro = (request.query_params.get("provincia") or "").strip()
+        if provincia_filtro:
+            qs = qs.filter(
+                Q(morada_texto__icontains=provincia_filtro)
+                | Q(dados_bancarios__vitrine_cms__localizacao_contacto__morada_completa__icontains=provincia_filtro)
+            ).distinct()
+
         if avaliacao_min is not None:
             qs = qs.filter(score_reputacao__gte=avaliacao_min)
 
