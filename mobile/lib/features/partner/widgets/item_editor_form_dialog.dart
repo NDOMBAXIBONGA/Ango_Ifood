@@ -85,7 +85,7 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
     } else if (widget.categories.isNotEmpty) {
       _categoriaSelecionadaId = widget.categories.first.id;
     } else {
-      _categoriaSelecionadaId = '';
+      _categoriaSelecionadaId = 'geral';
     }
 
     _alergenosSelecionados = Set<String>.from(widget.item?.alergenos ?? []);
@@ -198,13 +198,11 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
 
     final novoItem = MenuItemModel(
       id: widget.item?.id ?? 'item-${DateTime.now().millisecondsSinceEpoch}',
-      categoriaId: _categoriaSelecionadaId,
+      categoriaId: _categoriaSelecionadaId.isEmpty ? 'geral' : _categoriaSelecionadaId,
       nome: _nomeController.text.trim(),
       descricao: _descricaoController.text.trim(),
       preco: precoInteiro,
-      imagemUrl: _imagemUrlController.text.trim().isNotEmpty
-          ? _imagemUrlController.text.trim()
-          : 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400',
+      imagemUrl: _imagemUrlController.text.trim(),
       alergenos: _alergenosSelecionados.toList(),
       isDisponivel: _isDisponivel,
       isDestaque: _isDestaque,
@@ -405,33 +403,46 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
                         ),
                         const SizedBox(height: 14),
 
-                        DropdownButtonFormField<String>(
-                          value: _categoriaSelecionadaId.isNotEmpty
-                              ? _categoriaSelecionadaId
-                              : null,
-                          decoration: const InputDecoration(
-                            labelText: 'Categoria *',
-                            prefixIcon: Icon(Icons.category),
-                            border: OutlineInputBorder(),
-                          ),
-                          items: widget.categories.map((cat) {
-                            return DropdownMenuItem<String>(
-                              value: cat.id,
-                              child: Text(cat.nome),
+                        Builder(
+                          builder: (context) {
+                            final dropdownItems = widget.categories.isNotEmpty
+                                ? widget.categories
+                                    .map(
+                                      (cat) => DropdownMenuItem<String>(
+                                        value: cat.id,
+                                        child: Text(cat.nome),
+                                      ),
+                                    )
+                                    .toList()
+                                : const [
+                                    DropdownMenuItem<String>(
+                                      value: 'geral',
+                                      child: Text('Cardápio Principal'),
+                                    ),
+                                  ];
+                            final validIds =
+                                dropdownItems.map((e) => e.value).toSet();
+                            final currentValue =
+                                validIds.contains(_categoriaSelecionadaId)
+                                    ? _categoriaSelecionadaId
+                                    : dropdownItems.first.value;
+
+                            return DropdownButtonFormField<String>(
+                              value: currentValue,
+                              decoration: const InputDecoration(
+                                labelText: 'Categoria *',
+                                prefixIcon: Icon(Icons.category),
+                                border: OutlineInputBorder(),
+                              ),
+                              items: dropdownItems,
+                              onChanged: (novoId) {
+                                if (novoId != null) {
+                                  setState(() {
+                                    _categoriaSelecionadaId = novoId;
+                                  });
+                                }
+                              },
                             );
-                          }).toList(),
-                          onChanged: (novoId) {
-                            if (novoId != null) {
-                              setState(() {
-                                _categoriaSelecionadaId = novoId;
-                              });
-                            }
-                          },
-                          validator: (val) {
-                            if (val == null || val.isEmpty) {
-                              return 'Selecione uma categoria.';
-                            }
-                            return null;
                           },
                         ),
                         const SizedBox(height: 14),

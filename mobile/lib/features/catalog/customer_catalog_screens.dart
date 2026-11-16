@@ -254,15 +254,34 @@ class MenuItemModel extends Equatable {
     required this.gruposOpcoes,
   });
 
+  static const Set<String> _staticSeedNames = {
+    'Hambúrguer Artesanal Luanda Duplo',
+    'Frango Grelhado no Carvão com Batata Frita',
+    'Mufete Tradicional da Ilha',
+    'Pizza Familiar Suprema de Luanda',
+    'Pizza Familiar Suprema no Forno a Lenha',
+    'Sumo Natural de Múcua / Maracujá (500ml)',
+    'Pudim Caseiro de Leite Condensado',
+    'Chamuças Artesanais Estaladiças (4 Unid.)',
+    'Tábua de Camarão ao Alhinho & Torradas',
+    'Cocktail Tropical Marginal Sunset (Sem Álcool)',
+  };
+
+  static bool isStaticSeedItemName(String nome) =>
+      _staticSeedNames.contains(nome.trim());
+
   factory MenuItemModel.fromJson(Map<String, dynamic> json) {
     final rawAlergenos = (json['alergenos'] as List<dynamic>?) ?? const [];
     final rawGrupos = (json['grupos_opcoes'] as List<dynamic>?) ?? const [];
+    final rawPreco = (json['preco'] as num?)?.toInt() ?? 0;
+    final precoCentimos =
+        (rawPreco > 0 && rawPreco < 50000) ? rawPreco * 100 : rawPreco;
 
     return MenuItemModel(
       id: '${json['id']}',
       nome: (json['nome'] as String?) ?? '',
       descricao: (json['descricao'] as String?) ?? '',
-      preco: (json['preco'] as num?)?.toInt() ?? 0,
+      preco: precoCentimos,
       imagemUrl: (json['imagem_url'] as String?) ?? '',
       alergenos: rawAlergenos.map((e) => '$e').toList(),
       isDisponivel: (json['is_disponivel'] as bool?) ?? true,
@@ -305,14 +324,16 @@ class MenuCategoryModel extends Equatable {
 
   factory MenuCategoryModel.fromJson(Map<String, dynamic> json) {
     final rawItens = (json['itens'] as List<dynamic>?) ?? const [];
+    final parsedItens = rawItens
+        .whereType<Map<String, dynamic>>()
+        .map(MenuItemModel.fromJson)
+        .where((item) => !MenuItemModel.isStaticSeedItemName(item.nome))
+        .toList();
     return MenuCategoryModel(
       id: '${json['id']}',
       nome: (json['nome'] as String?) ?? '',
       ordemExibicao: (json['ordem_exibicao'] as num?)?.toInt() ?? 0,
-      itens: rawItens
-          .whereType<Map<String, dynamic>>()
-          .map(MenuItemModel.fromJson)
-          .toList(),
+      itens: parsedItens,
     );
   }
 
@@ -624,6 +645,7 @@ class CatalogRepository {
     final categories = rawCategories
         .whereType<Map<String, dynamic>>()
         .map(MenuCategoryModel.fromJson)
+        .where((cat) => cat.itens.isNotEmpty)
         .toList();
 
     final vitrineMap = data['vitrine'] is Map<String, dynamic>
@@ -2385,93 +2407,26 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
                     )
                     .toList(),
               );
-            } else if (vitrine.pratosDestaque.isNotEmpty) {
-              return Column(
-                children: vitrine.pratosDestaque
-                    .map(
-                      (dest) => Card(
-                        elevation: 0,
-                        margin: const EdgeInsets.only(bottom: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          side: const BorderSide(
-                            color: Color(0xFFE2E8F0),
-                            width: 1.2,
-                          ),
-                        ),
-                        color: Colors.white,
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      (dest['titulo'] ?? 'Prato Especial').toString(),
-                                      style: const TextStyle(
-                                        fontSize: 17,
-                                        fontWeight: FontWeight.w700,
-                                        color: Color(0xFF0F172A),
-                                      ),
-                                    ),
-                                    if ((dest['subtitulo'] ?? '')
-                                        .toString()
-                                        .isNotEmpty) ...[
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        (dest['subtitulo'] ?? '').toString(),
-                                        style: const TextStyle(
-                                          fontSize: 13,
-                                          color: Color(0xFF475569),
-                                        ),
-                                      ),
-                                    ],
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      formatarMoedaUnidadesMinimas(
-                                        (dest['preco'] as num?)?.toInt() ?? 0,
-                                      ),
-                                      style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w900,
-                                        color: Color(0xFFDC2626),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 14),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(16),
-                                child: Image.network(
-                                  (dest['midia_url'] ?? '').toString(),
-                                  width: 100,
-                                  height: 88,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
-                                    width: 100,
-                                    height: 88,
-                                    color: const Color(0xFFF1F5F9),
-                                    child: const Icon(
-                                      Icons.fastfood_outlined,
-                                      color: Colors.grey,
-                                      size: 28,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
-              );
             }
-            return const SizedBox.shrink();
+            return Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: const Center(
+                child: Text(
+                  'O parceiro ainda não publicou artigos no cardápio.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    color: Color(0xFF64748B),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            );
           },
         ),
       ],

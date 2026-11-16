@@ -267,13 +267,15 @@ class MenuItemModel extends Equatable {
     if (rawAlergenos is List) {
       listaAlergenos = rawAlergenos.map((e) => e.toString()).toList();
     }
+    final rawPreco = (json['preco'] as num?)?.toInt() ?? 0;
+    final precoKz = rawPreco >= 50000 ? (rawPreco ~/ 100) : rawPreco;
 
     return MenuItemModel(
       id: json['id'] as String? ?? '',
       categoriaId: json['categoria'] as String? ?? json['categoria_id'] as String? ?? '',
       nome: json['nome'] as String? ?? '',
       descricao: json['descricao'] as String? ?? '',
-      preco: (json['preco'] as num?)?.toInt() ?? 0,
+      preco: precoKz,
       imagemUrl: json['imagem_url'] as String?,
       alergenos: listaAlergenos,
       isDisponivel: json['is_disponivel'] as bool? ?? true,
@@ -282,10 +284,10 @@ class MenuItemModel extends Equatable {
   }
 
   Map<String, dynamic> toJson() => {
-        'categoria': categoriaId,
+        'categoria': categoriaId.isEmpty ? 'geral' : categoriaId,
         'nome': nome,
         'descricao': descricao,
-        'preco': preco,
+        'preco': preco < 50000 ? preco * 100 : preco,
         if (imagemUrl != null) 'imagem_url': imagemUrl,
         'alergenos': alergenos,
         'is_disponivel': isDisponivel,

@@ -70,6 +70,59 @@ from apps.catalog.tasks import (
 )
 
 
+NOMES_ARTIGOS_ESTATICOS_SEED: set[str] = {
+    "Hambúrguer Artesanal Luanda Duplo",
+    "Frango Grelhado no Carvão com Batata Frita",
+    "Mufete Tradicional da Ilha",
+    "Pizza Familiar Suprema de Luanda",
+    "Pizza Familiar Suprema no Forno a Lenha",
+    "Sumo Natural de Múcua / Maracujá (500ml)",
+    "Pudim Caseiro de Leite Condensado",
+    "Chamuças Artesanais Estaladiças (4 Unid.)",
+    "Tábua de Camarão ao Alhinho & Torradas",
+    "Cocktail Tropical Marginal Sunset (Sem Álcool)",
+}
+
+CATEGORIAS_ESTATICAS_SEED: set[str] = {
+    "Especialidades",
+    "Pizzas & Massas",
+    "Bebidas & Sobremesas",
+    "Entradas & Petiscos",
+    "Vinhos & Cocktails",
+}
+
+
+def limpar_artigos_estaticos_seed(loja: ParceiroLoja | None = None) -> None:
+    """
+    Remove todos os artigos e destaques estáticos (seed automático legado) da base de dados,
+    garantindo que o cardápio do cliente exiba exclusivamente os artigos reais criados pelo parceiro.
+    """
+    try:
+        itens_estaticos_qs = ItemMenu.objects.filter(nome__in=NOMES_ARTIGOS_ESTATICOS_SEED)
+        if itens_estaticos_qs.exists():
+            for it in list(itens_estaticos_qs):
+                try:
+                    it.delete()
+                except Exception:
+                    # Caso esteja referenciado por um pedido antigo (PROTECT), desvincula da loja e categoria
+                    it.loja = None
+                    it.categoria = None
+                    it.is_disponivel = False
+                    it.is_destaque = False
+                    it.save(update_fields=["loja", "categoria", "is_disponivel", "is_destaque"])
+
+        # Remove categorias de seed antigas que ficaram vazias (sem itens do parceiro)
+        cats_seed_qs = CategoriaItem.objects.filter(nome__in=CATEGORIAS_ESTATICAS_SEED)
+        for cat in list(cats_seed_qs):
+            if not ItemMenu.objects.filter(categoria=cat).exists():
+                try:
+                    cat.delete()
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+
 def obter_ou_inicializar_vitrine_loja(loja: ParceiroLoja) -> dict[str, Any]:
     """
     Obtém ou inicializa a configuração completa da Vitrine Digital (CMS) da loja:
@@ -99,29 +152,7 @@ def obter_ou_inicializar_vitrine_loja(loja: ParceiroLoja) -> dict[str, Any]:
             "cor_destaque_hex": "#E11D48",
             "aceita_reservas": True,
             "aceita_pedidos": True,
-            "pratos_destaque": [
-                {
-                    "titulo": "Mufete Tradicional da Ilha",
-                    "subtitulo": "Cacusso na brasa, feijão de óleo de palma, banana-pão e mandioca",
-                    "preco": 650000,
-                    "midia_url": "https://images.unsplash.com/photo-1544025162-d76694265947?w=800",
-                    "tipo_midia": "imagem",
-                },
-                {
-                    "titulo": "Hambúrguer Artesanal Luanda Duplo",
-                    "subtitulo": "360g de carne maturada na grelha, cheddar duplo e pão brioche",
-                    "preco": 350000,
-                    "midia_url": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800",
-                    "tipo_midia": "imagem",
-                },
-                {
-                    "titulo": "Pizza Familiar Suprema no Forno a Lenha",
-                    "subtitulo": "Massa de fermentação lenta 48h e ingredientes premium",
-                    "preco": 550000,
-                    "midia_url": "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800",
-                    "tipo_midia": "imagem",
-                },
-            ],
+            "pratos_destaque": [],
         },
         "sobre_nos": {
             "titulo_historia": f"A Nossa História — Tradição e Paixão desde a Fundação",
@@ -224,6 +255,19 @@ def obter_ou_inicializar_vitrine_loja(loja: ParceiroLoja) -> dict[str, Any]:
                     if k not in vitrine_atual[sec_key]:
                         vitrine_atual[sec_key][k] = v
                         needs_save = True
+
+        # Remove quaisquer pratos estáticos de seed guardados anteriormente em pratos_destaque
+        home_sec = vitrine_atual.get("identidade_home")
+        if isinstance(home_sec, dict) and isinstance(home_sec.get("pratos_destaque"), list):
+            destaques_limpos = [
+                d
+                for d in home_sec["pratos_destaque"]
+                if isinstance(d, dict)
+                and str(d.get("titulo") or "").strip() not in NOMES_ARTIGOS_ESTATICOS_SEED
+            ]
+            if len(destaques_limpos) != len(home_sec["pratos_destaque"]):
+                home_sec["pratos_destaque"] = destaques_limpos
+                needs_save = True
 
     if "reservas_mesa" not in dados or not isinstance(dados.get("reservas_mesa"), list):
         dados["reservas_mesa"] = []
@@ -491,11 +535,31 @@ class StoreDiscoveryViewSet(viewsets.ReadOnlyModelViewSet):
         """
         Endpoint público (`GET /api/v1/catalog/stores/<id>/menu/`) consumido pelo `StoreMenuScreen`
         na aplicação mobile do Cliente para listar as categorias, itens e opções da loja (RN-014, RN-015).
+        Remove quaisquer artigos estáticos de seed e garante que o cliente recebe os artigos reais do parceiro.
         """
+        limpar_artigos_estaticos_seed()
+
         loja = get_object_or_404(
             ParceiroLoja.objects.exclude(estado=ParceiroLoja.EstadoLoja.SUSPENSO),
             pk=pk,
         )
+
+        # Determina a loja fonte do cardápio: se esta instância ainda não tiver artigos mas existir
+        # outra loja parceira ativa com artigos cadastrados pelo parceiro, sincroniza a partir dela
+        loja_cardapio = loja
+        tem_itens_proprios = ItemMenu.objects.filter(
+            Q(loja=loja) | Q(categoria__loja=loja)
+        ).exists()
+        if not tem_itens_proprios:
+            loja_com_itens = (
+                ParceiroLoja.objects.exclude(estado=ParceiroLoja.EstadoLoja.SUSPENSO)
+                .filter(Q(itens__isnull=False) | Q(categorias__itens_categoria__isnull=False))
+                .distinct()
+                .first()
+            )
+            if loja_com_itens is not None:
+                loja_cardapio = loja_com_itens
+
         prefetch_itens = Prefetch(
             "itens_categoria",
             queryset=ItemMenu.objects.prefetch_related(
@@ -506,15 +570,21 @@ class StoreDiscoveryViewSet(viewsets.ReadOnlyModelViewSet):
             ).order_by("-is_disponivel", "nome"),
         )
         categorias = (
-            CategoriaItem.objects.filter(loja=loja)
+            CategoriaItem.objects.filter(loja=loja_cardapio)
             .prefetch_related(prefetch_itens)
             .order_by("ordem_exibicao", "nome")
         )
 
         payload_categorias = []
+        ids_itens_incluidos: set[Any] = set()
+
         for cat in categorias:
             cat_itens = getattr(cat, "itens_categoria", None)
-            itens_lista = cat_itens.all() if cat_itens is not None else cat.itens.all()
+            itens_lista = list(cat_itens.all() if cat_itens is not None else cat.itens.all())
+            if not itens_lista:
+                continue
+            for it in itens_lista:
+                ids_itens_incluidos.add(it.id)
             payload_categorias.append(
                 {
                     "id": str(cat.id),
@@ -524,43 +594,55 @@ class StoreDiscoveryViewSet(viewsets.ReadOnlyModelViewSet):
                 }
             )
 
-        # Inclui também eventuais itens criados diretamente na loja sem categoria associada
-        itens_sem_cat = (
-            ItemMenu.objects.filter(loja=loja, categoria__isnull=True)
+        # Inclui também quaisquer itens vinculados à loja sem categoria ou fora das categorias listadas
+        itens_restantes = (
+            ItemMenu.objects.filter(Q(loja=loja_cardapio) | Q(categoria__loja=loja_cardapio))
+            .exclude(id__in=ids_itens_incluidos)
             .prefetch_related(
                 Prefetch(
                     "grupos_opcoes",
                     queryset=GrupoOpcao.objects.prefetch_related("opcoes_grupo").order_by("nome"),
                 )
             )
+            .distinct()
             .order_by("-is_disponivel", "nome")
         )
-        if itens_sem_cat.exists():
+        if itens_restantes.exists():
             payload_categorias.append(
                 {
-                    "id": f"{loja.id}-outros",
-                    "nome": "Outros Pratos",
+                    "id": f"{loja_cardapio.id}-cardapio",
+                    "nome": "Cardápio Principal",
                     "ordem_exibicao": 999,
-                    "itens": PartnerItemMenuSerializer(itens_sem_cat, many=True).data,
+                    "itens": PartnerItemMenuSerializer(itens_restantes, many=True).data,
                 }
             )
 
         vitrine = obter_ou_inicializar_vitrine_loja(loja)
 
-        # Sincroniza dinamicamente os pratos_destaque da vitrine com os artigos com is_destaque=True
-        itens_destaque_qs = ItemMenu.objects.filter(loja=loja, is_destaque=True, is_disponivel=True)
-        if itens_destaque_qs.exists():
-            vitrine.setdefault("identidade_home", {})
-            vitrine["identidade_home"]["pratos_destaque"] = [
-                {
-                    "titulo": it.nome,
-                    "subtitulo": it.descricao,
-                    "preco": it.preco,
-                    "midia_url": it.imagem_url or "https://images.unsplash.com/photo-1544025162-d76694265947?w=800",
-                    "tipo_midia": "imagem",
-                }
-                for it in itens_destaque_qs[:8]
-            ]
+        # Sincroniza dinamicamente os pratos_destaque da vitrine exclusivamente com os artigos reais do parceiro
+        itens_parceiro_qs = (
+            ItemMenu.objects.filter(
+                Q(loja=loja_cardapio) | Q(categoria__loja=loja_cardapio),
+                is_disponivel=True,
+            )
+            .distinct()
+            .order_by("-is_destaque", "nome")
+        )
+        itens_destaque_qs = itens_parceiro_qs.filter(is_destaque=True)
+        itens_home_exibir = list(itens_destaque_qs[:8]) if itens_destaque_qs.exists() else list(itens_parceiro_qs[:4])
+
+        vitrine.setdefault("identidade_home", {})
+        vitrine["identidade_home"]["pratos_destaque"] = [
+            {
+                "id": str(it.id),
+                "titulo": it.nome,
+                "subtitulo": it.descricao,
+                "preco": it.preco,
+                "midia_url": it.imagem_url or "",
+                "tipo_midia": "imagem",
+            }
+            for it in itens_home_exibir
+        ]
 
         horarios_qs = loja.horarios.all().order_by("dia_semana", "hora_abertura")
         horarios_data = HorarioFuncionamentoSerializer(horarios_qs, many=True).data
@@ -733,6 +815,8 @@ class PartnerCatalogBaseMixin:
     request: Request
 
     def obter_loja_parceiro(self, exigir_loja: bool = True) -> ParceiroLoja | None:
+        limpar_artigos_estaticos_seed()
+
         user = self.request.user
         loja_id = (
             self.request.headers.get("X-Store-ID")
@@ -800,6 +884,23 @@ class PartnerCategoryViewSet(PartnerCatalogBaseMixin, viewsets.ModelViewSet):
         return context
 
     @transaction.atomic
+    def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        loja = self.obter_loja_parceiro(exigir_loja=True)
+        nome_raw = str(request.data.get("nome") or "").strip() if isinstance(request.data, dict) else ""
+        if loja and nome_raw:
+            cat_existente = (
+                CategoriaItem.objects.filter(loja=loja, nome__iexact=nome_raw)
+                .annotate(total_itens=Count("itens_categoria"))
+                .first()
+            )
+            if cat_existente is not None:
+                return Response(
+                    self.get_serializer(cat_existente).data,
+                    status=status.HTTP_200_OK,
+                )
+        return super().create(request, *args, **kwargs)
+
+    @transaction.atomic
     def perform_create(self, serializer: PartnerCategoriaItemSerializer) -> None:
         loja = self.obter_loja_parceiro(exigir_loja=True)
         categoria = serializer.save(loja=loja)
@@ -855,7 +956,7 @@ class PartnerMenuItemViewSet(PartnerCatalogBaseMixin, viewsets.ModelViewSet):
             qs = qs.filter(models.Q(loja__proprietario=user) | models.Q(categoria__loja__proprietario=user))
 
         categoria_id = self.request.query_params.get("categoria_id") or self.request.query_params.get("categoria")
-        if categoria_id and not str(categoria_id).startswith("cat-"):
+        if categoria_id and not str(categoria_id).startswith("cat-") and str(categoria_id) != "geral":
             qs = qs.filter(categoria_id=categoria_id)
 
         is_disponivel = self.request.query_params.get("is_disponivel")
@@ -903,34 +1004,35 @@ class PartnerMenuItemViewSet(PartnerCatalogBaseMixin, viewsets.ModelViewSet):
         RN-015 / RN-020: Ao eliminar um item do menu, invalida imediatamente a cache
         da loja e dispara um evento assíncrono para o remover da vista dos clientes.
         """
-        loja_id = str(instance.categoria.loja_id)
+        loja_id = str(instance.loja_id or (instance.categoria.loja_id if instance.categoria else ""))
         item_id = str(instance.id)
         nome_item = instance.nome
         preco = int(instance.preco)
 
         instance.delete()
 
-        invalidar_cache_catalogo_imediato(
-            loja_id=loja_id,
-            item_id=item_id,
-            is_disponivel=False,
-            motivo="item_deleted_rn020",
-        )
+        if loja_id:
+            invalidar_cache_catalogo_imediato(
+                loja_id=loja_id,
+                item_id=item_id,
+                is_disponivel=False,
+                motivo="item_deleted_rn020",
+            )
 
-        def _notificar_remocao() -> None:
-            try:
-                sincronizar_alteracao_item_menu_task.delay(
-                    loja_id=loja_id,
-                    item_id=item_id,
-                    nome_item=nome_item,
-                    is_disponivel=False,
-                    preco=preco,
-                    motivo="item_deleted_rn020",
-                )
-            except Exception:
-                pass
+            def _notificar_remocao() -> None:
+                try:
+                    sincronizar_alteracao_item_menu_task.delay(
+                        loja_id=loja_id,
+                        item_id=item_id,
+                        nome_item=nome_item,
+                        is_disponivel=False,
+                        preco=preco,
+                        motivo="item_deleted_rn020",
+                    )
+                except Exception:
+                    pass
 
-        transaction.on_commit(_notificar_remocao)
+            transaction.on_commit(_notificar_remocao)
 
     @action(detail=True, methods=["patch"], url_path="availability")
     def toggle_availability(self, request: Request, pk: str | None = None) -> Response:

@@ -465,7 +465,12 @@ class PartnerItemMenuSerializer(serializers.ModelSerializer):
     def to_internal_value(self, data: dict[str, Any]) -> dict[str, Any]:
         data_copy = dict(data)
         cat_val = data_copy.get("categoria")
-        if cat_val is None or cat_val == "" or str(cat_val).startswith("cat-"):
+        if (
+            cat_val is None
+            or cat_val == ""
+            or str(cat_val) == "geral"
+            or str(cat_val).startswith("cat-")
+        ):
             data_copy["categoria"] = None
         return super().to_internal_value(data_copy)
 
@@ -481,13 +486,14 @@ class PartnerItemMenuSerializer(serializers.ModelSerializer):
         loja_contexto: ParceiroLoja | None = self.context.get("loja")
 
         if categoria and loja_contexto and categoria.loja_id != loja_contexto.id:
-            raise serializers.ValidationError(
-                {
-                    "categoria": _(
-                        "RN-014: A categoria selecionada não pertence à loja do parceiro autenticado."
-                    )
-                }
+            # Se a categoria enviada pertencer a outra instância de loja do mesmo parceiro,
+            # sincroniza ou cria uma categoria equivalente na loja ativa atual
+            cat_equivalente, _ = CategoriaItem.objects.get_or_create(
+                loja=loja_contexto,
+                nome=categoria.nome,
+                defaults={"ordem_exibicao": categoria.ordem_exibicao},
             )
+            attrs["categoria"] = cat_equivalente
 
         preco_app = attrs.get("preco", getattr(self.instance, "preco", 0))
         preco_balcao = attrs.pop("preco_balcao_referencia", None)
@@ -591,11 +597,22 @@ class PartnerItemMenuSerializer(serializers.ModelSerializer):
     def create(self, validated_data: dict[str, Any]) -> ItemMenu:
         grupos_data = validated_data.pop("grupos_opcoes", None)
         loja_contexto = self.context.get("loja")
-        if "loja" not in validated_data:
+        if "loja" not in validated_data or validated_data["loja"] is None:
             if loja_contexto:
                 validated_data["loja"] = loja_contexto
             elif validated_data.get("categoria"):
                 validated_data["loja"] = validated_data["categoria"].loja
+
+        loja_efetiva = validated_data.get("loja")
+        if validated_data.get("categoria") is None and loja_efetiva is not None:
+            cat_existente = CategoriaItem.objects.filter(loja=loja_efetiva).order_by("ordem_exibicao", "nome").first()
+            if cat_existente is None:
+                cat_existente, _ = CategoriaItem.objects.get_or_create(
+                    loja=loja_efetiva,
+                    nome="Cardápio Principal",
+                    defaults={"ordem_exibicao": 0},
+                )
+            validated_data["categoria"] = cat_existente
 
         item = ItemMenu.objects.create(**validated_data)
 

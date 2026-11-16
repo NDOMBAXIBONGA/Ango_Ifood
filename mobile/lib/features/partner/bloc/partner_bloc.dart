@@ -411,7 +411,7 @@ class PartnerBloc extends Bloc<PartnerEvent, PartnerState> {
         items: items,
         businessHours: hours,
         tempoRestantePausa: storeStatus.tempoRestantePausa,
-        selectedCategoryId: categories.isNotEmpty ? categories.first.id : null,
+        clearSelectedCategory: true,
       ));
     } catch (e) {
       emit(state.copyWith(
@@ -570,12 +570,17 @@ class PartnerBloc extends Bloc<PartnerEvent, PartnerState> {
         novosItens = [savedItem, ...state.items];
       }
 
+      final categoriasAtualizadas = await _repository
+          .getCategories()
+          .catchError((_) => state.categories);
+
       emit(state.copyWith(
         isSavingItem: false,
+        categories: categoriasAtualizadas,
         items: novosItens,
         successMessage: event.isEditing
-            ? 'Item atualizado com sucesso!'
-            : 'Item adicionado ao catálogo com sucesso (RN-014)!',
+            ? 'Item atualizado com sucesso e sincronizado com o cardápio do cliente!'
+            : 'Item adicionado ao catálogo e disponibilizado no cardápio do cliente!',
       ));
     } catch (e) {
       emit(state.copyWith(

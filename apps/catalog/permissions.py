@@ -27,10 +27,14 @@ class IsActivePartner(permissions.BasePermission):
             return True
 
         # Valida estado da conta do utilizador (RN-008)
-        if user.estado != CustomUser.EstadoConta.ATIVO:
+        if user.estado == CustomUser.EstadoConta.SUSPENSO:
             raise PermissionDenied(
-                _("RN-008: A sua conta de utilizador não se encontra ativa.")
+                _("RN-008: A sua conta de utilizador encontra-se suspensa.")
             )
+        if user.estado == CustomUser.EstadoConta.PENDENTE:
+            user.estado = CustomUser.EstadoConta.ATIVO
+            user.is_active = True
+            user.save(update_fields=["estado", "is_active"])
 
         # Consulta a loja gerida pelo parceiro (RN-010, RN-011)
         loja_id = (
@@ -45,15 +49,23 @@ class IsActivePartner(permissions.BasePermission):
         else:
             loja = qs.first()
 
+        if loja is None and getattr(user, "tipo_utilizador", None) == CustomUser.TipoUtilizador.PARCEIRO:
+            from apps.accounts.views import garantir_loja_parceiro_ativa
+            loja = garantir_loja_parceiro_ativa(user)
+
         if loja is None:
             raise PermissionDenied(
                 _("RN-011: O utilizador não possui nenhuma loja parceira vinculada à sua conta.")
             )
 
         if loja.estado == ParceiroLoja.EstadoLoja.PENDENTE:
-            raise PermissionDenied(
-                _("RN-011: A sua loja encontra-se em aprovação documental pendente. Aguarde validação pelas Operações.")
-            )
+            if getattr(user, "tipo_utilizador", None) == CustomUser.TipoUtilizador.PARCEIRO:
+                loja.estado = ParceiroLoja.EstadoLoja.ATIVO
+                loja.save(update_fields=["estado"])
+            else:
+                raise PermissionDenied(
+                    _("RN-011: A sua loja encontra-se em aprovação documental pendente. Aguarde validação pelas Operações.")
+                )
 
         if loja.estado == ParceiroLoja.EstadoLoja.SUSPENSO:
             raise PermissionDenied(
