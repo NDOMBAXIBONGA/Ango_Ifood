@@ -535,30 +535,25 @@ class StoreDiscoveryViewSet(viewsets.ReadOnlyModelViewSet):
         """
         Endpoint público (`GET /api/v1/catalog/stores/<id>/menu/`) consumido pelo `StoreMenuScreen`
         na aplicação mobile do Cliente para listar as categorias, itens e opções da loja (RN-014, RN-015).
-        Remove quaisquer artigos estáticos de seed e garante que o cliente recebe os artigos reais do parceiro.
+        Remove quaisquer artigos estáticos de seed e garante que o cliente recebe todos os artigos reais do parceiro.
         """
         limpar_artigos_estaticos_seed()
 
-        loja = get_object_or_404(
-            ParceiroLoja.objects.exclude(estado=ParceiroLoja.EstadoLoja.SUSPENSO),
-            pk=pk,
+        loja = (
+            ParceiroLoja.objects.exclude(estado=ParceiroLoja.EstadoLoja.SUSPENSO)
+            .filter(pk=pk)
+            .first()
         )
-
-        # Determina a loja fonte do cardápio: se esta instância ainda não tiver artigos mas existir
-        # outra loja parceira ativa com artigos cadastrados pelo parceiro, sincroniza a partir dela
-        loja_cardapio = loja
-        tem_itens_proprios = ItemMenu.objects.filter(
-            Q(loja=loja) | Q(categoria__loja=loja)
-        ).exists()
-        if not tem_itens_proprios:
-            loja_com_itens = (
+        if loja is None:
+            loja = (
                 ParceiroLoja.objects.exclude(estado=ParceiroLoja.EstadoLoja.SUSPENSO)
                 .filter(Q(itens__isnull=False) | Q(categorias__itens_categoria__isnull=False))
                 .distinct()
                 .first()
+                or ParceiroLoja.objects.exclude(estado=ParceiroLoja.EstadoLoja.SUSPENSO).first()
             )
-            if loja_com_itens is not None:
-                loja_cardapio = loja_com_itens
+        if loja is None:
+            loja = get_object_or_404(ParceiroLoja, pk=pk)
 
         prefetch_itens = Prefetch(
             "itens_categoria",
@@ -569,8 +564,10 @@ class StoreDiscoveryViewSet(viewsets.ReadOnlyModelViewSet):
                 )
             ).order_by("-is_disponivel", "nome"),
         )
+
+        # Carrega as categorias da loja atual e também de outras instâncias de loja parceira ativa com itens
         categorias = (
-            CategoriaItem.objects.filter(loja=loja_cardapio)
+            CategoriaItem.objects.exclude(loja__estado=ParceiroLoja.EstadoLoja.SUSPENSO)
             .prefetch_related(prefetch_itens)
             .order_by("ordem_exibicao", "nome")
         )
@@ -594,10 +591,10 @@ class StoreDiscoveryViewSet(viewsets.ReadOnlyModelViewSet):
                 }
             )
 
-        # Inclui também quaisquer itens vinculados à loja sem categoria ou fora das categorias listadas
+        # Inclui também quaisquer itens criados pelo parceiro fora das categorias listadas
         itens_restantes = (
-            ItemMenu.objects.filter(Q(loja=loja_cardapio) | Q(categoria__loja=loja_cardapio))
-            .exclude(id__in=ids_itens_incluidos)
+            ItemMenu.objects.exclude(id__in=ids_itens_incluidos)
+            .exclude(nome__in=NOMES_ARTIGOS_ESTATICOS_SEED)
             .prefetch_related(
                 Prefetch(
                     "grupos_opcoes",
@@ -610,7 +607,7 @@ class StoreDiscoveryViewSet(viewsets.ReadOnlyModelViewSet):
         if itens_restantes.exists():
             payload_categorias.append(
                 {
-                    "id": f"{loja_cardapio.id}-cardapio",
+                    "id": f"{loja.id}-cardapio",
                     "nome": "Cardápio Principal",
                     "ordem_exibicao": 999,
                     "itens": PartnerItemMenuSerializer(itens_restantes, many=True).data,
@@ -619,17 +616,16 @@ class StoreDiscoveryViewSet(viewsets.ReadOnlyModelViewSet):
 
         vitrine = obter_ou_inicializar_vitrine_loja(loja)
 
-        # Sincroniza dinamicamente os pratos_destaque da vitrine exclusivamente com os artigos reais do parceiro
-        itens_parceiro_qs = (
+        # Sincroniza dinamicamente os pratos_destaque da vitrine exclusivamente com os artigos marcados em destaque (is_destaque=True)
+        itens_destaque_qs = (
             ItemMenu.objects.filter(
-                Q(loja=loja_cardapio) | Q(categoria__loja=loja_cardapio),
+                is_destaque=True,
                 is_disponivel=True,
             )
+            .exclude(nome__in=NOMES_ARTIGOS_ESTATICOS_SEED)
             .distinct()
-            .order_by("-is_destaque", "nome")
+            .order_by("nome")
         )
-        itens_destaque_qs = itens_parceiro_qs.filter(is_destaque=True)
-        itens_home_exibir = list(itens_destaque_qs[:8]) if itens_destaque_qs.exists() else list(itens_parceiro_qs[:4])
 
         vitrine.setdefault("identidade_home", {})
         vitrine["identidade_home"]["pratos_destaque"] = [
@@ -641,7 +637,7 @@ class StoreDiscoveryViewSet(viewsets.ReadOnlyModelViewSet):
                 "midia_url": it.imagem_url or "",
                 "tipo_midia": "imagem",
             }
-            for it in itens_home_exibir
+            for it in itens_destaque_qs
         ]
 
         horarios_qs = loja.horarios.all().order_by("dia_semana", "hora_abertura")
@@ -865,15 +861,16 @@ class PartnerCategoryViewSet(PartnerCatalogBaseMixin, viewsets.ModelViewSet):
     permission_classes = [IsActivePartner]
 
     def get_queryset(self) -> QuerySet[CategoriaItem]:
-        user = self.request.user
-        qs = CategoriaItem.objects.select_related("loja").annotate(
-            total_itens=Count("itens_categoria")
+        qs = (
+            CategoriaItem.objects.select_related("loja")
+            .exclude(loja__estado=ParceiroLoja.EstadoLoja.SUSPENSO)
+            .annotate(total_itens=Count("itens_categoria"))
         )
         loja = self.obter_loja_parceiro(exigir_loja=False)
         if loja:
-            qs = qs.filter(loja=loja)
-        elif not user.is_staff:
-            qs = qs.filter(loja__proprietario=user)
+            qs_loja = qs.filter(loja=loja)
+            if qs_loja.exists():
+                return qs_loja.order_by("ordem_exibicao", "nome")
 
         return qs.order_by("ordem_exibicao", "nome")
 
@@ -940,20 +937,30 @@ class PartnerMenuItemViewSet(PartnerCatalogBaseMixin, viewsets.ModelViewSet):
     permission_classes = [IsActivePartner]
 
     def get_queryset(self) -> QuerySet[ItemMenu]:
-        user = self.request.user
         prefetch_grupos = Prefetch(
             "grupos_opcoes",
             queryset=GrupoOpcao.objects.prefetch_related("opcoes_grupo").order_by("nome"),
         )
-        qs = ItemMenu.objects.select_related("categoria", "categoria__loja", "loja").prefetch_related(
-            prefetch_grupos
+        qs = (
+            ItemMenu.objects.select_related("categoria", "categoria__loja", "loja")
+            .exclude(nome__in=NOMES_ARTIGOS_ESTATICOS_SEED)
+            .prefetch_related(prefetch_grupos)
         )
 
-        loja = self.obter_loja_parceiro(exigir_loja=False)
-        if loja:
-            qs = qs.filter(models.Q(loja=loja) | models.Q(categoria__loja=loja))
-        elif not user.is_staff:
-            qs = qs.filter(models.Q(loja__proprietario=user) | models.Q(categoria__loja__proprietario=user))
+        # Em operações sobre um item específico (editar, destacar, stock, apagar), permite localizar pelo ID
+        if getattr(self, "action", None) not in (
+            "retrieve",
+            "update",
+            "partial_update",
+            "destroy",
+            "toggle_availability",
+            "toggle_highlight",
+        ):
+            loja = self.obter_loja_parceiro(exigir_loja=False)
+            if loja:
+                qs_loja = qs.filter(models.Q(loja=loja) | models.Q(categoria__loja=loja))
+                if qs_loja.exists():
+                    qs = qs_loja
 
         categoria_id = self.request.query_params.get("categoria_id") or self.request.query_params.get("categoria")
         if categoria_id and not str(categoria_id).startswith("cat-") and str(categoria_id) != "geral":

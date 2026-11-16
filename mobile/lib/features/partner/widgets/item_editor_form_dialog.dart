@@ -392,8 +392,8 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
                             if (val == null || val.trim().isEmpty) {
                               return 'O nome do produto é obrigatório.';
                             }
-                            if (val.trim().length < 3) {
-                              return 'O nome deve ter no mínimo 3 caracteres.';
+                            if (val.trim().length < 2) {
+                              return 'O nome deve ter no mínimo 2 caracteres.';
                             }
                             if (val.trim().length > 100) {
                               return 'O nome não pode exceder 100 caracteres.';
@@ -630,28 +630,94 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
                             );
                           }).toList(),
                         ),
+                        const SizedBox(height: 20),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF16A34A),
+                              foregroundColor: Colors.white,
+                              minimumSize: const Size(80, 50),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            icon: const Icon(Icons.check_circle_rounded, size: 20),
+                            label: Text(
+                              _isEditing
+                                  ? 'Guardar Alterações do Produto'
+                                  : 'Criar Produto no Cardápio',
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            onPressed: _submit,
+                          ),
+                        ),
                       ],
                     ),
                   ),
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 const Divider(height: 1),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
 
-                // Rodapé de Ações
+                // Rodapé Fixo de Ações (Sempre visível com larguras definidas)
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Cancelar'),
+                    Expanded(
+                      flex: 2,
+                      child: SizedBox(
+                        height: 48,
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(64, 48),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text(
+                            'Cancelar',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
                     ),
-                    const SizedBox(width: 12),
-                    FilledButton.icon(
-                      icon: const Icon(Icons.check_circle_outline),
-                      label: Text(_isEditing ? 'Atualizar Produto' : 'Adicionar ao Catálogo'),
-                      onPressed: _submit,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 3,
+                      child: SizedBox(
+                        height: 48,
+                        child: FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF1E88E5),
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size(80, 48),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          icon: const Icon(Icons.add_task_rounded, size: 18),
+                          label: Text(
+                            _isEditing ? 'Atualizar' : 'Criar Produto',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                            ),
+                          ),
+                          onPressed: _submit,
+                        ),
+                      ),
                     ),
                   ],
                 ),

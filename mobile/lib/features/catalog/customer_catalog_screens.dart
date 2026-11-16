@@ -2389,11 +2389,10 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
         Builder(
           builder: (context) {
             final destacadas = allItems.where((i) => i.isDestaque).toList();
-            final itensExibir = destacadas.isNotEmpty ? destacadas : allItems.take(4).toList();
 
-            if (itensExibir.isNotEmpty) {
+            if (destacadas.isNotEmpty) {
               return Column(
-                children: itensExibir
+                children: destacadas
                     .map(
                       (item) => _MenuItemTile(
                         item: item,
@@ -2415,11 +2414,13 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
-              child: const Center(
+              child: Center(
                 child: Text(
-                  'O parceiro ainda não publicou artigos no cardápio.',
+                  allItems.isEmpty
+                      ? 'O parceiro ainda não publicou artigos no cardápio.'
+                      : 'Nenhum prato marcado em destaque. Consulte todos os artigos na aba Cardápio.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 13.5,
                     color: Color(0xFF64748B),
                     fontWeight: FontWeight.w500,
