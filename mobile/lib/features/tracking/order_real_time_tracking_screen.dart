@@ -14,6 +14,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:dio/dio.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -22,6 +23,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../../core/network/app_environment_config.dart';
+import '../auth/storage/secure_token_storage.dart';
 
 // ============================================================================
 // 1. MODELO DE DADOS: TrackingLocationModel (Secção 12.1)
@@ -487,30 +489,38 @@ class _OrderRealTimeTrackingScreenState extends State<OrderRealTimeTrackingScree
         jwtToken: widget.jwtToken,
       ));
 
-    // Movimento progressivo contínuo caso o estafeta ainda não tenha emitido novo pacote WebSocket
-    _demoSimulationTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    // Sincronização periódica da telemetria GPS real do estafeta a partir do servidor
+    _demoSimulationTimer = Timer.periodic(const Duration(seconds: 4), (_) async {
       if (!mounted) return;
-      _simulatedRouteProgress += 0.06;
-      if (_simulatedRouteProgress > 0.88) {
-        _simulatedRouteProgress = 0.25;
-      }
-      final nextPos = _interpolateLatLng(
-        widget.coordenadasLoja,
-        widget.coordenadasCliente,
-        _simulatedRouteProgress,
-      );
-      _onNewLocationReceived(
-        TrackingLocationModel(
-          pedidoId: widget.pedidoId,
-          estafetaId: 'estafeta_ativo',
-          latitude: nextPos.latitude,
-          longitude: nextPos.longitude,
-          heading: 45.0,
-          speed: 32.0,
-          precisaoMetros: 4.5,
-          timestamp: DateTime.now(),
-        ),
-      );
+      try {
+        final token = await SecureTokenStorage().getAccessToken();
+        final dio = Dio(BaseOptions(
+          baseUrl: AppEnvironmentConfig.baseHttpUrl,
+          connectTimeout: const Duration(seconds: 8),
+          receiveTimeout: const Duration(seconds: 8),
+          headers: {
+            if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+          },
+        ));
+        final resp = await dio.get<Map<String, dynamic>>('/api/v1/logistics/orders/${widget.pedidoId}/tracking/');
+        if (resp.data != null && mounted) {
+          final est = resp.data!['estafeta'] as Map<String, dynamic>?;
+          if (est != null && est['latitude'] != null && est['longitude'] != null) {
+            _onNewLocationReceived(
+              TrackingLocationModel(
+                pedidoId: widget.pedidoId,
+                estafetaId: est['id']?.toString() ?? 'estafeta_real',
+                latitude: (est['latitude'] as num).toDouble(),
+                longitude: (est['longitude'] as num).toDouble(),
+                heading: 45.0,
+                speed: 28.0,
+                precisaoMetros: 5.0,
+                timestamp: DateTime.now(),
+              ),
+            );
+          }
+        }
+      } catch (_) {}
     });
   }
 

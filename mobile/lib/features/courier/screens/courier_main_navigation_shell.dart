@@ -67,56 +67,64 @@ class _CourierMainNavigationShellState
     return BlocProvider<CourierBloc>(
       create: (context) => CourierBloc(
         repository: CourierRepository(),
-      )..emit(const CourierActiveLoaded(profile: _defaultProfile)),
-      child: Scaffold(
-        backgroundColor: const Color(0xFF121417),
-        body: IndexedStack(
-          index: _currentIndex,
-          children: [
-            // Aba 0: Radar de Despacho
-            const CourierHomepageScreen(profile: _defaultProfile),
+      )..add(const LoadCourierProfileEvent()),
+      child: BlocBuilder<CourierBloc, CourierState>(
+        builder: (context, state) {
+          final activeProfile = (state is CourierActiveLoaded)
+              ? state.profile
+              : ((state is CourierRegistrationPending) ? state.profile : _defaultProfile);
 
-            // Aba 1: Corrida Ativa & Validação de PIN
-            ActiveDeliveryFlowScreen(
-              onGoToRadar: () => _onTabSelected(0),
-            ),
+          return Scaffold(
+            backgroundColor: const Color(0xFF121417),
+            body: IndexedStack(
+              index: _currentIndex,
+              children: [
+                // Aba 0: Radar de Despacho
+                CourierHomepageScreen(profile: activeProfile),
 
-            // Aba 2: Carteira Digital & Repasses
-            const CourierWalletScreen(),
+                // Aba 1: Corrida Ativa & Validação de PIN
+                ActiveDeliveryFlowScreen(
+                  onGoToRadar: () => _onTabSelected(0),
+                ),
 
-            // Aba 3: Perfil, Viatura e Logout
-            const CourierProfileScreen(),
-          ],
-        ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _currentIndex,
-          onDestinationSelected: _onTabSelected,
-          elevation: 4,
-          backgroundColor: const Color(0xFF1A1D23),
-          indicatorColor: const Color(0xFF00E676).withOpacity(0.2),
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.radar_outlined, color: Colors.white70),
-              selectedIcon: Icon(Icons.radar_rounded, color: Color(0xFF00E676)),
-              label: 'Radar',
+                // Aba 2: Carteira Digital & Repasses
+                const CourierWalletScreen(),
+
+                // Aba 3: Perfil, Viatura e Logout
+                const CourierProfileScreen(),
+              ],
             ),
-            NavigationDestination(
-              icon: Icon(Icons.delivery_dining_outlined, color: Colors.white70),
-              selectedIcon: Icon(Icons.delivery_dining_rounded, color: Color(0xFF00E676)),
-              label: 'Corrida',
+            bottomNavigationBar: NavigationBar(
+              selectedIndex: _currentIndex,
+              onDestinationSelected: _onTabSelected,
+              elevation: 4,
+              backgroundColor: const Color(0xFF1A1D23),
+              indicatorColor: const Color(0xFF00E676).withOpacity(0.2),
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.radar_outlined, color: Colors.white70),
+                  selectedIcon: Icon(Icons.radar_rounded, color: Color(0xFF00E676)),
+                  label: 'Radar',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.delivery_dining_outlined, color: Colors.white70),
+                  selectedIcon: Icon(Icons.delivery_dining_rounded, color: Color(0xFF00E676)),
+                  label: 'Corrida',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.account_balance_wallet_outlined, color: Colors.white70),
+                  selectedIcon: Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF00E676)),
+                  label: 'Carteira',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.person_outline_rounded, color: Colors.white70),
+                  selectedIcon: Icon(Icons.person_rounded, color: Color(0xFF00E676)),
+                  label: 'Perfil',
+                ),
+              ],
             ),
-            NavigationDestination(
-              icon: Icon(Icons.account_balance_wallet_outlined, color: Colors.white70),
-              selectedIcon: Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF00E676)),
-              label: 'Carteira',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.person_outline_rounded, color: Colors.white70),
-              selectedIcon: Icon(Icons.person_rounded, color: Color(0xFF00E676)),
-              label: 'Perfil',
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

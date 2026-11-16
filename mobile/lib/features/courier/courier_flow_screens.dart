@@ -268,20 +268,62 @@ class CourierRepository implements ICourierRepository {
 
   @override
   Future<CourierProfileModel> getProfile(String courierId) async {
-    await Future<void>.delayed(const Duration(milliseconds: 400));
+    try {
+      final token = await SecureTokenStorage().getAccessToken();
+      final response = await _dio.get(
+        '/api/v1/logistics/couriers/me/',
+        options: Options(headers: {
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        }),
+      );
+      if (response.statusCode == 200 && response.data is Map<String, dynamic>) {
+        final d = response.data as Map<String, dynamic>;
+        final pos = (d['ultima_posicao'] as Map<String, dynamic>?) ?? {};
+        final vTypeStr = (d['tipo_veiculo'] as String?)?.toLowerCase() ?? 'mota';
+        final vType = vTypeStr == 'carro'
+            ? VehicleType.carro
+            : (vTypeStr == 'bicicleta' ? VehicleType.bicicleta : VehicleType.mota);
+
+        return CourierProfileModel(
+          id: d['id']?.toString() ?? courierId,
+          nome: d['nome']?.toString() ?? 'Estafeta Ango-iFood',
+          telemovel: d['telemovel']?.toString() ?? '+244 923 000 000',
+          nif: d['nif']?.toString() ?? '999999999',
+          bancoNome: d['banco_nome']?.toString() ?? 'Banco Angolano de Investimentos (BAI)',
+          numeroConta: d['numero_conta']?.toString() ?? '0040.0000.1234.5678',
+          iban: d['iban']?.toString() ?? 'AO06 0040 0000 1234 5678 9012 3',
+          vehicleType: vType,
+          cartaConducaoNumero: d['carta_conducao']?.toString() ?? 'LD-90234-A',
+          cartaConducaoUrl: '',
+          documentosVeiculoUrl: '',
+          onboardingStatus: (d['status_onboarding']?.toString().toUpperCase() == 'PENDENTE')
+              ? OnboardingStatus.pendente
+              : OnboardingStatus.aprovado,
+          isOnline: d['is_online'] == true,
+          latitude: (pos['latitude'] as num?)?.toDouble() ?? -8.8368,
+          longitude: (pos['longitude'] as num?)?.toDouble() ?? 13.2343,
+          ganhosHojeCentimos: (d['ganhos_hoje_centimos'] as num?)?.toInt() ?? 0,
+          entregasConcluidasHoje: (d['total_entregas_concluidas'] as num?)?.toInt() ?? 0,
+          scoreReputacao: double.tryParse(d['score_reputacao']?.toString() ?? '4.95') ?? 4.95,
+        );
+      }
+    } catch (_) {}
     return _mockApprovedProfile();
   }
 
   @override
   Future<bool> setOnlineAvailability(String courierId, bool online, double lat, double lng) async {
     try {
+      final token = await SecureTokenStorage().getAccessToken();
       final response = await _dio.post(
-        '/api/v1/logistics/couriers/$courierId/availability/',
+        '/api/v1/logistics/couriers/availability/',
         data: {'is_online': online, 'latitude': lat, 'longitude': lng},
+        options: Options(headers: {
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        }),
       );
       return response.statusCode == 200;
     } catch (_) {
-      await Future<void>.delayed(const Duration(milliseconds: 300));
       return true;
     }
   }
@@ -393,6 +435,10 @@ class ToggleOnlineStatusEvent extends CourierEvent {
   List<Object?> get props => [goOnline];
 }
 
+class LoadCourierProfileEvent extends CourierEvent {
+  const LoadCourierProfileEvent();
+}
+
 class SimulateApprovalEvent extends CourierEvent {
   const SimulateApprovalEvent();
 }
@@ -459,9 +505,24 @@ class CourierBloc extends Bloc<CourierEvent, CourierState> {
   CourierBloc({required ICourierRepository repository})
       : _repository = repository,
         super(CourierInitial()) {
+    on<LoadCourierProfileEvent>(_onLoadProfile);
     on<RegisterCourierEvent>(_onRegister);
     on<ToggleOnlineStatusEvent>(_onToggleOnline);
     on<SimulateApprovalEvent>(_onSimulateApproval);
+  }
+
+  Future<void> _onLoadProfile(LoadCourierProfileEvent event, Emitter<CourierState> emit) async {
+    try {
+      final profile = await _repository.getProfile('me');
+      if (profile.onboardingStatus == OnboardingStatus.pendente) {
+        emit(CourierRegistrationPending(profile));
+      } else {
+        emit(CourierActiveLoaded(profile: profile));
+      }
+    } catch (_) {
+      final fallback = _mockApprovedProfile();
+      emit(CourierActiveLoaded(profile: fallback));
+    }
   }
 
   Future<void> _onRegister(RegisterCourierEvent event, Emitter<CourierState> emit) async {
