@@ -6,7 +6,9 @@ from rest_framework.routers import DefaultRouter
 
 from apps.catalog.views import (
     PartnerMediaUploadView,
+    PartnerStoreFinancesView,
     PartnerStoreHoursView,
+    PartnerStoreSettingsView,
     PartnerStoreStatusView,
     PartnerStorefrontCMSView,
 )
@@ -20,6 +22,10 @@ partner_order_router.register(r"orders", PartnerOrderViewSet, basename="partner-
 urlpatterns = [
     # PATCH /api/v1/partner/store/status/ (RN-013: Pausa temporária e reativação automática)
     path("status/", PartnerStoreStatusView.as_view(), name="store-status"),
+    # GET /api/v1/partner/store/finances/ (Faturação real, pedidos concluídos e comissões da loja)
+    path("finances/", PartnerStoreFinancesView.as_view(), name="store-finances"),
+    # GET/PATCH /api/v1/partner/store/settings/ (Tempo de preparo, raio PostGIS e dados bancários IBAN)
+    path("settings/", PartnerStoreSettingsView.as_view(), name="store-settings"),
     # GET/POST/PUT /api/v1/partner/store/hours/ (RN-012: Matriz de horários semanais)
     path("hours/", PartnerStoreHoursView.as_view(), name="store-hours"),
     # GET/POST/PUT/PATCH /api/v1/partner/store/storefront/ (Controlo Total CMS da Vitrine, Reservas e Mensagens)

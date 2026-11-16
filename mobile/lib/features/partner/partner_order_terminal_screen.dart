@@ -84,6 +84,11 @@ class IncomingPartnerOrder extends Equatable {
   final int tempoPreparacaoPadraoMinutos;
   final int subtotalCentimos;
   final List<TerminalOrderItem> itens;
+  final bool isAguardando;
+  final bool isEmPreparacao;
+  final bool isPronto;
+  final bool isEntregue;
+  final String estado;
 
   const IncomingPartnerOrder({
     required this.pedidoId,
@@ -94,6 +99,11 @@ class IncomingPartnerOrder extends Equatable {
     this.tempoPreparacaoPadraoMinutos = 20,
     required this.subtotalCentimos,
     required this.itens,
+    this.isAguardando = true,
+    this.isEmPreparacao = false,
+    this.isPronto = false,
+    this.isEntregue = false,
+    this.estado = 'AGUARDA_PARCEIRO',
   });
 
   @override
@@ -106,6 +116,11 @@ class IncomingPartnerOrder extends Equatable {
         tempoPreparacaoPadraoMinutos,
         subtotalCentimos,
         itens,
+        isAguardando,
+        isEmPreparacao,
+        isPronto,
+        isEntregue,
+        estado,
       ];
 }
 
@@ -203,6 +218,24 @@ class OrderTimeoutExpiredEvent extends PartnerTerminalEvent {
   List<Object?> get props => [pedidoId];
 }
 
+class MarkOrderReadyEvent extends PartnerTerminalEvent {
+  final String pedidoId;
+
+  const MarkOrderReadyEvent(this.pedidoId);
+
+  @override
+  List<Object?> get props => [pedidoId];
+}
+
+class RefreshTerminalOrdersEvent extends PartnerTerminalEvent {
+  final List<IncomingPartnerOrder> orders;
+
+  const RefreshTerminalOrdersEvent(this.orders);
+
+  @override
+  List<Object?> get props => [orders];
+}
+
 @immutable
 class PartnerTerminalState extends Equatable {
   final List<IncomingPartnerOrder> pedidosAtivos;
@@ -257,6 +290,15 @@ class PartnerTerminalBloc extends Bloc<PartnerTerminalEvent, PartnerTerminalStat
     on<AcceptOrderEvent>(_onAcceptOrder);
     on<RejectOrderEvent>(_onRejectOrder);
     on<OrderTimeoutExpiredEvent>(_onOrderTimeoutExpired);
+    on<MarkOrderReadyEvent>(_onMarkOrderReady);
+    on<RefreshTerminalOrdersEvent>(_onRefreshTerminalOrders);
+  }
+
+  void _onRefreshTerminalOrders(
+    RefreshTerminalOrdersEvent event,
+    Emitter<PartnerTerminalState> emit,
+  ) {
+    emit(state.copyWith(pedidosAtivos: event.orders));
   }
 
   void _onNewOrderReceived(NewOrderReceivedEvent event, Emitter<PartnerTerminalState> emit) {
@@ -293,12 +335,75 @@ class PartnerTerminalBloc extends Bloc<PartnerTerminalEvent, PartnerTerminalStat
       );
     } catch (_) {}
 
-    final atualizados = state.pedidosAtivos.where((p) => p.pedidoId != event.pedidoId).toList();
+    final atualizados = state.pedidosAtivos.map((p) {
+      if (p.pedidoId == event.pedidoId) {
+        return IncomingPartnerOrder(
+          pedidoId: p.pedidoId,
+          numeroPedidoExibicao: p.numeroPedidoExibicao,
+          nomeCliente: p.nomeCliente,
+          recebidoEm: p.recebidoEm,
+          expiraEm: p.expiraEm,
+          tempoPreparacaoPadraoMinutos: event.tempoPreparacaoMinutos,
+          subtotalCentimos: p.subtotalCentimos,
+          itens: p.itens,
+          isAguardando: false,
+          isEmPreparacao: true,
+          isPronto: false,
+          isEntregue: false,
+          estado: 'EM_PREPARACAO',
+        );
+      }
+      return p;
+    }).toList();
+
     emit(state.copyWith(
       pedidosAtivos: atualizados,
       clearModal: true,
       isProcessingAction: false,
-      feedbackMessage: 'Pedido aceite com tempo estimado de ${event.tempoPreparacaoMinutos} min. Em preparação!',
+      feedbackMessage: 'Pedido aceite com tempo estimado de ${event.tempoPreparacaoMinutos} min. Em preparação na cozinha!',
+    ));
+  }
+
+  Future<void> _onMarkOrderReady(MarkOrderReadyEvent event, Emitter<PartnerTerminalState> emit) async {
+    emit(state.copyWith(isProcessingAction: true));
+    try {
+      final token = await SecureTokenStorage().getAccessToken();
+      final dio = Dio(BaseOptions(
+        baseUrl: AppEnvironmentConfig.baseHttpUrl,
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 15),
+        headers: {
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+      ));
+      await dio.post('/api/v1/partner/store/orders/${event.pedidoId}/ready/');
+    } catch (_) {}
+
+    final atualizados = state.pedidosAtivos.map((p) {
+      if (p.pedidoId == event.pedidoId) {
+        return IncomingPartnerOrder(
+          pedidoId: p.pedidoId,
+          numeroPedidoExibicao: p.numeroPedidoExibicao,
+          nomeCliente: p.nomeCliente,
+          recebidoEm: p.recebidoEm,
+          expiraEm: p.expiraEm,
+          tempoPreparacaoPadraoMinutos: p.tempoPreparacaoPadraoMinutos,
+          subtotalCentimos: p.subtotalCentimos,
+          itens: p.itens,
+          isAguardando: false,
+          isEmPreparacao: false,
+          isPronto: true,
+          isEntregue: false,
+          estado: 'PRONTO',
+        );
+      }
+      return p;
+    }).toList();
+
+    emit(state.copyWith(
+      pedidosAtivos: atualizados,
+      isProcessingAction: false,
+      feedbackMessage: 'Pedido marcado como Pronto! O estafeta foi notificado para recolha.',
     ));
   }
 
@@ -365,6 +470,8 @@ class _PartnerOrderTerminalScreenState extends State<PartnerOrderTerminalScreen>
   late final PartnerTerminalBloc _terminalBloc;
   Timer? _pollingTimer;
   final Set<String> _notifiedOrderIds = {};
+  bool _mostrarHistorico = false;
+  bool _isCarregando = false;
 
   @override
   void initState() {
@@ -380,7 +487,10 @@ class _PartnerOrderTerminalScreenState extends State<PartnerOrderTerminalScreen>
     });
   }
 
-  Future<void> _carregarPedidosDoServidor() async {
+  Future<void> _carregarPedidosDoServidor({bool showLoading = false}) async {
+    if (showLoading && mounted) {
+      setState(() => _isCarregando = true);
+    }
     try {
       final token = await SecureTokenStorage().getAccessToken();
       final dio = Dio(
@@ -394,45 +504,71 @@ class _PartnerOrderTerminalScreenState extends State<PartnerOrderTerminalScreen>
         ),
       );
 
-      final resp = await dio.get<List<dynamic>>('/api/v1/partner/store/orders/');
+      final endpoint = _mostrarHistorico
+          ? '/api/v1/partner/store/orders/?historico=true'
+          : '/api/v1/partner/store/orders/';
+
+      final resp = await dio.get<List<dynamic>>(endpoint);
       if (resp.data != null && mounted) {
+        final List<IncomingPartnerOrder> lista = [];
+
         for (final raw in resp.data!) {
           if (raw is! Map<String, dynamic>) continue;
           final pId = raw['pedido_id']?.toString() ?? '';
           final isAguardando = raw['is_aguardando'] == true;
+          final isEmPreparacao = raw['is_em_preparacao'] == true;
+          final isPronto = raw['is_pronto'] == true;
+          final isEntregue = raw['is_entregue'] == true;
+          final estado = raw['estado']?.toString() ?? 'AGUARDA_PARCEIRO';
 
+          final rawItens = (raw['itens'] as List<dynamic>?) ?? [];
+          final itens = rawItens.map((it) {
+            final m = it as Map<String, dynamic>;
+            return TerminalOrderItem(
+              id: m['id']?.toString() ?? '',
+              nome: m['nome']?.toString() ?? 'Artigo',
+              quantidade: (m['quantidade'] as num?)?.toInt() ?? 1,
+              precoUnitarioCentimos: (m['preco_unitario_centimos'] as num?)?.toInt() ?? 0,
+              opcoesPersonalizadas: ((m['opcoes_personalizadas'] as List<dynamic>?) ?? [])
+                  .map((e) => e.toString())
+                  .toList(),
+              notas: m['notas']?.toString(),
+            );
+          }).toList();
+
+          final incoming = IncomingPartnerOrder(
+            pedidoId: pId,
+            numeroPedidoExibicao: raw['numero_pedido_exibicao']?.toString() ?? 'NOVO',
+            nomeCliente: raw['nome_cliente']?.toString() ?? 'Cliente',
+            recebidoEm: DateTime.tryParse(raw['recebido_em']?.toString() ?? '') ?? DateTime.now(),
+            expiraEm: DateTime.tryParse(raw['expira_em']?.toString() ?? '') ?? DateTime.now().add(const Duration(minutes: 3)),
+            tempoPreparacaoPadraoMinutos: (raw['tempo_preparacao_padrao_minutos'] as num?)?.toInt() ?? 20,
+            subtotalCentimos: (raw['subtotal_centimos'] as num?)?.toInt() ?? 0,
+            itens: itens,
+            isAguardando: isAguardando,
+            isEmPreparacao: isEmPreparacao,
+            isPronto: isPronto,
+            isEntregue: isEntregue,
+            estado: estado,
+          );
+
+          lista.add(incoming);
+
+          // Dispara alerta em loop para novo pedido de cliente pendente de aceitação
           if (isAguardando && !_notifiedOrderIds.contains(pId)) {
             _notifiedOrderIds.add(pId);
-            final rawItens = (raw['itens'] as List<dynamic>?) ?? [];
-            final itens = rawItens.map((it) {
-              final m = it as Map<String, dynamic>;
-              return TerminalOrderItem(
-                id: m['id']?.toString() ?? '',
-                nome: m['nome']?.toString() ?? 'Artigo',
-                quantidade: (m['quantidade'] as num?)?.toInt() ?? 1,
-                precoUnitarioCentimos: (m['preco_unitario_centimos'] as num?)?.toInt() ?? 0,
-                opcoesPersonalizadas: ((m['opcoes_personalizadas'] as List<dynamic>?) ?? [])
-                    .map((e) => e.toString())
-                    .toList(),
-                notas: m['notas']?.toString(),
-              );
-            }).toList();
-
-            final incoming = IncomingPartnerOrder(
-              pedidoId: pId,
-              numeroPedidoExibicao: raw['numero_pedido_exibicao']?.toString() ?? 'NOVO',
-              nomeCliente: raw['nome_cliente']?.toString() ?? 'Cliente',
-              recebidoEm: DateTime.tryParse(raw['recebido_em']?.toString() ?? '') ?? DateTime.now(),
-              expiraEm: DateTime.tryParse(raw['expira_em']?.toString() ?? '') ?? DateTime.now().add(const Duration(minutes: 3)),
-              tempoPreparacaoPadraoMinutos: (raw['tempo_preparacao_padrao_minutos'] as num?)?.toInt() ?? 20,
-              subtotalCentimos: (raw['subtotal_centimos'] as num?)?.toInt() ?? 0,
-              itens: itens,
-            );
             _terminalBloc.add(NewOrderReceivedEvent(incoming));
           }
         }
+
+        _terminalBloc.add(RefreshTerminalOrdersEvent(lista));
       }
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      if (showLoading && mounted) {
+        setState(() => _isCarregando = false);
+      }
+    }
   }
 
   @override
@@ -520,10 +656,65 @@ class _PartnerOrderTerminalScreenState extends State<PartnerOrderTerminalScreen>
                   ),
                 IconButton(
                   tooltip: 'Atualizar Pedidos',
-                  icon: const Icon(Icons.refresh_rounded, color: Color(0xFF1E88E5)),
+                  icon: _isCarregando
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF1E88E5)),
+                        )
+                      : const Icon(Icons.refresh_rounded, color: Color(0xFF1E88E5)),
                   onPressed: () => _carregarPedidosDoServidor(showLoading: true),
                 ),
               ],
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(48),
+                child: Container(
+                  height: 48,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  color: Colors.white,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: ChoiceChip(
+                          label: Text('Pedidos Ativos (${state.pedidosAtivos.where((p) => !p.isEntregue).length})'),
+                          selected: !_mostrarHistorico,
+                          selectedColor: const Color(0xFFEFF6FF),
+                          labelStyle: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12.5,
+                            color: !_mostrarHistorico ? const Color(0xFF1E88E5) : const Color(0xFF64748B),
+                          ),
+                          onSelected: (val) {
+                            if (val && _mostrarHistorico) {
+                              setState(() => _mostrarHistorico = false);
+                              _carregarPedidosDoServidor(showLoading: true);
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ChoiceChip(
+                          label: const Text('Histórico do Turno'),
+                          selected: _mostrarHistorico,
+                          selectedColor: const Color(0xFFEFF6FF),
+                          labelStyle: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12.5,
+                            color: _mostrarHistorico ? const Color(0xFF1E88E5) : const Color(0xFF64748B),
+                          ),
+                          onSelected: (val) {
+                            if (val && !_mostrarHistorico) {
+                              setState(() => _mostrarHistorico = true);
+                              _carregarPedidosDoServidor(showLoading: true);
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
             body: state.pedidosAtivos.isEmpty
                 ? Center(
@@ -547,19 +738,21 @@ class _PartnerOrderTerminalScreenState extends State<PartnerOrderTerminalScreen>
                             ),
                           ),
                           const SizedBox(height: 20),
-                          const Text(
-                            'Balcão & Cozinha Prontos',
-                            style: TextStyle(
+                          Text(
+                            _mostrarHistorico ? 'Histórico Vazio' : 'Balcão & Cozinha Prontos',
+                            style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                               color: Color(0xFF0F172A),
                             ),
                           ),
                           const SizedBox(height: 8),
-                          const Text(
-                            'Não há pedidos pendentes de aceitação neste momento.\nAssim que um cliente submeter um pedido, o alerta sonoro tocará automaticamente.',
+                          Text(
+                            _mostrarHistorico
+                                ? 'Nenhum pedido concluído ou cancelado registado neste turno.'
+                                : 'Não há pedidos pendentes de aceitação neste momento.\nAssim que um cliente submeter um pedido, o alerta sonoro tocará automaticamente.',
                             textAlign: TextAlign.center,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 13.5,
                               color: Color(0xFF64748B),
                               height: 1.4,
@@ -659,28 +852,7 @@ class _PartnerOrderTerminalScreenState extends State<PartnerOrderTerminalScreen>
                                       ],
                                     ),
                                   ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFFEF3C7),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: const Color(0xFFFDE68A)),
-                                    ),
-                                    child: const Row(
-                                      children: [
-                                        Icon(Icons.timer_outlined, size: 14, color: Color(0xFFB45309)),
-                                        SizedBox(width: 4),
-                                        Text(
-                                          'Aguardando',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                            color: Color(0xFFB45309),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
+                                  _buildStatusBadge(pedido),
                                 ],
                               ),
                               const SizedBox(height: 12),
@@ -717,7 +889,7 @@ class _PartnerOrderTerminalScreenState extends State<PartnerOrderTerminalScreen>
 
                               const SizedBox(height: 12),
 
-                              // Botões de Ação Imediata
+                              // Botões de Ação Dinâmicos por Estado do Pedido
                               Row(
                                 children: [
                                   Expanded(
@@ -736,20 +908,7 @@ class _PartnerOrderTerminalScreenState extends State<PartnerOrderTerminalScreen>
                                   const SizedBox(width: 12),
                                   Expanded(
                                     flex: 2,
-                                    child: FilledButton.icon(
-                                      onPressed: () => _abrirModalDestaquePedido(context, pedido),
-                                      style: FilledButton.styleFrom(
-                                        backgroundColor: const Color(0xFF16A34A),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                      ),
-                                      icon: const Icon(Icons.check_circle_rounded, size: 18),
-                                      label: const Text(
-                                        'Aceitar Pedido',
-                                        style: TextStyle(fontWeight: FontWeight.bold),
-                                      ),
-                                    ),
+                                    child: _buildActionButton(context, pedido),
                                   ),
                                 ],
                               ),
@@ -762,6 +921,139 @@ class _PartnerOrderTerminalScreenState extends State<PartnerOrderTerminalScreen>
           );
         },
       ),
+    );
+  }
+
+  Widget _buildStatusBadge(IncomingPartnerOrder pedido) {
+    if (pedido.isEntregue) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: const Text(
+          'Entregue',
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+        ),
+      );
+    }
+    if (pedido.isPronto) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFDCFCE7),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFBBF7D0)),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.check_circle_outline, size: 14, color: Color(0xFF16A34A)),
+            SizedBox(width: 4),
+            Text(
+              'Pronto',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF16A34A)),
+            ),
+          ],
+        ),
+      );
+    }
+    if (pedido.isEmPreparacao) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEFF6FF),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFBFDBFE)),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.soup_kitchen_outlined, size: 14, color: Color(0xFF1E88E5)),
+            SizedBox(width: 4),
+            Text(
+              'Na Cozinha',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF1E88E5)),
+            ),
+          ],
+        ),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF3C7),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFDE68A)),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.timer_outlined, size: 14, color: Color(0xFFB45309)),
+          SizedBox(width: 4),
+          Text(
+            'Aguardando',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFFB45309),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton(BuildContext context, IncomingPartnerOrder pedido) {
+    if (pedido.isEmPreparacao) {
+      return FilledButton.icon(
+        onPressed: () => _terminalBloc.add(MarkOrderReadyEvent(pedido.pedidoId)),
+        style: FilledButton.styleFrom(
+          backgroundColor: const Color(0xFFEA580C),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        icon: const Icon(Icons.done_all_rounded, size: 18),
+        label: const Text(
+          'Marcar Pronto',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+      );
+    }
+    if (pedido.isPronto) {
+      return FilledButton.icon(
+        onPressed: null,
+        style: FilledButton.styleFrom(
+          backgroundColor: const Color(0xFF16A34A),
+          disabledBackgroundColor: const Color(0xFFDCFCE7),
+          disabledForegroundColor: const Color(0xFF16A34A),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        icon: const Icon(Icons.two_wheeler_rounded, size: 18),
+        label: const Text(
+          'Aguardando Estafeta',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+      );
+    }
+    if (pedido.isEntregue) {
+      return OutlinedButton.icon(
+        onPressed: null,
+        icon: const Icon(Icons.verified_rounded, size: 16),
+        label: const Text('Concluído'),
+      );
+    }
+    return FilledButton.icon(
+      onPressed: () => _abrirModalDestaquePedido(context, pedido),
+      style: FilledButton.styleFrom(
+        backgroundColor: const Color(0xFF16A34A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      icon: const Icon(Icons.check_circle_rounded, size: 18),
+      label: const Text(
+        'Aceitar Pedido',
+        style: TextStyle(fontWeight: FontWeight.bold),
+      ),
+    );
+  }
     );
   }
 

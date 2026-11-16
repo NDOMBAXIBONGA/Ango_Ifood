@@ -416,3 +416,106 @@ class BusinessHourSlot extends Equatable {
   List<Object?> get props => [id, diaSemana, horaAbertura, horaFecho, isAtivo];
 }
 
+// ============================================================================
+// 7. MODELOS DE FINANÇAS E DEFINIÇÕES OPERACIONAIS REAIS (RN-010, RN-054, RN-145)
+// ============================================================================
+
+class PartnerFinancesModel extends Equatable {
+  final int faturacaoBrutaHojeCentimos;
+  final int pedidosConcluidosHoje;
+  final int pedidosTotaisHoje;
+  final int ticketMedioCentimos;
+  final double comissaoPercentagem;
+  final int comissaoValorCentimos;
+  final int valorLiquidoRepassarCentimos;
+  final int totalHistoricoFaturadoCentimos;
+  final int totalPedidosHistorico;
+
+  const PartnerFinancesModel({
+    this.faturacaoBrutaHojeCentimos = 0,
+    this.pedidosConcluidosHoje = 0,
+    this.pedidosTotaisHoje = 0,
+    this.ticketMedioCentimos = 0,
+    this.comissaoPercentagem = 15.0,
+    this.comissaoValorCentimos = 0,
+    this.valorLiquidoRepassarCentimos = 0,
+    this.totalHistoricoFaturadoCentimos = 0,
+    this.totalPedidosHistorico = 0,
+  });
+
+  factory PartnerFinancesModel.fromJson(Map<String, dynamic> json) {
+    return PartnerFinancesModel(
+      faturacaoBrutaHojeCentimos:
+          (json['faturacao_bruta_hoje_centimos'] as num?)?.toInt() ?? 0,
+      pedidosConcluidosHoje:
+          (json['pedidos_concluidos_hoje'] as num?)?.toInt() ?? 0,
+      pedidosTotaisHoje: (json['pedidos_totais_hoje'] as num?)?.toInt() ?? 0,
+      ticketMedioCentimos:
+          (json['ticket_medio_centimos'] as num?)?.toInt() ?? 0,
+      comissaoPercentagem:
+          (json['comissao_percentagem'] as num?)?.toDouble() ?? 15.0,
+      comissaoValorCentimos:
+          (json['comissao_valor_centimos'] as num?)?.toInt() ?? 0,
+      valorLiquidoRepassarCentimos:
+          (json['valor_liquido_repassar_centimos'] as num?)?.toInt() ?? 0,
+      totalHistoricoFaturadoCentimos:
+          (json['total_historico_faturado_centimos'] as num?)?.toInt() ?? 0,
+      totalPedidosHistorico:
+          (json['total_pedidos_historico'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+        faturacaoBrutaHojeCentimos,
+        pedidosConcluidosHoje,
+        pedidosTotaisHoje,
+        ticketMedioCentimos,
+        comissaoPercentagem,
+        comissaoValorCentimos,
+        valorLiquidoRepassarCentimos,
+        totalHistoricoFaturadoCentimos,
+        totalPedidosHistorico,
+      ];
+}
+
+class PartnerSettingsModel extends Equatable {
+  final int tempoPreparacaoPadraoMinutos;
+  final double raioEntregaKm;
+  final String iban;
+  final String bancoNome;
+  final String titularConta;
+
+  const PartnerSettingsModel({
+    this.tempoPreparacaoPadraoMinutos = 30,
+    this.raioEntregaKm = 7.0,
+    this.iban = 'AO06.0040.0000.0000.0000.0000.0',
+    this.bancoNome = 'Banco Angolano de Investimentos (BAI)',
+    this.titularConta = 'Restaurante Parceiro',
+  });
+
+  factory PartnerSettingsModel.fromJson(Map<String, dynamic> json) {
+    final banco = (json['dados_bancarios'] as Map<String, dynamic>?) ?? {};
+    return PartnerSettingsModel(
+      tempoPreparacaoPadraoMinutos:
+          (json['tempo_preparacao_padrao_minutos'] as num?)?.toInt() ?? 30,
+      raioEntregaKm: (json['raio_entrega_km'] as num?)?.toDouble() ?? 7.0,
+      iban: (banco['iban'] ?? '').toString(),
+      bancoNome:
+          (banco['banco_nome'] ?? 'Banco Angolano de Investimentos (BAI)')
+              .toString(),
+      titularConta: (banco['titular_conta'] ?? '').toString(),
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+        tempoPreparacaoPadraoMinutos,
+        raioEntregaKm,
+        iban,
+        bancoNome,
+        titularConta,
+      ];
+}
+
+

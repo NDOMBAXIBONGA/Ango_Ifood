@@ -612,13 +612,23 @@ class PartnerOrderViewSet(viewsets.ViewSet):
         if not loja:
             return Response([])
 
-        estados_kds = [
-            Pedido.EstadoPedido.PAGAMENTO,
-            Pedido.EstadoPedido.AGUARDA_PARCEIRO,
-            Pedido.EstadoPedido.ACEITE,
-            Pedido.EstadoPedido.EM_PREPARACAO,
-            Pedido.EstadoPedido.PRONTO,
-        ]
+        is_historico = request.query_params.get("historico") == "true"
+        if is_historico:
+            estados_kds = [
+                Pedido.EstadoPedido.PRONTO,
+                Pedido.EstadoPedido.ATRIBUIDO,
+                Pedido.EstadoPedido.A_CAMINHO,
+                Pedido.EstadoPedido.ENTREGUE,
+                Pedido.EstadoPedido.CANCELADO,
+            ]
+        else:
+            estados_kds = [
+                Pedido.EstadoPedido.PAGAMENTO,
+                Pedido.EstadoPedido.AGUARDA_PARCEIRO,
+                Pedido.EstadoPedido.ACEITE,
+                Pedido.EstadoPedido.EM_PREPARACAO,
+                Pedido.EstadoPedido.PRONTO,
+            ]
         pedidos_qs = (
             Pedido.objects.filter(loja=loja, estado__in=estados_kds)
             .select_related("cliente")
@@ -671,6 +681,8 @@ class PartnerOrderViewSet(viewsets.ViewSet):
                 "is_aguardando": p.estado in (Pedido.EstadoPedido.PAGAMENTO, Pedido.EstadoPedido.AGUARDA_PARCEIRO),
                 "is_em_preparacao": p.estado in (Pedido.EstadoPedido.ACEITE, Pedido.EstadoPedido.EM_PREPARACAO),
                 "is_pronto": p.estado == Pedido.EstadoPedido.PRONTO,
+                "is_entregue": p.estado == Pedido.EstadoPedido.ENTREGUE,
+                "is_cancelado": p.estado == Pedido.EstadoPedido.CANCELADO,
                 "itens": itens_lista,
             })
 

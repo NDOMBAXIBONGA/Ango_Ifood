@@ -3653,9 +3653,17 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
     required String subtitle,
   }) {
     bool isPlaying = false;
+    final bool isFallbackVideo = fallbackImageUrl.toLowerCase().endsWith('.mp4') ||
+        fallbackImageUrl.toLowerCase().endsWith('.mov') ||
+        fallbackImageUrl.toLowerCase().endsWith('.webm');
+
+    final String safeThumbnailUrl = !isFallbackVideo && fallbackImageUrl.isNotEmpty
+        ? fallbackImageUrl
+        : 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800';
+
     final String targetImageUrl = !isVideo
-        ? (mediaUrl.isNotEmpty ? mediaUrl : fallbackImageUrl)
-        : (fallbackImageUrl.isNotEmpty ? fallbackImageUrl : mediaUrl);
+        ? (mediaUrl.isNotEmpty ? mediaUrl : safeThumbnailUrl)
+        : safeThumbnailUrl;
 
     showModalBottomSheet<void>(
       context: context,
@@ -3698,22 +3706,18 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
                       children: [
                         if (isVideo)
                           Image.network(
-                            targetImageUrl.isNotEmpty
-                                ? targetImageUrl
-                                : 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800',
+                            targetImageUrl,
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => Container(
                               color: const Color(0xFF0F172A),
-                              child: const Icon(Icons.movie_creation_outlined, color: Colors.white70, size: 48),
+                              child: const Icon(Icons.restaurant_rounded, color: Colors.white70, size: 48),
                             ),
                           )
                         else
                           InteractiveViewer(
                             maxScale: 4.0,
                             child: Image.network(
-                              targetImageUrl.isNotEmpty
-                                  ? targetImageUrl
-                                  : 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800',
+                              targetImageUrl,
                               fit: BoxFit.cover,
                               errorBuilder: (_, __, ___) => Image.network(
                                 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800',
@@ -4635,20 +4639,44 @@ class _CustomerAddressSelectionSheetState
   final _referenciaController = TextEditingController();
   final _andarPortaController = TextEditingController();
   final _instrucoesController = TextEditingController();
+  final _municipioController = TextEditingController();
   int _selectedPresetIndex = 0;
+  String _selectedProvince = 'Luanda';
 
-  static const List<CustomerGeoAddress> _luandaDistrictPresets = [
+  static const List<String> _todasProvinciasAngola = [
+    'Luanda',
+    'Benguela',
+    'Huambo',
+    'Huíla',
+    'Cabinda',
+    'Cuanza Sul',
+    'Cuanza Norte',
+    'Uíge',
+    'Zaire',
+    'Malanje',
+    'Lunda Norte',
+    'Lunda Sul',
+    'Moxico',
+    'Bié',
+    'Namibe',
+    'Cunene',
+    'Cuando Cubango',
+    'Bengo',
+  ];
+
+  static const List<CustomerGeoAddress> _angolaNationalPresets = [
+    // 1. Luanda
     CustomerGeoAddress(
       id: 'preset_ingombota',
-      label: 'Ingombota / Centro',
-      fullAddress: 'Avenida 4 de Fevereiro, Marginal de Luanda, Ingombota',
+      label: 'Ingombota / Centro (Luanda)',
+      fullAddress: 'Avenida 4 de Fevereiro, Marginal de Luanda, Ingombota, Luanda',
       referencia: 'Centro de Luanda',
       latitude: -8.8147,
       longitude: 13.2343,
     ),
     CustomerGeoAddress(
       id: 'preset_talatona',
-      label: 'Talatona',
+      label: 'Talatona (Luanda)',
       fullAddress: 'Via S8, Condomínio Belas Business Park, Talatona, Luanda',
       referencia: 'Talatona Shopping',
       latitude: -8.9167,
@@ -4656,7 +4684,7 @@ class _CustomerAddressSelectionSheetState
     ),
     CustomerGeoAddress(
       id: 'preset_kilamba',
-      label: 'Centralidade do Kilamba',
+      label: 'Centralidade do Kilamba (Luanda)',
       fullAddress: 'Quarteirão Q, Centralidade do Kilamba, Belas, Luanda',
       referencia: 'Kero Kilamba',
       latitude: -8.9950,
@@ -4664,7 +4692,7 @@ class _CustomerAddressSelectionSheetState
     ),
     CustomerGeoAddress(
       id: 'preset_maianga',
-      label: 'Maianga / Alvalade',
+      label: 'Maianga / Alvalade (Luanda)',
       fullAddress: 'Rua Comandante Gika, Alvalade, Maianga, Luanda',
       referencia: 'Hotel Alvalade',
       latitude: -8.8399,
@@ -4672,7 +4700,7 @@ class _CustomerAddressSelectionSheetState
     ),
     CustomerGeoAddress(
       id: 'preset_morro_bento',
-      label: 'Morro Bento',
+      label: 'Morro Bento (Luanda)',
       fullAddress: 'Avenida 21 de Janeiro, Morro Bento, Luanda',
       referencia: 'Rotunda da Multiperfil',
       latitude: -8.8850,
@@ -4680,13 +4708,104 @@ class _CustomerAddressSelectionSheetState
     ),
     CustomerGeoAddress(
       id: 'preset_viana',
-      label: 'Viana / Zango',
+      label: 'Viana / Zango (Luanda)',
       fullAddress: 'Estrada de Catete, Vila de Viana, Luanda',
       referencia: 'Administração de Viana',
       latitude: -8.9030,
       longitude: 13.3740,
     ),
+    // 2. Benguela & Lobito
+    CustomerGeoAddress(
+      id: 'preset_benguela_centro',
+      label: 'Benguela Centro',
+      fullAddress: 'Largo da Peça, Zona Comercial, Benguela',
+      referencia: 'Praça Central de Benguela',
+      latitude: -12.5763,
+      longitude: 13.4055,
+    ),
+    CustomerGeoAddress(
+      id: 'preset_lobito',
+      label: 'Lobito / Restinga',
+      fullAddress: 'Avenida da Independência, Restinga, Lobito, Benguela',
+      referencia: 'Porto do Lobito',
+      latitude: -12.3644,
+      longitude: 13.5360,
+    ),
+    // 3. Huambo
+    CustomerGeoAddress(
+      id: 'preset_huambo_centro',
+      label: 'Huambo Centro',
+      fullAddress: 'Avenida Norton de Matos, Huambo',
+      referencia: 'Jardim da Cultura',
+      latitude: -12.7761,
+      longitude: 15.7392,
+    ),
+    // 4. Huíla (Lubango)
+    CustomerGeoAddress(
+      id: 'preset_lubango_centro',
+      label: 'Lubango Centro (Huíla)',
+      fullAddress: 'Avenida Lúcio Lara, Lubango, Huíla',
+      referencia: 'Sé Catedral do Lubango',
+      latitude: -14.9172,
+      longitude: 13.4925,
+    ),
+    // 5. Cabinda
+    CustomerGeoAddress(
+      id: 'preset_cabinda_centro',
+      label: 'Cabinda Centro',
+      fullAddress: 'Avenida Duque de Chiazi, Cabinda',
+      referencia: 'Palácio do Governo de Cabinda',
+      latitude: -5.5500,
+      longitude: 12.2000,
+    ),
+    // 6. Cuanza Sul (Sumbe)
+    CustomerGeoAddress(
+      id: 'preset_sumbe',
+      label: 'Sumbe Centro (Cuanza Sul)',
+      fullAddress: 'Avenida 4 de Fevereiro, Sumbe, Cuanza Sul',
+      referencia: 'Marginal do Sumbe',
+      latitude: -11.2061,
+      longitude: 13.8437,
+    ),
+    // 7. Malanje
+    CustomerGeoAddress(
+      id: 'preset_malanje',
+      label: 'Malanje Centro',
+      fullAddress: 'Avenida Agostinho Neto, Malanje',
+      referencia: 'Largo da Rainha Ginga',
+      latitude: -9.5402,
+      longitude: 16.3410,
+    ),
+    // 8. Namibe (Moçâmedes)
+    CustomerGeoAddress(
+      id: 'preset_namibe',
+      label: 'Moçâmedes / Namibe Centro',
+      fullAddress: 'Avenida Marginal, Moçâmedes, Namibe',
+      referencia: 'Baía de Moçâmedes',
+      latitude: -15.1961,
+      longitude: 12.1522,
+    ),
+    // 9. Zaire (Soyo)
+    CustomerGeoAddress(
+      id: 'preset_soyo',
+      label: 'Soyo Centro (Zaire)',
+      fullAddress: 'Estrada Principal do Kwanda, Soyo, Zaire',
+      referencia: 'Base Petrolífera do Kwanda',
+      latitude: -6.1349,
+      longitude: 12.3689,
+    ),
+    // 10. Uíge
+    CustomerGeoAddress(
+      id: 'preset_uige',
+      label: 'Uíge Centro',
+      fullAddress: 'Avenida dos Combatentes, Uíge',
+      referencia: 'Praça da Independência do Uíge',
+      latitude: -7.6086,
+      longitude: 15.0614,
+    ),
   ];
+
+  static List<CustomerGeoAddress> get _luandaDistrictPresets => _angolaNationalPresets;
 
   @override
   void initState() {
@@ -4700,6 +4819,7 @@ class _CustomerAddressSelectionSheetState
     _referenciaController.dispose();
     _andarPortaController.dispose();
     _instrucoesController.dispose();
+    _municipioController.dispose();
     super.dispose();
   }
 
@@ -4816,10 +4936,14 @@ class _CustomerAddressSelectionSheetState
       _errorMsg = null;
     });
 
-    final preset = _luandaDistrictPresets[_selectedPresetIndex];
+    final preset = _angolaNationalPresets[_selectedPresetIndex.clamp(0, _angolaNationalPresets.length - 1)];
+    final municipioTexto = _municipioController.text.trim().isNotEmpty
+        ? _municipioController.text.trim()
+        : preset.label;
     final ref = _referenciaController.text.trim().isNotEmpty
         ? _referenciaController.text.trim()
-        : preset.label;
+        : '$municipioTexto, $_selectedProvince';
+    final fullAddr = '$texto, $municipioTexto, $_selectedProvince, Angola';
 
     try {
       final dio = await _buildAuthDio();
@@ -4827,7 +4951,7 @@ class _CustomerAddressSelectionSheetState
         final resp = await dio.post<Map<String, dynamic>>(
           '/api/v1/auth/moradas/',
           data: {
-            'texto_endereco': '$texto, ${preset.label}, Luanda',
+            'texto_endereco': fullAddr,
             'referencia': ref,
             'andar_porta': _andarPortaController.text.trim(),
             'instrucoes_estafeta': _instrucoesController.text.trim(),
@@ -4845,7 +4969,7 @@ class _CustomerAddressSelectionSheetState
       final fallback = CustomerGeoAddress(
         id: 'morada_principal',
         label: ref,
-        fullAddress: '$texto, ${preset.label}, Luanda',
+        fullAddress: fullAddr,
         referencia: ref,
         andarPorta: _andarPortaController.text.trim(),
         instrucoesEstafeta: _instrucoesController.text.trim(),
@@ -4935,23 +5059,43 @@ class _CustomerAddressSelectionSheetState
             ],
             if (_showForm) ...[
               Text(
-                'Selecione a Zona / Município em Luanda:',
-                style: theme.textTheme.labelLarge,
+                'Província (Cobertura Nacional de Angola):',
+                style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: List.generate(_luandaDistrictPresets.length, (i) {
-                  final p = _luandaDistrictPresets[i];
-                  return ChoiceChip(
-                    label: Text(p.label),
-                    selected: _selectedPresetIndex == i,
-                    onSelected: (_) => setState(() => _selectedPresetIndex = i),
-                  );
-                }),
+              SizedBox(
+                height: 38,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _todasProvinciasAngola.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 6),
+                  itemBuilder: (ctx, i) {
+                    final prov = _todasProvinciasAngola[i];
+                    final isSel = _selectedProvince == prov;
+                    return ChoiceChip(
+                      label: Text(prov),
+                      selected: isSel,
+                      selectedColor: const Color(0xFFEFF6FF),
+                      labelStyle: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        color: isSel ? const Color(0xFF1E88E5) : const Color(0xFF64748B),
+                      ),
+                      onSelected: (_) => setState(() => _selectedProvince = prov),
+                    );
+                  },
+                ),
               ),
               const SizedBox(height: 14),
+              TextField(
+                controller: _municipioController,
+                decoration: InputDecoration(
+                  labelText: 'Município / Bairro na província de $_selectedProvince *',
+                  hintText: 'Ex.: Maianga, Lobito, Caála, Lubango...',
+                  prefixIcon: const Icon(Icons.location_city_rounded),
+                ),
+              ),
+              const SizedBox(height: 12),
               TextField(
                 controller: _enderecoController,
                 decoration: const InputDecoration(
@@ -5071,13 +5215,13 @@ class _CustomerAddressSelectionSheetState
                   const SizedBox(height: 16),
                 ],
                 Text(
-                  'Zonas Rápidas de Luanda',
+                  'Zonas de Entrega Rápida em Angola',
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 8),
-                ..._luandaDistrictPresets.map((preset) {
+                ..._angolaNationalPresets.map((preset) {
                   return ListTile(
                     dense: true,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 8),

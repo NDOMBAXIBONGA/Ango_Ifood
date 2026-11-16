@@ -1704,8 +1704,9 @@ class PartnerMediaUploadView(APIView):
         if "onrender.com" in url_absoluta and url_absoluta.startswith("http://"):
             url_absoluta = url_absoluta.replace("http://", "https://", 1)
 
-        # Se houver loja associada, assegura a persistência fiel imediata dos dados
+        # Se houver loja associada, assegura a persistência fiel imediata dos dados tanto em disco como na base de dados PostgreSQL
         try:
+            import base64
             loja = None
             loja_id = request.headers.get("X-Store-ID") or request.data.get("loja_id")
             if loja_id:
@@ -1715,15 +1716,51 @@ class PartnerMediaUploadView(APIView):
             if not loja:
                 loja = ParceiroLoja.objects.first()
 
-            if loja and tipo_midia == "video":
+            if loja:
+                dados = dict(loja.dados_bancarios or {})
                 vitrine = obter_ou_inicializar_vitrine_loja(loja)
                 vitrine.setdefault("identidade_home", {})
-                vitrine["identidade_home"]["hero_video_url"] = url_absoluta
-                dados = dict(loja.dados_bancarios or {})
+                vitrine.setdefault("sobre_nos", {})
+                galeria = list(vitrine["sobre_nos"].get("galeria_midia") or [])
+
+                if tipo_midia == "video":
+                    vitrine["identidade_home"]["hero_video_url"] = url_absoluta
+                    galeria.insert(0, {
+                        "tipo": "video",
+                        "url": url_absoluta,
+                        "legenda": f"Vídeo: {nome_original[:30]}",
+                    })
+                else:
+                    if not vitrine["identidade_home"].get("hero_imagem_url"):
+                        vitrine["identidade_home"]["hero_imagem_url"] = url_absoluta
+                    galeria.insert(0, {
+                        "tipo": "imagem",
+                        "url": url_absoluta,
+                        "legenda": f"Foto: {nome_original[:30]}",
+                    })
+
+                vitrine["sobre_nos"]["galeria_midia"] = galeria[:12]
                 dados["vitrine_cms"] = vitrine
+
+                # Backup persistente em PostgreSQL caso o contentor Render seja reiniciado (ficheiros até 15MB)
+                if arquivo.size <= 15 * 1024 * 1024:
+                    try:
+                        with open(caminho_final, "rb") as f_bin:
+                            conteudo_b64 = base64.b64encode(f_bin.read()).decode("ascii")
+                        arquivos_salvos = dict(dados.get("arquivos_binarios") or {})
+                        arquivos_salvos[nome_seguro] = {
+                            "b64": conteudo_b64,
+                            "content_type": content_type,
+                            "tipo": tipo_midia,
+                            "tamanho": arquivo.size,
+                        }
+                        dados["arquivos_binarios"] = arquivos_salvos
+                    except Exception:
+                        pass
+
                 loja.dados_bancarios = dados
                 loja.save(update_fields=["dados_bancarios"])
-                invalidar_cache_catalogo_imediato(loja_id=str(loja.id), motivo="video_uploaded_saved")
+                invalidar_cache_catalogo_imediato(loja_id=str(loja.id), motivo="media_uploaded_saved")
         except Exception:
             pass
 
@@ -1745,6 +1782,7 @@ class MediaStreamView(APIView):
     """
     Serve ficheiros de mídia estáticos e uploads com suporte a HTTP 206 Partial Content
     e cabeçalhos 'Range', permitindo reprodução de vídeo fluida em Android/iOS e navegadores.
+    Restaura automaticamente ficheiros a partir do PostgreSQL se o disco temporário do Render for reiniciado.
     """
 
     authentication_classes = [OptionalJWTAuthentication]
@@ -1755,7 +1793,30 @@ class MediaStreamView(APIView):
         caminho_ficheiro = os.path.abspath(os.path.join(caminho_base, path))
 
         # Proteção contra Directory Traversal
-        if not caminho_ficheiro.startswith(os.path.abspath(caminho_base)) or not os.path.isfile(caminho_ficheiro):
+        if not caminho_ficheiro.startswith(os.path.abspath(caminho_base)):
+            from django.http import Http404
+            raise Http404(_("Ficheiro de mídia não permitido."))
+
+        # Auto-recuperação do banco de dados se o contentor efêmero do Render tiver sido reiniciado
+        if not os.path.isfile(caminho_ficheiro):
+            nome_ficheiro = os.path.basename(caminho_ficheiro)
+            import base64
+            for loja in ParceiroLoja.objects.exclude(dados_bancarios__isnull=True)[:20]:
+                dados = loja.dados_bancarios if isinstance(loja.dados_bancarios, dict) else {}
+                arquivos = dados.get("arquivos_binarios") if isinstance(dados.get("arquivos_binarios"), dict) else {}
+                if nome_ficheiro in arquivos:
+                    info = arquivos[nome_ficheiro]
+                    b64_data = info.get("b64")
+                    if b64_data:
+                        try:
+                            os.makedirs(os.path.dirname(caminho_ficheiro), exist_ok=True)
+                            with open(caminho_ficheiro, "wb") as f_out:
+                                f_out.write(base64.b64decode(b64_data))
+                            break
+                        except Exception:
+                            pass
+
+        if not os.path.isfile(caminho_ficheiro):
             from django.http import Http404
             raise Http404(_("Ficheiro de mídia não encontrado."))
 
@@ -1820,6 +1881,200 @@ class MediaStreamView(APIView):
         resp["Accept-Ranges"] = "bytes"
         resp["Access-Control-Allow-Origin"] = "*"
         return resp
+
+
+# ==============================================================================
+# 7. FINANÇAS REAIS E DEFINIÇÕES OPERACIONAIS DO PARCEIRO (RN-010, RN-054, RN-145)
+# ==============================================================================
+
+class PartnerStoreFinancesView(PartnerCatalogBaseMixin, APIView):
+    """
+    Endpoint: GET /api/v1/partner/store/finances/
+    Calcula dinamicamente as métricas financeiras reais da loja parceira
+    com base nas transações e pedidos gravados na base de dados PostgreSQL.
+    """
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request: Request) -> Response:
+        loja = self.obter_loja_parceiro(exigir_loja=False)
+        if not loja and request.user.is_authenticated:
+            from apps.accounts.views import garantir_loja_parceiro_ativa
+            garantir_loja_parceiro_ativa(request.user)
+            loja = getattr(request.user, "lojas_geridas", None)
+            loja = loja.first() if loja is not None else None
+
+        if not loja:
+            loja = ParceiroLoja.objects.exclude(estado=ParceiroLoja.EstadoLoja.SUSPENSO).first()
+
+        if not loja:
+            return Response(
+                {
+                    "faturacao_bruta_hoje_centimos": 0,
+                    "pedidos_concluidos_hoje": 0,
+                    "pedidos_totais_hoje": 0,
+                    "ticket_medio_centimos": 0,
+                    "comissao_percentagem": 15.0,
+                    "comissao_valor_centimos": 0,
+                    "valor_liquido_repassar_centimos": 0,
+                    "total_historico_faturado_centimos": 0,
+                    "total_pedidos_historico": 0,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        from apps.orders.models import Pedido
+
+        agora = timezone.now()
+        inicio_hoje = agora.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        # Pedidos criados/ativos hoje
+        pedidos_hoje = Pedido.objects.filter(
+            loja=loja,
+            data_criacao__gte=inicio_hoje,
+        ).exclude(estado=Pedido.EstadoPedido.CANCELADO)
+
+        pedidos_concluidos_hoje = pedidos_hoje.filter(estado=Pedido.EstadoPedido.ENTREGUE).count()
+        total_cobrado_hoje = pedidos_hoje.aggregate(total=Sum("total_cobrado"))["total"] or 0
+        total_pedidos_hoje = pedidos_hoje.count()
+
+        ticket_medio = int(total_cobrado_hoje / total_pedidos_hoje) if total_pedidos_hoje > 0 else 0
+        comissao_pct = float(loja.comissao_percentagem or Decimal("15.00"))
+        comissao_valor = int(total_cobrado_hoje * (comissao_pct / 100.0))
+        valor_liquido = total_cobrado_hoje - comissao_valor
+
+        # Histórico geral de pedidos da loja
+        pedidos_historico = Pedido.objects.filter(loja=loja).exclude(estado=Pedido.EstadoPedido.CANCELADO)
+        total_historico = pedidos_historico.aggregate(total=Sum("total_cobrado"))["total"] or 0
+        total_pedidos_historico = pedidos_historico.count()
+
+        return Response(
+            {
+                "loja_id": str(loja.id),
+                "loja_nome": loja.nome,
+                "faturacao_bruta_hoje_centimos": total_cobrado_hoje,
+                "pedidos_concluidos_hoje": pedidos_concluidos_hoje,
+                "pedidos_totais_hoje": total_pedidos_hoje,
+                "ticket_medio_centimos": ticket_medio,
+                "comissao_percentagem": comissao_pct,
+                "comissao_valor_centimos": comissao_valor,
+                "valor_liquido_repassar_centimos": valor_liquido,
+                "total_historico_faturado_centimos": total_historico,
+                "total_pedidos_historico": total_pedidos_historico,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class PartnerStoreSettingsView(PartnerCatalogBaseMixin, APIView):
+    """
+    Endpoint: GET / PATCH /api/v1/partner/store/settings/
+    Permite consultar e atualizar as definições operacionais da loja:
+    - tempo_preparacao_padrao_minutos (salvo em loja.dados_bancarios['tempo_preparacao_minutos'])
+    - raio_entrega_km (salvo em loja.raio_entrega_km)
+    - dados_bancarios (salvo em loja.dados_bancarios: {iban, banco_nome, titular_conta})
+    """
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request: Request) -> Response:
+        loja = self.obter_loja_parceiro(exigir_loja=False)
+        if not loja and request.user.is_authenticated:
+            from apps.accounts.views import garantir_loja_parceiro_ativa
+            garantir_loja_parceiro_ativa(request.user)
+            loja = getattr(request.user, "lojas_geridas", None)
+            loja = loja.first() if loja is not None else None
+
+        if not loja:
+            loja = ParceiroLoja.objects.exclude(estado=ParceiroLoja.EstadoLoja.SUSPENSO).first()
+
+        if not loja:
+            return Response(
+                {
+                    "tempo_preparacao_padrao_minutos": 25,
+                    "raio_entrega_km": 7.0,
+                    "dados_bancarios": {
+                        "iban": "AO06.0040.0000.0000.0000.0000.0",
+                        "banco_nome": "Banco Angolano de Investimentos (BAI)",
+                        "titular_conta": "Restaurante Parceiro",
+                    },
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        dados_bancarios = loja.dados_bancarios or {}
+        tempo_prep = dados_bancarios.get("tempo_preparacao_minutos", 30)
+
+        return Response(
+            {
+                "loja_id": str(loja.id),
+                "loja_nome": loja.nome,
+                "tempo_preparacao_padrao_minutos": int(tempo_prep),
+                "raio_entrega_km": float(loja.raio_entrega_km or 7.0),
+                "dados_bancarios": {
+                    "iban": dados_bancarios.get("iban", "AO06.0040.0000.0000.0000.0000.0"),
+                    "banco_nome": dados_bancarios.get("banco_nome", "Banco Angolano de Investimentos (BAI)"),
+                    "titular_conta": dados_bancarios.get("titular_conta", loja.nome),
+                },
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @transaction.atomic
+    def patch(self, request: Request) -> Response:
+        loja = self.obter_loja_parceiro(exigir_loja=False)
+        if not loja:
+            loja = ParceiroLoja.objects.exclude(estado=ParceiroLoja.EstadoLoja.SUSPENSO).first()
+
+        if not loja:
+            return Response({"erro": "Loja não encontrada"}, status=status.HTTP_404_NOT_FOUND)
+
+        dados = request.data
+        dados_bancarios = dict(loja.dados_bancarios or {})
+
+        if "tempo_preparacao_padrao_minutos" in dados:
+            try:
+                dados_bancarios["tempo_preparacao_minutos"] = int(dados["tempo_preparacao_padrao_minutos"])
+            except (ValueError, TypeError):
+                pass
+
+        if "raio_entrega_km" in dados:
+            try:
+                novo_raio = Decimal(str(dados["raio_entrega_km"]))
+                if Decimal("0.5") <= novo_raio <= Decimal("50.0"):
+                    loja.raio_entrega_km = novo_raio
+            except Exception:
+                pass
+
+        if "dados_bancarios" in dados and isinstance(dados["dados_bancarios"], dict):
+            banco_in = dados["dados_bancarios"]
+            if "iban" in banco_in:
+                dados_bancarios["iban"] = str(banco_in["iban"]).strip()
+            if "banco_nome" in banco_in:
+                dados_bancarios["banco_nome"] = str(banco_in["banco_nome"]).strip()
+            if "titular_conta" in banco_in:
+                dados_bancarios["titular_conta"] = str(banco_in["titular_conta"]).strip()
+
+        loja.dados_bancarios = dados_bancarios
+        loja.save(update_fields=["raio_entrega_km", "dados_bancarios"])
+
+        invalidar_cache_catalogo_imediato(loja_id=str(loja.id), motivo="partner_settings_updated")
+
+        return Response(
+            {
+                "sucesso": True,
+                "mensagem": _("Definições da loja atualizadas com sucesso."),
+                "tempo_preparacao_padrao_minutos": dados_bancarios.get("tempo_preparacao_minutos", 30),
+                "raio_entrega_km": float(loja.raio_entrega_km),
+                "dados_bancarios": {
+                    "iban": dados_bancarios.get("iban", ""),
+                    "banco_nome": dados_bancarios.get("banco_nome", ""),
+                    "titular_conta": dados_bancarios.get("titular_conta", ""),
+                },
+            },
+            status=status.HTTP_200_OK,
+        )
+
 
 
 

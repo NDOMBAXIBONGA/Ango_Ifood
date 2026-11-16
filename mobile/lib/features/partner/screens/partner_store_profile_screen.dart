@@ -54,6 +54,26 @@ class PartnerStoreProfileScreen extends StatelessWidget {
             builder: (context, partnerState) {
               final store = partnerState.storeStatus;
               final isAberta = store?.status == StoreOperationalStatus.disponivel;
+              final finances = partnerState.finances;
+              final settings = partnerState.settings;
+
+              final vendasHojeStr = CurrencyFormatter.formatKwanza(
+                finances?.faturacaoBrutaHojeCentimos ?? 0,
+              );
+              final pedidosHojeStr =
+                  '${finances?.pedidosConcluidosHoje ?? 0} concluídos';
+              final ticketMedioStr = CurrencyFormatter.formatKwanza(
+                finances?.ticketMedioCentimos ?? 0,
+              );
+              final comissaoStr =
+                  '${(finances?.comissaoPercentagem ?? 15.0).toStringAsFixed(0)}%';
+              final tempoPreparoStr =
+                  '${settings?.tempoPreparacaoPadraoMinutos ?? 30} minutos (Configurável)';
+              final raioEntregaStr =
+                  'PostGIS delimitado a ${(settings?.raioEntregaKm ?? 7.0).toStringAsFixed(1)} km da loja';
+              final ibanDisplay = (settings?.iban != null && settings!.iban.isNotEmpty)
+                  ? settings.iban
+                  : 'Conta e IBAN para liquidação automática';
 
               return ListView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
@@ -193,7 +213,7 @@ class PartnerStoreProfileScreen extends StatelessWidget {
                       Expanded(
                         child: _buildMetricCard(
                           title: 'Vendas Hoje',
-                          value: '125.000 Kz',
+                          value: vendasHojeStr,
                           subtitle: 'Faturação bruta',
                           icon: Icons.payments_rounded,
                           accentColor: const Color(0xFF16A34A),
@@ -204,7 +224,7 @@ class PartnerStoreProfileScreen extends StatelessWidget {
                       Expanded(
                         child: _buildMetricCard(
                           title: 'Pedidos Hoje',
-                          value: '18 concluídos',
+                          value: pedidosHojeStr,
                           subtitle: '100% no prazo',
                           icon: Icons.receipt_long_rounded,
                           accentColor: const Color(0xFF1E88E5),
@@ -219,7 +239,7 @@ class PartnerStoreProfileScreen extends StatelessWidget {
                       Expanded(
                         child: _buildMetricCard(
                           title: 'Ticket Médio',
-                          value: '6.944 Kz',
+                          value: ticketMedioStr,
                           subtitle: 'Por pedido',
                           icon: Icons.trending_up_rounded,
                           accentColor: const Color(0xFF9333EA),
@@ -230,7 +250,7 @@ class PartnerStoreProfileScreen extends StatelessWidget {
                       Expanded(
                         child: _buildMetricCard(
                           title: 'Comissão',
-                          value: '15%',
+                          value: comissaoStr,
                           subtitle: 'Taxa da plataforma',
                           icon: Icons.percent_rounded,
                           accentColor: const Color(0xFFEA580C),
@@ -273,24 +293,30 @@ class PartnerStoreProfileScreen extends StatelessWidget {
                           icon: Icons.timer_outlined,
                           iconColor: const Color(0xFF1E88E5),
                           title: 'Tempo Médio de Preparo',
-                          subtitle: '30 - 45 minutos (Configurável)',
-                          onTap: () => _showComingSoonSnackBar(context, 'Ajuste de Tempo Base'),
+                          subtitle: tempoPreparoStr,
+                          onTap: () => _showTempoPreparoDialog(
+                            context,
+                            settings?.tempoPreparacaoPadraoMinutos ?? 30,
+                          ),
                         ),
                         const Divider(height: 1, indent: 56, color: Color(0xFFF1F5F9)),
                         _buildSettingsRow(
                           icon: Icons.delivery_dining_outlined,
                           iconColor: const Color(0xFF16A34A),
                           title: 'Raio de Cobertura de Entregas',
-                          subtitle: 'PostGIS delimitado a 8.0 km da loja',
-                          onTap: () => _showComingSoonSnackBar(context, 'Raio de Entrega'),
+                          subtitle: raioEntregaStr,
+                          onTap: () => _showRaioEntregaDialog(
+                            context,
+                            settings?.raioEntregaKm ?? 7.0,
+                          ),
                         ),
                         const Divider(height: 1, indent: 56, color: Color(0xFFF1F5F9)),
                         _buildSettingsRow(
                           icon: Icons.account_balance_rounded,
                           iconColor: const Color(0xFF9333EA),
                           title: 'Dados Bancários & Repasses',
-                          subtitle: 'Conta e IBAN para liquidação automática',
-                          onTap: () => _showComingSoonSnackBar(context, 'Dados Bancários'),
+                          subtitle: ibanDisplay,
+                          onTap: () => _showDadosBancariosDialog(context, settings),
                         ),
                         const Divider(height: 1, indent: 56, color: Color(0xFFF1F5F9)),
                         _buildSettingsRow(
@@ -486,6 +512,199 @@ class PartnerStoreProfileScreen extends StatelessWidget {
           content: Text('$feature estará disponível na próxima atualização do portal.'),
         ),
       );
+  }
+
+  void _showTempoPreparoDialog(BuildContext context, int valorAtual) {
+    int tempoSelecionado = valorAtual;
+    final partnerBloc = context.read<PartnerBloc>();
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: const [
+              Icon(Icons.timer_outlined, color: Color(0xFF1E88E5)),
+              SizedBox(width: 8),
+              Text('Tempo Base de Preparo', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Defina o tempo estimado padrão para a sua cozinha confeccionar os pedidos:',
+                style: TextStyle(fontSize: 13, color: Color(0xFF475569)),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                '$tempoSelecionado minutos',
+                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Color(0xFF1E88E5)),
+              ),
+              Slider(
+                value: tempoSelecionado.toDouble(),
+                min: 10,
+                max: 90,
+                divisions: 16,
+                label: '$tempoSelecionado min',
+                activeColor: const Color(0xFF1E88E5),
+                onChanged: (val) => setModalState(() => tempoSelecionado = val.round()),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF1E88E5)),
+              onPressed: () {
+                partnerBloc.add(SavePartnerSettingsRequested(tempoPreparacaoMinutos: tempoSelecionado));
+                Navigator.of(ctx).pop();
+              },
+              child: const Text('Salvar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showRaioEntregaDialog(BuildContext context, double raioAtual) {
+    double raioSelecionado = raioAtual;
+    final partnerBloc = context.read<PartnerBloc>();
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: const [
+              Icon(Icons.delivery_dining_outlined, color: Color(0xFF16A34A)),
+              SizedBox(width: 8),
+              Text('Raio de Entrega PostGIS', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Clientes dentro deste raio geográfico conseguirão encontrar a sua loja no catálogo:',
+                style: TextStyle(fontSize: 13, color: Color(0xFF475569)),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                '${raioSelecionado.toStringAsFixed(1)} km',
+                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Color(0xFF16A34A)),
+              ),
+              Slider(
+                value: raioSelecionado,
+                min: 1.0,
+                max: 30.0,
+                divisions: 29,
+                label: '${raioSelecionado.toStringAsFixed(1)} km',
+                activeColor: const Color(0xFF16A34A),
+                onChanged: (val) => setModalState(() => raioSelecionado = val),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF16A34A)),
+              onPressed: () {
+                partnerBloc.add(SavePartnerSettingsRequested(raioEntregaKm: raioSelecionado));
+                Navigator.of(ctx).pop();
+              },
+              child: const Text('Salvar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showDadosBancariosDialog(BuildContext context, PartnerSettingsModel? settings) {
+    final ibanCtrl = TextEditingController(text: settings?.iban ?? '');
+    final bancoCtrl = TextEditingController(text: settings?.bancoNome ?? 'Banco Angolano de Investimentos (BAI)');
+    final titularCtrl = TextEditingController(text: settings?.titularConta ?? '');
+    final partnerBloc = context.read<PartnerBloc>();
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: const [
+            Icon(Icons.account_balance_rounded, color: Color(0xFF9333EA)),
+            SizedBox(width: 8),
+            Text('Dados Bancários & Repasses', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Configure a conta bancária para liquidação automática dos valores faturados em Kwanzas:',
+                style: TextStyle(fontSize: 13, color: Color(0xFF475569)),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: ibanCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'IBAN Angolano (AO06...)',
+                  hintText: 'AO06 0040 0000 1234 5678 9012 3',
+                  prefixIcon: Icon(Icons.credit_card_rounded),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: bancoCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Instituição Bancária',
+                  hintText: 'Ex.: BAI, BFA, BIC, Millennium Atlântico',
+                  prefixIcon: Icon(Icons.account_balance_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: titularCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Titular da Conta / Empresa',
+                  hintText: 'Nome da empresa ou representante legal',
+                  prefixIcon: Icon(Icons.person_outline_rounded),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF9333EA)),
+            onPressed: () {
+              partnerBloc.add(SavePartnerSettingsRequested(
+                iban: ibanCtrl.text.trim(),
+                bancoNome: bancoCtrl.text.trim(),
+                titularConta: titularCtrl.text.trim(),
+              ));
+              Navigator.of(ctx).pop();
+            },
+            child: const Text('Salvar Dados'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showLogoutConfirmDialog(BuildContext context) {

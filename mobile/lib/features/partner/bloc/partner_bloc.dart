@@ -119,6 +119,42 @@ class SaveBusinessHoursRequested extends PartnerEvent {
   List<Object?> get props => [hours];
 }
 
+/// Carrega as métricas financeiras reais da loja em Kwanzas (RN-054, RN-145).
+class LoadPartnerFinancesRequested extends PartnerEvent {
+  const LoadPartnerFinancesRequested();
+}
+
+/// Carrega as definições operacionais da loja (tempo preparo, raio PostGIS, IBAN).
+class LoadPartnerSettingsRequested extends PartnerEvent {
+  const LoadPartnerSettingsRequested();
+}
+
+/// Salva as definições operacionais da loja no backend.
+class SavePartnerSettingsRequested extends PartnerEvent {
+  final int? tempoPreparacaoMinutos;
+  final double? raioEntregaKm;
+  final String? iban;
+  final String? bancoNome;
+  final String? titularConta;
+
+  const SavePartnerSettingsRequested({
+    this.tempoPreparacaoMinutos,
+    this.raioEntregaKm,
+    this.iban,
+    this.bancoNome,
+    this.titularConta,
+  });
+
+  @override
+  List<Object?> get props => [
+        tempoPreparacaoMinutos,
+        raioEntregaKm,
+        iban,
+        bancoNome,
+        titularConta,
+      ];
+}
+
 /// Tick do timer para atualizar contagem decrescente no painel de controlo (RN-013).
 class PauseTimerTicked extends PartnerEvent {
   final Duration tempoRestante;
@@ -141,6 +177,8 @@ class PartnerState extends Equatable {
   final List<MenuCategory> categories;
   final List<MenuItemModel> items;
   final List<BusinessHourSlot> businessHours;
+  final PartnerFinancesModel? finances;
+  final PartnerSettingsModel? settings;
   final String? selectedCategoryId;
   final Duration? tempoRestantePausa;
   final String? errorMessage;
@@ -154,6 +192,8 @@ class PartnerState extends Equatable {
     this.categories = const [],
     this.items = const [],
     this.businessHours = const [],
+    this.finances,
+    this.settings,
     this.selectedCategoryId,
     this.tempoRestantePausa,
     this.errorMessage,
@@ -186,6 +226,8 @@ class PartnerState extends Equatable {
     List<MenuCategory>? categories,
     List<MenuItemModel>? items,
     List<BusinessHourSlot>? businessHours,
+    PartnerFinancesModel? finances,
+    PartnerSettingsModel? settings,
     String? selectedCategoryId,
     bool clearSelectedCategory = false,
     Duration? tempoRestantePausa,
@@ -203,6 +245,8 @@ class PartnerState extends Equatable {
       categories: categories ?? this.categories,
       items: items ?? this.items,
       businessHours: businessHours ?? this.businessHours,
+      finances: finances ?? this.finances,
+      settings: settings ?? this.settings,
       selectedCategoryId: clearSelectedCategory ? null : (selectedCategoryId ?? this.selectedCategoryId),
       tempoRestantePausa: clearPauseTimer ? null : (tempoRestantePausa ?? this.tempoRestantePausa),
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
@@ -219,6 +263,8 @@ class PartnerState extends Equatable {
         categories,
         items,
         businessHours,
+        finances,
+        settings,
         selectedCategoryId,
         tempoRestantePausa,
         errorMessage,
@@ -337,21 +383,43 @@ class PartnerRepository {
     return list.map((e) => BusinessHourSlot.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<void> saveBusinessHours(List<BusinessHourSlot> slots) async {
-    final activeSlots = slots.where((s) => s.isAtivo).toList();
-    final matrixPayload = {
-      'horarios': activeSlots.map((s) => s.toJson()).toList(),
-    };
+  Future<PartnerFinancesModel> fetchFinances() async {
+    final response = await _dio.get('/api/v1/partner/store/finances/');
+    return PartnerFinancesModel.fromJson(response.data as Map<String, dynamic>);
+  }
 
-    try {
-      // 1. Tenta envio da matriz completa via PUT (RN-012)
-      await _dio.put('/api/v1/partner/store/hours/', data: matrixPayload);
-    } catch (_) {
-      // 2. Se falhar, tenta via POST individual com tratamento de idempotência
-      for (final slot in activeSlots) {
-        await _dio.post('/api/v1/partner/store/hours/', data: slot.toJson());
-      }
+  Future<PartnerSettingsModel> fetchSettings() async {
+    final response = await _dio.get('/api/v1/partner/store/settings/');
+    return PartnerSettingsModel.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  Future<PartnerSettingsModel> saveSettings({
+    int? tempoPreparacaoMinutos,
+    double? raioEntregaKm,
+    String? iban,
+    String? bancoNome,
+    String? titularConta,
+  }) async {
+    final payload = <String, dynamic>{};
+    if (tempoPreparacaoMinutos != null) {
+      payload['tempo_preparacao_padrao_minutos'] = tempoPreparacaoMinutos;
     }
+    if (raioEntregaKm != null) {
+      payload['raio_entrega_km'] = raioEntregaKm;
+    }
+    if (iban != null || bancoNome != null || titularConta != null) {
+      payload['dados_bancarios'] = {
+        if (iban != null) 'iban': iban,
+        if (bancoNome != null) 'banco_nome': bancoNome,
+        if (titularConta != null) 'titular_conta': titularConta,
+      };
+    }
+
+    final response = await _dio.patch(
+      '/api/v1/partner/store/settings/',
+      data: payload,
+    );
+    return PartnerSettingsModel.fromJson(response.data as Map<String, dynamic>);
   }
 }
 
@@ -376,6 +444,9 @@ class PartnerBloc extends Bloc<PartnerEvent, PartnerState> {
     on<CreateCategoryRequested>(_onCreateCategory);
     on<SaveBusinessHoursRequested>(_onSaveBusinessHours);
     on<PauseTimerTicked>(_onTimerTicked);
+    on<LoadPartnerFinancesRequested>(_onLoadFinances);
+    on<LoadPartnerSettingsRequested>(_onLoadSettings);
+    on<SavePartnerSettingsRequested>(_onSaveSettings);
   }
 
   @override
@@ -425,6 +496,14 @@ class PartnerBloc extends Bloc<PartnerEvent, PartnerState> {
             (_) => <BusinessHourSlot>[],
           );
 
+      final finances = await _repository.fetchFinances().catchError(
+            (_) => const PartnerFinancesModel(),
+          );
+
+      final settings = await _repository.fetchSettings().catchError(
+            (_) => const PartnerSettingsModel(),
+          );
+
       if (storeStatus.isPausada && storeStatus.reativacaoAutomaticaEm != null) {
         _startCountdownTimer(storeStatus.reativacaoAutomaticaEm!);
       }
@@ -435,6 +514,8 @@ class PartnerBloc extends Bloc<PartnerEvent, PartnerState> {
         categories: categories,
         items: items,
         businessHours: hours,
+        finances: finances,
+        settings: settings,
         tempoRestantePausa: storeStatus.tempoRestantePausa,
         clearSelectedCategory: true,
       ));
@@ -734,6 +815,49 @@ class PartnerBloc extends Bloc<PartnerEvent, PartnerState> {
       emit(state.copyWith(
         isUpdatingHours: false,
         errorMessage: 'Erro ao guardar horários de funcionamento: ${e.toString()}',
+      ));
+    }
+  }
+
+  Future<void> _onLoadFinances(
+    LoadPartnerFinancesRequested event,
+    Emitter<PartnerState> emit,
+  ) async {
+    try {
+      final finances = await _repository.fetchFinances();
+      emit(state.copyWith(finances: finances));
+    } catch (_) {}
+  }
+
+  Future<void> _onLoadSettings(
+    LoadPartnerSettingsRequested event,
+    Emitter<PartnerState> emit,
+  ) async {
+    try {
+      final settings = await _repository.fetchSettings();
+      emit(state.copyWith(settings: settings));
+    } catch (_) {}
+  }
+
+  Future<void> _onSaveSettings(
+    SavePartnerSettingsRequested event,
+    Emitter<PartnerState> emit,
+  ) async {
+    try {
+      final updated = await _repository.saveSettings(
+        tempoPreparacaoMinutos: event.tempoPreparacaoMinutos,
+        raioEntregaKm: event.raioEntregaKm,
+        iban: event.iban,
+        bancoNome: event.bancoNome,
+        titularConta: event.titularConta,
+      );
+      emit(state.copyWith(
+        settings: updated,
+        successMessage: 'Definições da loja atualizadas com sucesso!',
+      ));
+    } catch (e) {
+      emit(state.copyWith(
+        errorMessage: 'Erro ao salvar definições da loja: ${e.toString()}',
       ));
     }
   }
