@@ -171,6 +171,8 @@ class CartService extends ChangeNotifier {
     notifyListeners();
   }
 
+  void clearCart() => clear();
+
   /// Converte os itens do carrinho para a lista esperada pelo `CheckoutScreen`.
   List<CheckoutCartItemInput> toCheckoutInputs() {
     return _items.values.map((item) {

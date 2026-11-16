@@ -1079,7 +1079,7 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
         metodoPagamentoId: state.metodoPagamentoSelecionado.id,
       );
 
-      CartService.instance.clearCart();
+      CartService.instance.clear();
 
       emit(
         state.copyWith(
@@ -1087,7 +1087,7 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
           pedidoConfirmado: resultado,
         ),
       );
-    } on CheckoutRepositoryException catch (e) {
+    } on CheckoutRepositoryException {
       // Se a cotação falhar na rede ou Redis cold start, gera confirmação resiliente com limpeza do carrinho
       final fallbackResultado = ConfirmedOrderResult(
         pedidoId: 'ped-${DateTime.now().millisecondsSinceEpoch}',
@@ -1098,7 +1098,7 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
         eventoGerado: 'order.created',
         pinEntrega: '4829',
       );
-      CartService.instance.clearCart();
+      CartService.instance.clear();
       emit(
         state.copyWith(
           isSubmittingOrder: false,
