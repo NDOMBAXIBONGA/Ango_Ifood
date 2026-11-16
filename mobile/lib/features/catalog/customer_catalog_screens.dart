@@ -2426,9 +2426,60 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
                   ),
                 ),
               ),
-            );
-          },
-        ),
+            if (categories.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Categorias da Loja',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              InkWell(
+                onTap: () => _navigateToSection(1),
+                borderRadius: BorderRadius.circular(8),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                  child: Text(
+                    'Ver Todas',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFFDC2626),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 48,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: categories.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, idx) {
+                final cat = categories[idx];
+                return ActionChip(
+                  avatar: const Icon(Icons.restaurant_menu_rounded, size: 16, color: Color(0xFFDC2626)),
+                  label: Text('${cat.nome} (${cat.itens.length})'),
+                  backgroundColor: Colors.white,
+                  side: const BorderSide(color: Color(0xFFE2E8F0)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  onPressed: () {
+                    setState(() => _selectedMenuCategoryId = cat.id);
+                    _navigateToSection(1);
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -2572,17 +2623,56 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
                         ),
                         if (category.itens.isEmpty)
                           Container(
-                            padding: const EdgeInsets.all(14),
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: colorScheme.outlineVariant),
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.02),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
                             ),
-                            child: Text(
-                              'Nenhum artigo disponível nesta categoria no momento.',
-                              style: textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.primary.withValues(alpha: 0.08),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.restaurant_menu_rounded,
+                                    size: 20,
+                                    color: colorScheme.primary,
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Categoria em preparação',
+                                        style: textTheme.labelLarge?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Esta categoria ainda não possui artigos cadastrados. Novos pratos estarão disponíveis em breve!',
+                                        style: textTheme.bodySmall?.copyWith(
+                                          color: colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                           )
                         else

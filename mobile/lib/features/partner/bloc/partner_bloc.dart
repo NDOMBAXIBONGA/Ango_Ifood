@@ -166,7 +166,18 @@ class PartnerState extends Equatable {
     if (selectedCategoryId == null || selectedCategoryId!.isEmpty) {
       return items;
     }
-    return items.where((i) => i.categoriaId == selectedCategoryId).toList();
+    final catObj = categories.where((c) => c.id == selectedCategoryId).firstOrNull;
+    final catNome = catObj?.nome.trim().toUpperCase();
+
+    return items.where((i) {
+      if (i.categoriaId == selectedCategoryId) return true;
+      if (catNome != null &&
+          catNome.isNotEmpty &&
+          (i.categoriaNome ?? '').trim().toUpperCase() == catNome) {
+        return true;
+      }
+      return false;
+    }).toList();
   }
 
   PartnerState copyWith({
@@ -559,23 +570,26 @@ class PartnerBloc extends Bloc<PartnerEvent, PartnerState> {
       MenuItemModel itemParaGuardar = event.item;
       String? novoSelectedCategoryId = state.selectedCategoryId;
 
-      // Se a categoria selecionada tiver sido criada localmente (id temporário "cat-..."),
-      // sincroniza-a primeiro no servidor para obter o UUID real da categoria (ex.: "PIZZA")
+      // Se a categoria selecionada tiver sido criada localmente (id temporário "cat-...")
+      // ou se tiver categoriaNome definido, sincroniza primeiro no servidor para garantir UUID real
       if (itemParaGuardar.categoriaId.startsWith('cat-') ||
           itemParaGuardar.categoriaId == 'geral' ||
           itemParaGuardar.categoriaId.isEmpty) {
         final catLocal = state.categories
             .where((c) => c.id == itemParaGuardar.categoriaId)
             .firstOrNull;
-        final nomeCat = (catLocal?.nome ?? '').trim();
+        final nomeCat = (catLocal?.nome ?? itemParaGuardar.categoriaNome ?? '').trim();
         if (nomeCat.isNotEmpty) {
           try {
             final catServidor = await _repository.createCategory(
               nomeCat,
               catLocal?.ordemExibicao ?? (state.categories.length + 1),
             );
-            itemParaGuardar = itemParaGuardar.copyWith(categoriaId: catServidor.id);
-            if (state.selectedCategoryId == catLocal?.id) {
+            itemParaGuardar = itemParaGuardar.copyWith(
+              categoriaId: catServidor.id,
+              categoriaNome: catServidor.nome,
+            );
+            if (state.selectedCategoryId == catLocal?.id || (state.selectedCategoryId?.startsWith('cat-') ?? false)) {
               novoSelectedCategoryId = catServidor.id;
             }
           } catch (_) {}
@@ -589,25 +603,40 @@ class PartnerBloc extends Bloc<PartnerEvent, PartnerState> {
         savedItem = await _repository.createItem(itemParaGuardar);
       }
 
-      final List<MenuItemModel> novosItens;
-      if (event.isEditing) {
-        novosItens = state.items.map((i) => i.id == savedItem.id ? savedItem : i).toList();
-      } else {
-        novosItens = [savedItem, ...state.items];
+      // Sincronização estrita: recarrega imediatamente categorias e itens direto da base de dados
+      // garantindo que ambos (cardápio do parceiro e vitrine) utilizam a mesma tabela e dados
+      final categoriasAtualizadas = await _repository.getCategories().catchError((_) => state.categories);
+      final itensAtualizados = await _repository.getItems().catchError((_) => <MenuItemModel>[]);
+
+      final todosItens = <MenuItemModel>[];
+      final idsAdicionados = <String>{};
+      for (final it in itensAtualizados) {
+        todosItens.add(it);
+        idsAdicionados.add(it.id);
+      }
+      if (!idsAdicionados.contains(savedItem.id)) {
+        todosItens.insert(0, savedItem);
       }
 
-      final categoriasAtualizadas = await _repository
-          .getCategories()
-          .catchError((_) => state.categories);
+      if (novoSelectedCategoryId != null && novoSelectedCategoryId.startsWith('cat-')) {
+        final match = categoriasAtualizadas
+            .where((c) => c.nome.trim().toUpperCase() == (savedItem.categoriaNome ?? '').trim().toUpperCase())
+            .firstOrNull;
+        if (match != null) {
+          novoSelectedCategoryId = match.id;
+        } else if (savedItem.categoriaId.isNotEmpty) {
+          novoSelectedCategoryId = savedItem.categoriaId;
+        }
+      }
 
       emit(state.copyWith(
         isSavingItem: false,
         categories: categoriasAtualizadas,
         selectedCategoryId: novoSelectedCategoryId,
-        items: novosItens,
+        items: todosItens,
         successMessage: event.isEditing
-            ? 'Item atualizado com sucesso e sincronizado com o cardápio do cliente!'
-            : 'Item adicionado ao catálogo e disponibilizado no cardápio do cliente!',
+            ? 'Item atualizado com sucesso e sincronizado com a vitrine!'
+            : 'Item adicionado ao catálogo e publicado na vitrine!',
       ));
     } catch (e) {
       emit(state.copyWith(
@@ -626,11 +655,11 @@ class PartnerBloc extends Bloc<PartnerEvent, PartnerState> {
     emit(state.copyWith(items: novos, clearError: true));
     try {
       await _repository.deleteItem(event.itemId);
-      final categoriasAtualizadas = await _repository
-          .getCategories()
-          .catchError((_) => state.categories);
+      final categoriasAtualizadas = await _repository.getCategories().catchError((_) => state.categories);
+      final itensAtualizados = await _repository.getItems().catchError((_) => novos);
       emit(state.copyWith(
         categories: categoriasAtualizadas,
+        items: itensAtualizados,
         successMessage: 'Produto removido com sucesso.',
       ));
     } catch (e) {

@@ -187,8 +187,20 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
 
                     // Categorias Cadastradas
                     ...categories.map((cat) {
-                      final count = state.items.where((i) => i.categoriaId == cat.id).length;
-                      final isSelected = selectedCategoryId == cat.id;
+                      final count = state.items.where((i) {
+                        if (i.categoriaId == cat.id) return true;
+                        if ((i.categoriaNome ?? '').trim().toUpperCase() == cat.nome.trim().toUpperCase()) return true;
+                        return false;
+                      }).length;
+                      final isSelected = selectedCategoryId == cat.id ||
+                          (selectedCategoryId != null &&
+                              state.categories
+                                      .where((c) => c.id == selectedCategoryId)
+                                      .firstOrNull
+                                      ?.nome
+                                      .trim()
+                                      .toUpperCase() ==
+                                  cat.nome.trim().toUpperCase());
 
                       return _buildCategoryPill(
                         title: cat.nome,

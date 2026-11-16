@@ -196,9 +196,15 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
 
     final precoInteiro = int.tryParse(_precoController.text.trim()) ?? 0;
 
+    final catObj = widget.categories
+        .where((c) => c.id == _categoriaSelecionadaId)
+        .firstOrNull;
+    final catNome = catObj?.nome ?? '';
+
     final novoItem = MenuItemModel(
       id: widget.item?.id ?? 'item-${DateTime.now().millisecondsSinceEpoch}',
       categoriaId: _categoriaSelecionadaId.isEmpty ? 'geral' : _categoriaSelecionadaId,
+      categoriaNome: catNome,
       nome: _nomeController.text.trim(),
       descricao: _descricaoController.text.trim(),
       preco: precoInteiro,

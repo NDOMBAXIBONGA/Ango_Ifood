@@ -905,6 +905,20 @@ class PartnerCatalogBaseMixin:
             if owner is not None:
                 loja = garantir_loja_parceiro_ativa(owner)
 
+        if loja is not None:
+            # Unifica e garante que todos os itens e categorias ativos estão associados à loja
+            # para que parceiro e vitrine compartilhem rigorosamente a mesma tabela e dados
+            try:
+                CategoriaItem.objects.filter(
+                    models.Q(loja__isnull=True)
+                ).exclude(nome__in=CATEGORIAS_ESTATICAS_SEED).update(loja=loja)
+
+                ItemMenu.objects.filter(
+                    models.Q(loja__isnull=True)
+                ).exclude(nome__in=NOMES_ARTIGOS_ESTATICOS_SEED).update(loja=loja)
+            except Exception:
+                pass
+
         if loja is None and exigir_loja:
             raise PermissionDenied(
                 _("RN-010 / RN-011: Nenhuma loja parceira encontrada ou associada a este utilizador.")

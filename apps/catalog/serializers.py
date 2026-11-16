@@ -428,12 +428,14 @@ class PartnerItemMenuSerializer(serializers.ModelSerializer):
         ),
     )
     grupos_opcoes = PartnerGrupoOpcaoSerializer(many=True, required=False)
+    categoria_nome = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = ItemMenu
         fields = (
             "id",
             "categoria",
+            "categoria_nome",
             "nome",
             "descricao",
             "preco",
@@ -444,7 +446,10 @@ class PartnerItemMenuSerializer(serializers.ModelSerializer):
             "is_destaque",
             "grupos_opcoes",
         )
-        read_only_fields = ("id",)
+        read_only_fields = ("id", "categoria_nome")
+
+    def get_categoria_nome(self, obj: ItemMenu) -> str:
+        return obj.categoria.nome if obj.categoria else ""
 
     def validate_preco(self, value: int) -> int:
         """RN-016: Garante que o preço do menu nunca é negativo."""
@@ -615,6 +620,14 @@ class PartnerItemMenuSerializer(serializers.ModelSerializer):
                 validated_data["loja"] = validated_data["categoria"].loja
 
         loja_efetiva = validated_data.get("loja")
+        if loja_efetiva is None:
+            from apps.catalog.models import ParceiroLoja
+            loja_efetiva = (
+                ParceiroLoja.objects.exclude(estado=ParceiroLoja.EstadoLoja.SUSPENSO).first()
+                or ParceiroLoja.objects.first()
+            )
+            validated_data["loja"] = loja_efetiva
+
         nome_hint = getattr(self, "_categoria_nome_hint", "")
         if validated_data.get("categoria") is None and loja_efetiva is not None:
             if nome_hint:

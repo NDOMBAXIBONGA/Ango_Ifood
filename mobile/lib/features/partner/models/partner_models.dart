@@ -203,6 +203,7 @@ class MenuCategory extends Equatable {
 class MenuItemModel extends Equatable {
   final String id;
   final String categoriaId;
+  final String? categoriaNome;
   final String nome;
   final String descricao;
   final int preco; // Em unidades inteiras (Kwanza)
@@ -214,6 +215,7 @@ class MenuItemModel extends Equatable {
   const MenuItemModel({
     required this.id,
     required this.categoriaId,
+    this.categoriaNome,
     required this.nome,
     required this.descricao,
     required this.preco,
@@ -226,6 +228,7 @@ class MenuItemModel extends Equatable {
   MenuItemModel copyWith({
     String? id,
     String? categoriaId,
+    String? categoriaNome,
     String? nome,
     String? descricao,
     int? preco,
@@ -237,6 +240,7 @@ class MenuItemModel extends Equatable {
     return MenuItemModel(
       id: id ?? this.id,
       categoriaId: categoriaId ?? this.categoriaId,
+      categoriaNome: categoriaNome ?? this.categoriaNome,
       nome: nome ?? this.nome,
       descricao: descricao ?? this.descricao,
       preco: preco ?? this.preco,
@@ -273,6 +277,7 @@ class MenuItemModel extends Equatable {
     return MenuItemModel(
       id: json['id'] as String? ?? '',
       categoriaId: json['categoria'] as String? ?? json['categoria_id'] as String? ?? '',
+      categoriaNome: json['categoria_nome'] as String?,
       nome: json['nome'] as String? ?? '',
       descricao: json['descricao'] as String? ?? '',
       preco: precoKz,
@@ -285,6 +290,7 @@ class MenuItemModel extends Equatable {
 
   Map<String, dynamic> toJson() => {
         'categoria': categoriaId.isEmpty ? 'geral' : categoriaId,
+        if (categoriaNome != null && categoriaNome!.isNotEmpty) 'categoria_nome': categoriaNome,
         'nome': nome,
         'descricao': descricao,
         'preco': preco < 50000 ? preco * 100 : preco,
@@ -298,6 +304,7 @@ class MenuItemModel extends Equatable {
   List<Object?> get props => [
         id,
         categoriaId,
+        categoriaNome,
         nome,
         descricao,
         preco,
