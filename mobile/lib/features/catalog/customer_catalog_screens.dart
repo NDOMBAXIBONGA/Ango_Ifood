@@ -2426,7 +2426,10 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
                   ),
                 ),
               ),
-            if (categories.isNotEmpty) ...[
+            );
+          },
+        ),
+        if (categories.isNotEmpty) ...[
           const SizedBox(height: 24),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
