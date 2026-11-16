@@ -20,7 +20,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../auth/storage/secure_token_storage.dart';
+import '../auth/storage/secure_token_storage.dart';
 
 // ============================================================================
 // 1. UTILITÁRIO DE FORMATAÇÃO MONETÁRIA INTEIRA (RN-059)
