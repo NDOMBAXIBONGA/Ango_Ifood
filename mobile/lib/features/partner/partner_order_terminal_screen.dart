@@ -435,6 +435,37 @@ class _PartnerOrderTerminalScreenState extends State<PartnerOrderTerminalScreen>
     } catch (_) {}
   }
 
+  void _simularEntradaPedidoTeste() {
+    final numAleatorio = (1000 + DateTime.now().millisecond).toString();
+    final pedidoExemplo = IncomingPartnerOrder(
+      pedidoId: 'ped-${DateTime.now().millisecondsSinceEpoch}',
+      numeroPedidoExibicao: numAleatorio,
+      nomeCliente: 'Mário Silva',
+      recebidoEm: DateTime.now(),
+      expiraEm: DateTime.now().add(const Duration(minutes: 3)),
+      tempoPreparacaoPadraoMinutos: 25,
+      subtotalCentimos: 750000,
+      itens: const [
+        TerminalOrderItem(
+          id: 'it-1',
+          nome: 'Hambúrguer Artesanal Duplo com Bacon',
+          quantidade: 2,
+          precoUnitarioCentimos: 300000,
+          opcoesPersonalizadas: ['Ponto: Bem Passado', 'Sem Cebola', 'Dose Extra de Cheddar'],
+          notas: 'Por favor, molho à parte.',
+        ),
+        TerminalOrderItem(
+          id: 'it-2',
+          nome: 'Batata Rústica com Alecrim e Parmesão',
+          quantidade: 1,
+          precoUnitarioCentimos: 150000,
+          opcoesPersonalizadas: ['Molho de Alho Suave'],
+        ),
+      ],
+    );
+    _terminalBloc.add(NewOrderReceivedEvent(pedidoExemplo));
+  }
+
   @override
   void dispose() {
     _pollingTimer?.cancel();

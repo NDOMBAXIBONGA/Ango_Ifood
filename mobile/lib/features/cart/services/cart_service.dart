@@ -81,6 +81,8 @@ class CartService extends ChangeNotifier {
   int get totalSubtotalCentimos =>
       _items.values.fold(0, (sum, item) => sum + item.subtotalCentimos);
 
+  int get subtotalCentimos => totalSubtotalCentimos;
+
   int getQuantity(String itemId) => _items[itemId]?.quantidade ?? 0;
 
   /// Adiciona um item ao carrinho. Se o item pertencer a uma loja diferente,

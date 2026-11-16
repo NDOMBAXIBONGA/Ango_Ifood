@@ -1149,8 +1149,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   Duration _remainingTime = const Duration(minutes: 15);
 
   CheckoutQuoteModel _buildInitialClientQuote() {
-    final subtotalEfetivo = (CartService.instance.subtotalCentimos > 0)
-        ? CartService.instance.subtotalCentimos
+    final subtotalEfetivo = (CartService.instance.totalSubtotalCentimos > 0)
+        ? CartService.instance.totalSubtotalCentimos
         : widget.itensCarrinho.fold<int>(
             0,
             (sum, item) => sum + (item.quantidade * 500000),
@@ -1174,19 +1174,25 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       descontos: 0,
       totalCobrado: totalCobrado,
       detalhesEntrega: const CheckoutDeliveryDetailsModel(
-        distanciaKm: 2.5,
-        tempoEstimadoMinutos: 25,
-        modoCalculo: 'estimado',
+        distanciaMetros: 2500,
+        distanciaKm: '2.50',
+        baseTaxa: 50000,
+        precoPorKm: 10000,
+        taxaSemPrecoDinamico: 50000,
+        fatorPrecoDinamico: '1.00',
+        isPrecoDinamicoAtivo: false,
       ),
       cupao: null,
       itens: widget.itensCarrinho
           .map((it) => CheckoutLineItemModel(
                 itemId: it.itemId,
                 nome: it.nome,
+                imagemUrl: it.imagemUrl,
                 quantidade: it.quantidade,
+                precoUnitarioBase: 500000,
+                precoOpcoesUnitario: 0,
                 precoUnitarioNoMomento: 500000,
                 subtotalLinha: it.quantidade * 500000,
-                imagemUrl: it.imagemUrl,
                 opcoes: const [],
                 notas: it.notas,
               ))
@@ -2713,8 +2719,8 @@ class _FloatingConfirmAndPayBar extends StatelessWidget {
 
     final totalCentimos = cotacao != null
         ? cotacao!.totalCobrado
-        : (CartService.instance.subtotalCentimos > 0
-            ? CartService.instance.subtotalCentimos + 60000
+        : (CartService.instance.totalSubtotalCentimos > 0
+            ? CartService.instance.totalSubtotalCentimos + 60000
             : 560000);
     final totalStr = CurrencyFormatter.formatKwanza(totalCentimos);
 
