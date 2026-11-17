@@ -147,10 +147,10 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
         );
       }
 
-      final tokenStorage = const SecureTokenStorage();
-      final dio = await createSecureDioClient(tokenStorage: tokenStorage);
+      final tokenStorage = SecureTokenStorage();
+      final dio = createSecureDioClient(tokenStorage: tokenStorage);
       final partnerState = context.read<PartnerBloc>().state;
-      final lojaId = partnerState.storeProfile?.id ?? '';
+      final lojaId = partnerState.storeStatus?.id ?? '';
 
       final formData = FormData.fromMap({
         'arquivo': await MultipartFile.fromFile(
