@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+      Método de exportação do IPA:
+      - app-store: Para submissão no TestFlight ou App Store Connect
+      - ad-hoc: Para distribuição direta/instalação em dispositivos registados
+      - enterprise: Para distribuição corporativa interna (Apple Developer Enterprise)
+      - development: Para testes locais com certificados de desenvolvimento
+    -->
+    <key>method</key>
+    <string>ad-hoc</string>
+
+    <!-- Habilitar bitcode (descontinuado a partir do Xcode 14, mantido falso por padrão) -->
+    <key>compileBitcode</key>
+    <false/>
+
+    <!-- Enviar símbolos de depuração para relatórios de crash -->
+    <key>uploadSymbols</key>
+    <true/>
+
+    <!-- Gestão automática ou manual de assinaturas -->
+    <key>signingStyle</key>
+    <string>manual</string>
+
+    <!-- Mapeamento do Perfil de Provisionamento para o Bundle ID da aplicação -->
+    <key>provisioningProfiles</key>
+    <dict>
+        <key>com.delivery.app</key>
+        <string>Delivery Pro AdHoc Profile</string>
+    </dict>
+
+    <!-- Desativar thinning ou configurar para dispositivos específicos -->
+    <key>thinning</key>
+    <string>&lt;none&gt;</string>
+</dict>
+</plist>

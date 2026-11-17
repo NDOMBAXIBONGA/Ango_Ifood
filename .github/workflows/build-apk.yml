@@ -1,4 +1,4 @@
-name: Build Android APK (CI/CD Mobile)
+name: Build Mobile Apps (Android APK & iOS IPA)
 
 # Acionadores do Workflow: Disparado em eventos de 'push' nas branches principais
 # ou manualmente através do tab 'Actions' no GitHub (workflow_dispatch).
@@ -218,4 +218,221 @@ jobs:
             echo "- 📦 **[Abrir Página de Releases do GitHub]($RELEASE_PAGE)**"
             echo "- 🔖 **Commit:** \`${{ github.sha }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # ==============================================================================
+  # JOB 2: Compilação e Geração do Pacote iOS (.ipa)
+  # Executa num ambiente macOS oficial para suportar Xcode, CocoaPods e Code Signing
+  # ==============================================================================
+  build-ipa:
+    name: Build & Package iOS Release IPA
+    runs-on: macos-latest
+
+    steps:
+      # ==============================================================================
+      # Passo 1: Checkout do código-fonte do repositório
+      # ==============================================================================
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      # ==============================================================================
+      # Passo 2: Instalação e configuração do Flutter SDK (Mesma versão do Android)
+      # ==============================================================================
+      - name: Instalar e Configurar o Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+          cache-key: "flutter-:os:-:channel:-:version:-:arch:-:hash:"
+
+      # ==============================================================================
+      # Passo 3: Verificação do Xcode instalado no macOS Runner
+      # ==============================================================================
+      - name: Verificar Versão do Xcode
+        run: |
+          xcodebuild -version
+          xcrun --version
+
+      # ==============================================================================
+      # Passo 4: Instalação das dependências Flutter e inicialização nativa iOS
+      # ==============================================================================
+      - name: Instalar Dependências do Flutter (pub get)
+        working-directory: mobile
+        run: |
+          # Garante que a infraestrutura nativa iOS existe
+          if [ ! -d "ios" ] || [ ! -f "ios/Runner.xcodeproj/project.pbxproj" ]; then
+            echo "Aviso: Camada nativa iOS não encontrada. A inicializar suporte iOS com flutter create..."
+            flutter create . --platforms=ios --org com.delivery.app
+            rm -f test/widget_test.dart
+          fi
+
+          echo "A descarregar dependências do Flutter (flutter pub get)..."
+          flutter pub get
+
+      # ==============================================================================
+      # Passo 5: Instalação dos CocoaPods na pasta ios
+      # ==============================================================================
+      - name: Instalar CocoaPods (pod install)
+        working-directory: mobile/ios
+        run: |
+          echo "A instalar pods e dependências nativas iOS via CocoaPods..."
+          pod repo update --silent || true
+          pod install
+
+      # ==============================================================================
+      # Passo 6: Configuração de Assinatura de Código (Certificado .p12 & Provisioning Profile)
+      # Utiliza Secrets em Base64 configurados no repositório do GitHub
+      # ==============================================================================
+      - name: Configurar Assinatura de Código iOS (Apple Code Signing)
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          if [ -z "$BUILD_CERTIFICATE_BASE64" ] || [ -z "$BUILD_PROVISION_PROFILE_BASE64" ]; then
+            echo "::warning::Secrets de assinatura iOS (BUILD_CERTIFICATE_BASE64 ou BUILD_PROVISION_PROFILE_BASE64) não foram detetados."
+            echo "::warning::A compilar em modo de validação com arquivamento. Configure os Secrets para gerar um IPA assinado."
+            echo "SIGNED_BUILD=false" >> $GITHUB_ENV
+            exit 0
+          fi
+
+          echo "SIGNED_BUILD=true" >> $GITHUB_ENV
+          echo "A preparar Keychain temporária e perfis de provisionamento..."
+
+          # 1. Definir caminhos temporários seguros
+          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+          PP_PATH=$RUNNER_TEMP/build_profile.mobileprovision
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEY_PWD="${KEYCHAIN_PASSWORD:-temporary_runner_pwd_2026}"
+
+          # 2. Descodificar os segredos Base64 em ficheiros binários reais
+          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
+          echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o $PP_PATH
+
+          # 3. Criar uma nova Keychain isolada no macOS
+          security create-keychain -p "$KEY_PWD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEY_PWD" $KEYCHAIN_PATH
+
+          # 4. Importar o certificado de distribuição (.p12) na Keychain
+          security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEY_PWD" $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+          # 5. Instalar o Perfil de Provisionamento no diretório oficial do sistema
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/
+          echo "Assinatura iOS e Keychain configuradas com sucesso!"
+
+      # ==============================================================================
+      # Passo 7: Garantir existência do ficheiro ExportOptions.plist
+      # ==============================================================================
+      - name: Validar ou Gerar ExportOptions.plist
+        working-directory: mobile
+        run: |
+          mkdir -p ios
+          if [ ! -f "ios/ExportOptions.plist" ]; then
+            echo "A gerar modelo base de ExportOptions.plist..."
+            cat << 'EOF' > ios/ExportOptions.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>ad-hoc</string>
+              <key>compileBitcode</key>
+              <false/>
+              <key>uploadSymbols</key>
+              <true/>
+              <key>signingStyle</key>
+              <string>automatic</string>
+              <key>thinning</key>
+              <string>&lt;none&gt;</string>
+          </dict>
+          </plist>
+          EOF
+          fi
+          echo "Conteúdo de ios/ExportOptions.plist:"
+          cat ios/ExportOptions.plist
+
+      # ==============================================================================
+      # Passo 8: Compilação do IPA (flutter build ipa)
+      # ==============================================================================
+      - name: Compilar IPA iOS em Modo Release
+        working-directory: mobile
+        run: |
+          echo "A iniciar compilação da aplicação iOS..."
+
+          if [ "$SIGNED_BUILD" = "true" ]; then
+            echo "A executar compilação com assinatura e exportação do ficheiro IPA..."
+            flutter build ipa --release --no-tree-shake-icons \
+              --export-options-plist=ios/ExportOptions.plist \
+              --dart-define=BASE_HTTP_URL=https://ango-ifood.onrender.com \
+              --dart-define=BASE_WEBSOCKET_URL=wss://ango-ifood.onrender.com
+          else
+            echo "A compilar binário nativo iOS com '--no-codesign' para verificação de compilação..."
+            flutter build ios --release --no-codesign --no-tree-shake-icons \
+              --dart-define=BASE_HTTP_URL=https://ango-ifood.onrender.com \
+              --dart-define=BASE_WEBSOCKET_URL=wss://ango-ifood.onrender.com
+
+            # Empacota em .ipa não assinado para que o artefacto esteja disponível para inspeção
+            mkdir -p build/ios/ipa
+            if [ -d "build/ios/iphoneos/Runner.app" ]; then
+              cd build/ios/iphoneos
+              mkdir -p Payload
+              cp -R Runner.app Payload/
+              zip -r -q ../ipa/DeliveryPro-unsigned.ipa Payload
+              cd ../../..
+              echo "Pacote IPA não assinado gerado em build/ios/ipa/DeliveryPro-unsigned.ipa"
+            fi
+          fi
+
+      # ==============================================================================
+      # Passo 9: Upload do Artefacto IPA para download no GitHub Actions
+      # ==============================================================================
+      - name: Disponibilizar Artefacto IPA (GitHub Actions Artifacts)
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-ipa
+          path: |
+            mobile/build/ios/ipa/*.ipa
+            mobile/build/ios/archive/*.xcarchive
+          if-no-files-found: warn
+          retention-days: 14
+
+      # ==============================================================================
+      # Passo 10: Resumo da Execução no GitHub Actions
+      # ==============================================================================
+      - name: Publicar Resumo do Job iOS (GitHub Step Summary)
+        if: always()
+        working-directory: mobile
+        run: |
+          {
+            echo "## 🍏 Delivery Pro — Build iOS (IPA) Concluído!"
+            echo ""
+            if compgen -G "build/ios/ipa/*.ipa" > /dev/null; then
+              echo "### 📦 Ficheiros Gerados:"
+              for ipa in build/ios/ipa/*.ipa; do
+                IPA_SIZE=$(du -h "$ipa" | cut -f1)
+                echo "- 📲 **Ficheiro:** \`$(basename "$ipa")\` (**$IPA_SIZE**)"
+              done
+              echo ""
+              echo "👉 **Download:** Descarregue o ficheiro na secção **Artifacts** deste workflow no GitHub Actions."
+            else
+              echo "⚠️ *Nenhum ficheiro .ipa foi gerado.* Verifique se os segredos de assinatura Apple foram devidamente configurados."
+            fi
+            echo "- 🔖 **Commit:** \`${{ github.sha }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # ==============================================================================
+      # Passo 11: Limpeza Segura da Keychain e Certificados Efémeros
+      # ==============================================================================
+      - name: Limpar Keychain e Certificados Efémeros
+        if: always()
+        run: |
+          echo "A efetuar limpeza segura de certificados e chaves temporárias..."
+          security delete-keychain $RUNNER_TEMP/app-signing.keychain-db 2>/dev/null || true
+          rm -f ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision 2>/dev/null || true
+          rm -f $RUNNER_TEMP/build_certificate.p12 2>/dev/null || true
+          rm -f $RUNNER_TEMP/build_profile.mobileprovision 2>/dev/null || true
 
