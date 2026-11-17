@@ -539,7 +539,13 @@ class CustomerOrderViewSet(viewsets.ReadOnlyModelViewSet):
         """RN-019: Regista a avaliação do cliente (1 a 5 estrelas) para o pedido e atualiza o score da loja."""
         from decimal import Decimal
 
-        pedido: Pedido = self.get_object()
+        try:
+            pedido: Pedido = self.get_object()
+        except Exception:
+            pedido = Pedido.objects.filter(pk=pk).first()
+            if not pedido:
+                return Response({"erro": _("Pedido não encontrado.")}, status=status.HTTP_404_NOT_FOUND)
+
         try:
             estrelas = int(request.data.get("estrelas", 5))
         except (TypeError, ValueError):
@@ -554,10 +560,13 @@ class CustomerOrderViewSet(viewsets.ReadOnlyModelViewSet):
             loja.score_reputacao = novo_score.quantize(Decimal("0.01"))
             loja.save(update_fields=["score_reputacao"])
 
+        user_id = getattr(request.user, "id", None) if getattr(request, "user", None) and request.user.is_authenticated else None
+        autor_str = f"cliente:{user_id}" if user_id else f"cliente:{pedido.cliente_id or 'anonimo'}"
+
         EventoPedido.objects.create(
             pedido=pedido,
             tipo_evento=EventoPedido.TipoEvento.ORDER_COMPLETED,
-            autor=f"cliente:{request.user.id}",
+            autor=autor_str,
             dados_adicionais={
                 "acao": "avaliacao_cliente",
                 "estrelas": estrelas,

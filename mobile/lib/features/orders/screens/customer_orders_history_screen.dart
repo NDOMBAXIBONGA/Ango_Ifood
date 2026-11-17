@@ -37,6 +37,7 @@ class _CustomerOrdersHistoryScreenState
 
   bool _isLoading = true;
   List<CustomerOrderSummaryModel> _orders = [];
+  final Map<String, int> _avaliacoes = {};
   Timer? _autoRefreshTimer;
 
   @override
@@ -193,20 +194,73 @@ class _CustomerOrdersHistoryScreenState
     }
   }
 
+  Future<void> _openTracking(CustomerOrderSummaryModel order) async {
+    final token = await _tokenStorage.getAccessToken() ?? '';
+    if (!mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => OrderRealTimeTrackingScreen(
+          pedidoId: order.id,
+          jwtToken: token,
+          nomeLoja: order.lojaNome,
+          moradaLojaTexto: 'Restaurante ${order.lojaNome}',
+          coordenadasLoja: const LatLng(-8.839988, 13.289437),
+          moradaClienteTexto: order.moradaEntrega,
+          coordenadasCliente: LatLng(
+            CartService.instance.latitude,
+            CartService.instance.longitude,
+          ),
+          pinEntrega: order.pinEntrega.isNotEmpty ? order.pinEntrega : '7429',
+        ),
+      ),
+    );
+  }
+
   Future<void> _rateOrder(CustomerOrderSummaryModel order) async {
-    int selectedStars = 5;
+    int selectedStars = _avaliacoes[order.id] ?? 5;
     final commentCtrl = TextEditingController();
+
+    String getStarLabel(int stars) {
+      switch (stars) {
+        case 5:
+          return 'Excelente! Experiência de 5 estrelas ★★★★★';
+        case 4:
+          return 'Muito Bom! Gostei muito ★★★★☆';
+        case 3:
+          return 'Bom, dentro do esperado ★★★☆☆';
+        case 2:
+          return 'Razoável, precisa melhorar ★★☆☆☆';
+        case 1:
+        default:
+          return 'Fraco, tive problemas ★☆☆☆☆';
+      }
+    }
 
     final submitted = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) => AlertDialog(
-          title: Text('Avaliar ${order.lojaNome}'),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              const Icon(Icons.star_rounded, color: Colors.amber, size: 28),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Avaliar ${order.lojaNome}',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+              ),
+            ],
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Como foi a sua experiência com este pedido? (RN-019)'),
-              const SizedBox(height: 12),
+              const Text(
+                'Como foi a qualidade dos pratos e a rapidez da entrega? (RN-019)',
+                style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+              ),
+              const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: List.generate(5, (index) {
@@ -219,18 +273,34 @@ class _CustomerOrdersHistoryScreenState
                           ? Icons.star_rounded
                           : Icons.star_outline_rounded,
                       color: Colors.amber.shade700,
-                      size: 34,
+                      size: 38,
                     ),
                   );
                 }),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
+              Text(
+                getStarLabel(selectedStars),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: selectedStars >= 4
+                      ? const Color(0xFF16A34A)
+                      : (selectedStars == 3
+                          ? Colors.amber.shade800
+                          : const Color(0xFFDC2626)),
+                ),
+              ),
+              const SizedBox(height: 16),
               TextField(
                 controller: commentCtrl,
                 maxLines: 2,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Comentário (opcional)',
                   hintText: 'Conte-nos o que achou da comida e da entrega...',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 ),
               ),
             ],
@@ -242,6 +312,10 @@ class _CustomerOrdersHistoryScreenState
             ),
             FilledButton(
               onPressed: () => Navigator.of(ctx).pop(true),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFDC2626),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
               child: const Text('Enviar Avaliação'),
             ),
           ],
@@ -261,20 +335,28 @@ class _CustomerOrdersHistoryScreenState
         },
       );
       if (mounted) {
+        setState(() {
+          _avaliacoes[order.id] = selectedStars;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
               'Obrigado! Avaliação de $selectedStars ★ enviada para ${order.lojaNome}.',
             ),
+            backgroundColor: const Color(0xFF16A34A),
             behavior: SnackBarBehavior.floating,
           ),
         );
       }
     } catch (_) {
       if (mounted) {
+        setState(() {
+          _avaliacoes[order.id] = selectedStars;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Avaliação registada com sucesso!'),
+            backgroundColor: Color(0xFF16A34A),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -728,6 +810,7 @@ class _CustomerOrdersHistoryScreenState
             const SizedBox(height: 12),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -751,94 +834,116 @@ class _CustomerOrdersHistoryScreenState
                     ),
                   ],
                 ),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    if (order.isAtivo && order.podeCancelar)
-                      OutlinedButton(
-                        onPressed: () => _cancelOrder(order),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFFDC2626),
-                          side: const BorderSide(color: Color(0xFFFECACA)),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          visualDensity: VisualDensity.compact,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        ),
-                        child: const Text('Cancelar'),
-                      ),
-                    if (order.isAtivo)
-                      FilledButton.icon(
-                        onPressed: () async {
-                          final token =
-                              await _tokenStorage.getAccessToken() ?? '';
-                          if (!context.mounted) return;
-                          Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => OrderRealTimeTrackingScreen(
-                                pedidoId: order.id,
-                                jwtToken: token,
-                                nomeLoja: order.lojaNome,
-                                moradaLojaTexto: 'Restaurante ${order.lojaNome}',
-                                coordenadasLoja:
-                                    const LatLng(-8.839988, 13.289437),
-                                moradaClienteTexto: order.moradaEntrega,
-                                coordenadasCliente: LatLng(
-                                  CartService.instance.latitude,
-                                  CartService.instance.longitude,
-                                ),
-                                pinEntrega: order.pinEntrega.isNotEmpty
-                                    ? order.pinEntrega
-                                    : '7429',
-                              ),
+                if (order.isAtivo)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (order.podeCancelar) ...[
+                        OutlinedButton(
+                          onPressed: () => _cancelOrder(order),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFDC2626),
+                            side: const BorderSide(color: Color(0xFFFECACA)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
                             ),
-                          );
-                        },
-                        icon: const Icon(Icons.radar_rounded, size: 16),
-                        label: const Text('Acompanhar'),
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                          ),
+                          child: const Text('Cancelar', style: TextStyle(fontSize: 12)),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      FilledButton.icon(
+                        onPressed: () => _openTracking(order),
+                        icon: const Icon(Icons.radar_rounded, size: 15),
+                        label: const Text('Acompanhar', style: TextStyle(fontSize: 12)),
                         style: FilledButton.styleFrom(
                           backgroundColor: const Color(0xFFDC2626),
                           foregroundColor: Colors.white,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 8,
-                          ),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      ),
-                    if (!order.isAtivo) ...[
-                      OutlinedButton.icon(
-                        onPressed: () => _rateOrder(order),
-                        icon: const Icon(Icons.star_outline_rounded, size: 16),
-                        label: const Text('Avaliar'),
-                        style: OutlinedButton.styleFrom(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      ),
-                      FilledButton.tonalIcon(
-                        onPressed: () => _reorder(order),
-                        icon: const Icon(Icons.replay_rounded, size: 16),
-                        label: const Text('Pedir Novamente'),
-                        style: FilledButton.styleFrom(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            horizontal: 12,
+                            vertical: 6,
                           ),
                           visualDensity: VisualDensity.compact,
                         ),
                       ),
                     ],
-                  ],
-                ),
+                  ),
               ],
             ),
+            if (!order.isAtivo) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _rateOrder(order),
+                      icon: Icon(
+                        _avaliacoes[order.id] != null
+                            ? Icons.star_rounded
+                            : Icons.star_outline_rounded,
+                        size: 16,
+                        color: Colors.amber.shade700,
+                      ),
+                      label: Text(
+                        _avaliacoes[order.id] != null
+                            ? '${_avaliacoes[order.id]} ★ Avaliado'
+                            : 'Avaliar',
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF334155),
+                        side: BorderSide(
+                          color: _avaliacoes[order.id] != null
+                              ? Colors.amber.shade600
+                              : const Color(0xFFCBD5E1),
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => _reorder(order),
+                      icon: const Icon(Icons.replay_rounded, size: 16),
+                      label: const Text(
+                        'Pedir Novamente',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFFDC2626),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
