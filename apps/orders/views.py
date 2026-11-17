@@ -75,20 +75,7 @@ class CheckoutViewSet(viewsets.GenericViewSet):
     def _resolver_utilizador_checkout(self, request: Request):
         if request.user and request.user.is_authenticated:
             return request.user
-        User = get_user_model()
-        user_demo = User.objects.filter(is_active=True).first()
-        if user_demo:
-            return user_demo
-        # Cria utilizador guest se não houver utilizador ativo
-        user_guest, _ = User.objects.get_or_create(
-            telemovel="+244900000000",
-            defaults={
-                "email": "cliente@ango-ifood.ao",
-                "nome": "Mário Silva",
-                "is_active": True,
-            },
-        )
-        return user_guest
+        return None
 
     def get_serializer_class(self):
         if self.action == "confirm":
@@ -111,6 +98,14 @@ class CheckoutViewSet(viewsets.GenericViewSet):
         serializer.is_valid(raise_exception=True)
 
         utilizador = self._resolver_utilizador_checkout(request)
+        if not utilizador:
+            return Response(
+                {
+                    "erro": "autenticacao_obrigatoria",
+                    "detalhe": _("Inicie sessão ou crie uma conta para calcular a cotação e prosseguir com a encomenda."),
+                },
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
 
         # Mantém registo do carrinho ativo do utilizador em cache Redis (para limpeza posterior no /confirm/)
         chave_carrinho_ativo = self._construir_chave_carrinho_ativo(utilizador.id)
@@ -203,6 +198,14 @@ class CheckoutViewSet(viewsets.GenericViewSet):
         metodo_pagamento_id: str = serializer.validated_data["metodo_pagamento_id"]
         metodo_pagamento_canonico: str = serializer.validated_data["metodo_pagamento_canonico"]
         utilizador = self._resolver_utilizador_checkout(request)
+        if not utilizador:
+            return Response(
+                {
+                    "erro": "autenticacao_obrigatoria",
+                    "detalhe": _("Inicie sessão ou crie uma conta para confirmar a sua encomenda."),
+                },
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
 
         # 1. Validação da cotação na cache Redis (TTL de 15 minutos - RN-043)
         try:
@@ -459,32 +462,39 @@ class CustomerOrderViewSet(viewsets.ReadOnlyModelViewSet):
     """
 
     authentication_classes = [OptionalJWTAuthentication]
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
     serializer_class = PedidoConfirmadoOutputSerializer
 
     def get_queryset(self):
         user = self.request.user
-        if user and user.is_authenticated:
-            return (
-                Pedido.objects.filter(cliente=user)
-                .exclude(id__istartswith="B9B202A3")
-                .select_related("loja", "cliente")
-                .prefetch_related("linhas__item", "linhas__opcoes_selecionadas", "eventos")
-                .order_by("-data_criacao")
-            )
-        # Modo resiliente / convidado: retorna pedidos recentes da plataforma excluindo testes legados
+        # Isolamento estrito de segurança (LGPD/Privacidade):
+        # Utilizadores anónimos ou visitantes NUNCA têm acesso aos pedidos de outros clientes.
+        if not user or not user.is_authenticated:
+            return Pedido.objects.none()
+
         return (
-            Pedido.objects.exclude(id__istartswith="B9B202A3")
+            Pedido.objects.filter(cliente=user)
+            .exclude(id__istartswith="B9B202A3")
             .select_related("loja", "cliente")
             .prefetch_related("linhas__item", "linhas__opcoes_selecionadas", "eventos")
-            .order_by("-data_criacao")[:30]
+            .order_by("-data_criacao")
         )
 
     @action(detail=True, methods=["post"], url_path="cancelar", url_name="cancelar")
     @transaction.atomic
     def cancelar(self, request: Request, pk: str | None = None) -> Response:
         """Permite ao cliente cancelar o pedido enquanto ainda não entrou em preparação na cozinha."""
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {"erro": "autenticacao_obrigatoria", "detalhe": _("Inicie sessão para gerir pedidos.")},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
         pedido: Pedido = self.get_object()
+        if pedido.cliente_id != request.user.id and not request.user.is_staff:
+            return Response(
+                {"erro": "acesso_negado", "detalhe": _("Não tem permissão para aceder a este pedido.")},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         estados_cancelaveis = {
             Pedido.EstadoPedido.CRIADO,
             Pedido.EstadoPedido.PAGAMENTO,
@@ -539,12 +549,24 @@ class CustomerOrderViewSet(viewsets.ReadOnlyModelViewSet):
         """RN-019: Regista a avaliação do cliente (1 a 5 estrelas) para o pedido e atualiza o score da loja."""
         from decimal import Decimal
 
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {"erro": "autenticacao_obrigatoria", "detalhe": _("Inicie sessão para avaliar o pedido.")},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
         try:
             pedido: Pedido = self.get_object()
         except Exception:
             pedido = Pedido.objects.filter(pk=pk).first()
             if not pedido:
                 return Response({"erro": _("Pedido não encontrado.")}, status=status.HTTP_404_NOT_FOUND)
+
+        if pedido.cliente_id != request.user.id and not request.user.is_staff:
+            return Response(
+                {"erro": "acesso_negado", "detalhe": _("Não tem permissão para avaliar este pedido.")},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         try:
             estrelas = int(request.data.get("estrelas", 5))

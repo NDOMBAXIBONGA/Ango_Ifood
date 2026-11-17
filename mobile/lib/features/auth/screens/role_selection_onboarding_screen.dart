@@ -6,6 +6,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../storage/secure_token_storage.dart';
 import '../theme/role_theme.dart';
 import '../../catalog/customer_main_navigation_shell.dart';
 import 'auth_screen.dart';
@@ -61,8 +62,11 @@ class _RoleSelectionOnboardingScreenState
     );
   }
 
-  void _exploreAsGuest() {
+  Future<void> _exploreAsGuest() async {
+    // Isolamento de Segurança: Garante que o modo visitante inicia sem resíduos de contas anteriores
+    await SecureTokenStorage().clearTokens();
     RoleThemeManager.instance.setRole(PlatformRole.cliente);
+    if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => const CustomerMainNavigationShell(),

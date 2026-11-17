@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../core/network/app_environment_config.dart';
+import '../../auth/screens/auth_screen.dart';
 import '../../auth/storage/secure_token_storage.dart';
+import '../../auth/theme/role_theme.dart';
 import '../../cart/cart.dart';
 import '../../checkout/checkout_screen.dart';
 import '../../tracking/order_real_time_tracking_screen.dart';
@@ -36,6 +38,7 @@ class _CustomerOrdersHistoryScreenState
   final SecureTokenStorage _tokenStorage = SecureTokenStorage();
 
   bool _isLoading = true;
+  bool _hasToken = false;
   List<CustomerOrderSummaryModel> _orders = [];
   final Map<String, int> _avaliacoes = {};
   Timer? _autoRefreshTimer;
@@ -91,6 +94,25 @@ class _CustomerOrdersHistoryScreenState
   }
 
   Future<void> _loadOrders({bool showLoading = true}) async {
+    final token = await _tokenStorage.getAccessToken();
+    final hasToken = token != null && token.isNotEmpty;
+    if (!hasToken) {
+      if (mounted) {
+        setState(() {
+          _hasToken = false;
+          _orders = [];
+          _isLoading = false;
+        });
+      }
+      return;
+    }
+
+    if (mounted && !_hasToken) {
+      setState(() {
+        _hasToken = true;
+      });
+    }
+
     if (showLoading && mounted) {
       setState(() {
         _isLoading = true;
@@ -480,6 +502,75 @@ class _CustomerOrdersHistoryScreenState
     required List<CustomerOrderSummaryModel> orders,
     required bool isActiveTab,
   }) {
+    if (!_hasToken) {
+      return RefreshIndicator(
+        onRefresh: _loadOrders,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 48),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(22),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFEF2F2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.person_search_outlined,
+                  size: 56,
+                  color: Color(0xFFDC2626),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'A navegar como Visitante',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Inicie sessão ou crie a sua conta para acompanhar o preparo na cozinha, o código PIN de entrega e o histórico dos seus pedidos.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.4),
+              ),
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                onPressed: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const AuthScreen(
+                        selectedRole: PlatformRole.cliente,
+                      ),
+                    ),
+                  );
+                  _loadOrders();
+                },
+                icon: const Icon(Icons.login_rounded, size: 18),
+                label: const Text('Criar Conta / Iniciar Sessão'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFDC2626),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: widget.onExploreTap,
+                child: const Text('Continuar a Explorar Restaurantes'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     if (orders.isEmpty) {
       return RefreshIndicator(
         onRefresh: _loadOrders,
