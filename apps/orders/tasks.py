@@ -183,52 +183,21 @@ def task_monitorizar_timeout_aceitacao_parceiro(
                 "estado_atual": pedido.estado,
             }
 
-        # 1. Transita o estado para REJEITADO com o ator 'SISTEMA' (Secção 5.1 e RN-075)
-        motivo_rejeicao = (
-            f"RN-075: Rejeição automática por timeout de aceitação da loja parceira "
-            f"após {sla_segundos} segundos (SLA Secção 8)."
-        )
-
-        from apps.orders.state_machine import OrderStateMachineManager
-
-        resultado_transicao = OrderStateMachineManager.transitar_estado(
-            pedido_id=pedido.id,
-            novo_estado=Pedido.EstadoPedido.REJEITADO,
-            ator="SISTEMA",
-            dados_adicionais={
-                "motivo": motivo_rejeicao,
-                "timeout_segundos": sla_segundos,
-                "loja_id": str(pedido.loja_id),
-                "loja_nome": pedido.loja.nome,
-                "regra": "RN-075",
-            },
-        )
-
-        # 2. Executa a rotina de estorno e reembolso integral do valor ao cliente (RN-075)
-        reembolso_info = _executar_reembolso_integral_cliente(
-            pedido=pedido,
-            motivo=motivo_rejeicao,
-            ator="SISTEMA",
-        )
-
-        # 3. Liberta o stock previamente reservado dos itens do menu (RN-075)
-        stock_info = _libertar_stock_pedido(pedido=pedido)
-
-        logger.warning(
-            "[RN-075] Pedido %s REJEITADO automaticamente pelo SISTEMA por timeout. "
-            "Reembolso efetuado: %s. Stock libertado: %s",
+        # Regra de Negócio Atualizada: O cancelamento pelo sistema foi revogado.
+        # Cancelamentos só podem ser efetuados ativamente pelo CLIENTE ou pelo PARCEIRO.
+        # O pedido permanece ativo em AGUARDA_PARCEIRO aguardando a decisão da loja ou cancelamento do cliente.
+        logger.info(
+            "[RN-075] Prazo de aceitação da loja (%ss) atingido para o Pedido %s. "
+            "Cancelamento automático pelo SISTEMA revogado. Pedido mantido ativo aguardando parceiro ou cliente.",
+            sla_segundos,
             pedido_id,
-            reembolso_info,
-            stock_info,
         )
 
         return {
-            "status": "rejeitado_por_timeout",
+            "status": "aguardando_decisao_parceiro_ou_cliente",
             "pedido_id": str(pedido.id),
-            "novo_estado": pedido.estado,
-            "reembolso": reembolso_info,
-            "stock_libertado": stock_info,
-            "evento_id": str(resultado_transicao.evento.id) if resultado_transicao.evento else None,
+            "estado_atual": pedido.estado,
+            "cancelamento_sistema": False,
         }
 
 

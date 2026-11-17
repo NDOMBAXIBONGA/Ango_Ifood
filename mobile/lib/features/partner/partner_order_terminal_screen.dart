@@ -438,13 +438,10 @@ class PartnerTerminalBloc extends Bloc<PartnerTerminalEvent, PartnerTerminalStat
 
   void _onOrderTimeoutExpired(OrderTimeoutExpiredEvent event, Emitter<PartnerTerminalState> emit) {
     _audioService.stopAlertLoop();
-    final atualizados = state.pedidosAtivos.where((p) => p.pedidoId != event.pedidoId).toList();
-
+    // Regra Atualizada: O cancelamento automático pelo sistema foi revogado.
+    // O pedido NÃO é cancelado nem removido da lista; o cancelamento só pode ser feito pelo cliente ou parceiro.
     emit(state.copyWith(
-      pedidosAtivos: atualizados,
-      clearModal: true,
       isAudioAlertActive: false,
-      feedbackMessage: 'RN-075: Prazo de 3 minutos expirado. Pedido cancelado automaticamente pelo sistema.',
     ));
   }
 
@@ -905,7 +902,21 @@ class _PartnerOrderTerminalScreenState extends State<PartnerOrderTerminalScreen>
                                       child: const Text('Ver Detalhes'),
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
+                                  if (pedido.isAguardando) ...[
+                                    const SizedBox(width: 8),
+                                    IconButton.outlined(
+                                      tooltip: 'Recusar Pedido',
+                                      icon: const Icon(Icons.close_rounded, color: Color(0xFFDC2626), size: 20),
+                                      style: OutlinedButton.styleFrom(
+                                        side: const BorderSide(color: Color(0xFFFCA5A5)),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                      ),
+                                      onPressed: () => _abrirDialogRejeicaoNoCard(context, pedido),
+                                    ),
+                                  ],
+                                  const SizedBox(width: 8),
                                   Expanded(
                                     flex: 2,
                                     child: _buildActionButton(context, pedido),
@@ -1055,11 +1066,62 @@ class _PartnerOrderTerminalScreenState extends State<PartnerOrderTerminalScreen>
     );
   }
 
+  void _abrirDialogRejeicaoNoCard(BuildContext context, IncomingPartnerOrder pedido) {
+    MotivoRejeicaoPedido motivoSelecionado = MotivoRejeicaoPedido.cozinhaSobrecarregada;
+    final obsController = TextEditingController();
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text('Rejeitar Pedido #${pedido.numeroPedidoExibicao}', style: const TextStyle(fontWeight: FontWeight.bold)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Selecione o motivo da rejeição para notificar o cliente:'),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<MotivoRejeicaoPedido>(
+                    value: motivoSelecionado,
+                    isExpanded: true,
+                    items: MotivoRejeicaoPedido.values.map((m) {
+                      return DropdownMenuItem(value: m, child: Text(m.descricao, style: const TextStyle(fontSize: 13)));
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) setDialogState(() => motivoSelecionado = val);
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.of(dialogCtx).pop(), child: const Text('Voltar')),
+                FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+                  onPressed: () {
+                    Navigator.of(dialogCtx).pop();
+                    _terminalBloc.add(RejectOrderEvent(
+                      pedidoId: pedido.pedidoId,
+                      motivo: motivoSelecionado,
+                      observacoes: obsController.text,
+                    ));
+                  },
+                  child: const Text('Confirmar Rejeição'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _abrirModalDestaquePedido(BuildContext context, IncomingPartnerOrder pedido) {
     showModalBottomSheet<void>(
       context: context,
-      isDismissible: false,
-      enableDrag: false,
+      isDismissible: true,
+      enableDrag: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
@@ -1080,10 +1142,6 @@ class _PartnerOrderTerminalScreenState extends State<PartnerOrderTerminalScreen>
             ));
             Navigator.of(sheetContext).pop();
           },
-          onExpirarTimeout: () {
-            _terminalBloc.add(OrderTimeoutExpiredEvent(pedido.pedidoId));
-            Navigator.of(sheetContext).pop();
-          },
         );
       },
     );
@@ -1098,13 +1156,11 @@ class _ModalNovoPedidoPendente extends StatefulWidget {
   final IncomingPartnerOrder pedido;
   final ValueChanged<int> onAceitar;
   final Function(MotivoRejeicaoPedido motivo, String? observacoes) onRejeitar;
-  final VoidCallback onExpirarTimeout;
 
   const _ModalNovoPedidoPendente({
     required this.pedido,
     required this.onAceitar,
     required this.onRejeitar,
-    required this.onExpirarTimeout,
   });
 
   @override
@@ -1129,11 +1185,17 @@ class _ModalNovoPedidoPendenteState extends State<_ModalNovoPedidoPendente> {
       final diff = widget.pedido.expiraEm.difference(DateTime.now());
       if (diff.isNegative || diff.inSeconds <= 0) {
         _countdownTimer?.cancel();
-        widget.onExpirarTimeout();
+        if (mounted) {
+          setState(() {
+            _tempoRestante = Duration.zero;
+          });
+        }
       } else {
-        setState(() {
-          _tempoRestante = diff;
-        });
+        if (mounted) {
+          setState(() {
+            _tempoRestante = diff;
+          });
+        }
       }
     });
   }
@@ -1176,7 +1238,7 @@ class _ModalNovoPedidoPendenteState extends State<_ModalNovoPedidoPendente> {
           ),
           const SizedBox(height: 16),
 
-          // Cabeçalho com Número do Pedido e Timer Regressivo de 3 Minutos (RN-075)
+          // Cabeçalho com Número do Pedido e Timer Regressivo
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -1187,29 +1249,62 @@ class _ModalNovoPedidoPendenteState extends State<_ModalNovoPedidoPendente> {
                   Text('#${widget.pedido.numeroPedidoExibicao}', style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
                 ],
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isCritico ? colorScheme.errorContainer : Colors.amber.shade100,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.timer_outlined, size: 20, color: isCritico ? colorScheme.error : Colors.orange.shade900),
-                    const SizedBox(width: 6),
-                    Text(
-                      '$minutosStr:$segundosStr',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        color: isCritico ? colorScheme.error : Colors.orange.shade900,
-                      ),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isCritico ? colorScheme.errorContainer : Colors.amber.shade100,
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                  ],
-                ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.timer_outlined, size: 20, color: isCritico ? colorScheme.error : Colors.orange.shade900),
+                        const SizedBox(width: 6),
+                        Text(
+                          _tempoRestante == Duration.zero ? '00:00 (Aguardando)' : '$minutosStr:$segundosStr',
+                          style: TextStyle(
+                            fontSize: _tempoRestante == Duration.zero ? 12 : 18,
+                            fontWeight: FontWeight.w900,
+                            color: isCritico ? colorScheme.error : Colors.orange.shade900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  IconButton(
+                    tooltip: 'Fechar e ver outros pedidos',
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
               ),
             ],
           ),
+          if (_tempoRestante == Duration.zero)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              margin: const EdgeInsets.only(top: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF3C7),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFFDE68A)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline, size: 16, color: Color(0xFFB45309)),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Prazo sugerido de 3 min atingido. O pedido continua ativo aguardando a sua aceitação ou recusa.',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFFB45309)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           const Divider(height: 24),
 
           // Lista dos Itens do Pedido com personalizações

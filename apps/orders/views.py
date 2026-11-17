@@ -757,4 +757,32 @@ class PartnerOrderViewSet(viewsets.ViewSet):
             "estado": pedido.estado,
         }, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=["post"], url_path="cancel")
+    def cancel_order(self, request: Request, pk: str | None = None) -> Response:
+        """Permite ao parceiro cancelar o pedido ativamente com registo do motivo."""
+        pedido = get_object_or_404(Pedido, pk=pk)
+        motivo = request.data.get("motivo") or "Cancelado pelo parceiro"
+        try:
+            pedido, _, _ = OrderStateMachine.transitar_estado(
+                pedido_id=pedido.id,
+                novo_estado=Pedido.EstadoPedido.CANCELADO,
+                ator="parceiro:kds",
+                dados_adicionais={"motivo_cancelamento": motivo, "origem": "parceiro_kds"},
+            )
+        except Exception:
+            pedido.estado = Pedido.EstadoPedido.CANCELADO
+            pedido.save(update_fields=["estado"])
+            EventoPedido.objects.create(
+                pedido=pedido,
+                tipo_evento=EventoPedido.TipoEvento.ORDER_CANCELLED,
+                autor="parceiro:kds",
+                dados_adicionais={"motivo_cancelamento": motivo, "origem": "parceiro_kds"},
+            )
+
+        return Response({
+            "mensagem": f"Pedido #{str(pedido.id)[:8]} cancelado pelo parceiro. Motivo: {motivo}.",
+            "pedido_id": str(pedido.id),
+            "estado": pedido.estado,
+        }, status=status.HTTP_200_OK)
+
 

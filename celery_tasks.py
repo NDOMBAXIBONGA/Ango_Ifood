@@ -116,44 +116,21 @@ def task_timeout_aceitacao_parceiro(
                 "estado_atual": pedido.estado,
             }
 
-        # RN-075: Altera automaticamente o estado para REJEITADO com o ator 'SISTEMA'
-        motivo_rejeicao = (
-            f"RN-075: Rejeição automática por timeout de aceitação da loja "
-            f"após {timeout_segundos} segundos."
-        )
-
-        pedido, evento_rejeicao, transitou = OrderStateMachine.transitar_estado(
-            pedido_id=pedido.id,
-            novo_estado=Pedido.EstadoPedido.REJEITADO,
-            ator="SISTEMA",
-            dados_adicionais={
-                "motivo": motivo_rejeicao,
-                "timeout_segundos": timeout_segundos,
-                "loja_id": str(pedido.loja_id),
-                "loja_nome": pedido.loja.nome,
-                "regra": "RN-075",
-            },
-        )
-
-        # RN-075: Executa a rotina de reembolso integral ao cliente
-        reembolso_info = _executar_reembolso_integral_cliente(
-            pedido=pedido,
-            motivo=motivo_rejeicao,
-            ator="SISTEMA",
-        )
-
-        logger.warning(
-            "[RN-075] Pedido %s rejeitado com sucesso pelo SISTEMA. Reembolso processado: %s",
+        # Regra de Negócio Atualizada: O cancelamento pelo sistema foi revogado.
+        # Cancelamentos só podem ser efetuados ativamente pelo CLIENTE ou pelo PARCEIRO.
+        # O pedido permanece ativo em AGUARDA_PARCEIRO aguardando a decisão da loja ou cancelamento do cliente.
+        logger.info(
+            "[RN-075] Prazo de aceitação da loja (%ss) atingido para o Pedido %s. "
+            "Cancelamento automático pelo SISTEMA revogado. Pedido mantido ativo aguardando parceiro ou cliente.",
+            timeout_segundos,
             pedido_id,
-            reembolso_info,
         )
 
         return {
-            "status": "rejeitado_por_timeout",
+            "status": "aguardando_decisao_parceiro_ou_cliente",
             "pedido_id": str(pedido.id),
-            "novo_estado": pedido.estado,
-            "reembolso": reembolso_info,
-            "evento_id": str(evento_rejeicao.id) if evento_rejeicao else None,
+            "estado_atual": pedido.estado,
+            "cancelamento_sistema": False,
         }
 
 
