@@ -114,11 +114,28 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
   Future<void> _pickImageFromGallery() async {
     try {
       final picker = ImagePicker();
+      // Otimização de Performance: Redimensiona e comprime no dispositivo para evitar uploads pesados e erro 502
       final pickedFile = await picker.pickImage(
         source: ImageSource.gallery,
-        imageQuality: 85,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 75,
       );
       if (pickedFile == null) return;
+
+      final fileSizeBytes = await pickedFile.length();
+      if (fileSizeBytes > 8 * 1024 * 1024) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('A fotografia selecionada é demasiado pesada (máximo 8 MB). Escolha outra foto.'),
+              backgroundColor: Color(0xFFD97706),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
 
       setState(() {
         _isUploadingImage = true;
@@ -126,10 +143,10 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Row(
               children: [
-                SizedBox(
+                const SizedBox(
                   width: 16,
                   height: 16,
                   child: CircularProgressIndicator(
@@ -137,11 +154,11 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
                     color: Colors.white,
                   ),
                 ),
-                SizedBox(width: 12),
-                Text('A carregar imagem da galeria para o catálogo...'),
+                const SizedBox(width: 12),
+                Text('A enviar imagem otimizada (${(fileSizeBytes / 1024).round()} KB)...'),
               ],
             ),
-            duration: Duration(seconds: 4),
+            duration: const Duration(seconds: 10),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -149,6 +166,10 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
 
       final tokenStorage = SecureTokenStorage();
       final dio = createSecureDioClient(tokenStorage: tokenStorage);
+      dio.options.connectTimeout = const Duration(seconds: 30);
+      dio.options.sendTimeout = const Duration(seconds: 60);
+      dio.options.receiveTimeout = const Duration(seconds: 30);
+
       final partnerState = context.read<PartnerBloc>().state;
       final lojaId = partnerState.storeStatus?.id ?? '';
 
@@ -175,9 +196,10 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
           _imagemUrlController.text = url;
         });
         if (mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Fotografia carregada com sucesso!'),
+              content: Text('Fotografia carregada e guardada com sucesso!'),
               backgroundColor: Color(0xFF16A34A),
               behavior: SnackBarBehavior.floating,
             ),
@@ -185,11 +207,23 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
         }
       }
     } catch (e) {
+      String msgErro = 'Erro ao enviar imagem. Verifique a sua ligação.';
+      if (e is DioException) {
+        final code = e.response?.statusCode;
+        if (code == 502 || code == 503 || code == 504) {
+          msgErro = 'Servidor temporariamente ocupado (Erro $code). A imagem foi otimizada; tente novamente em instantes.';
+        } else if (code == 413) {
+          msgErro = 'Fotografia demasiado grande para envio. Escolha outra imagem.';
+        } else if (e.response?.data is Map && e.response?.data['erro'] != null) {
+          msgErro = e.response!.data['erro'].toString();
+        }
+      }
       if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro ao enviar imagem: $e'),
-            backgroundColor: Colors.red,
+            content: Text(msgErro),
+            backgroundColor: Colors.redAccent,
             behavior: SnackBarBehavior.floating,
           ),
         );

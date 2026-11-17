@@ -429,6 +429,14 @@ MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ==============================================================================
+# 11.1 OTIMIZAÇÃO DE UPLOAD DE MÍDIA E LIMITES DE TRANSMISSÃO
+# ==============================================================================
+# Permite uploads de imagens e vídeos de vitrine até 50 MB sem travar Daphne / Render
+DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024  # 50 MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024  # 50 MB
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 2000
+
+# ==============================================================================
 # 12. LOGGING ESTRUTURADO PARA PRODUÇÃO (CONSOLA / CONTENTORES)
 # ==============================================================================
 LOGGING = {

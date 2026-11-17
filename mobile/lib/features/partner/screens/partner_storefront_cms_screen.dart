@@ -131,15 +131,38 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
       if (isVideo) {
         pickedFile = await picker.pickVideo(
           source: ImageSource.gallery,
-          maxDuration: const Duration(minutes: 5),
+          maxDuration: const Duration(minutes: 3),
         );
       } else {
+        // Otimização de Performance: Redimensiona e comprime no cliente para evitar 502 e timeouts na rede móvel
         pickedFile = await picker.pickImage(
           source: ImageSource.gallery,
-          imageQuality: 85,
+          maxWidth: 1600,
+          maxHeight: 1600,
+          imageQuality: 75,
         );
       }
       if (pickedFile == null) return;
+
+      // Validação prévia de tamanho no telemóvel para economizar dados e assegurar resposta rápida
+      final fileSizeBytes = await pickedFile.length();
+      final limiteBytes = isVideo ? 25 * 1024 * 1024 : 8 * 1024 * 1024;
+      if (fileSizeBytes > limiteBytes) {
+        final tamanhoMb = (fileSizeBytes / (1024 * 1024)).toStringAsFixed(1);
+        final limiteMb = isVideo ? 25 : 8;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Ficheiro com $tamanhoMb MB. O limite máximo suportado é de $limiteMb MB para garantir rapidez e estabilidade. Escolha um ficheiro menor.',
+              ),
+              backgroundColor: const Color(0xFFD97706),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -155,21 +178,26 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
                   ),
                 ),
                 const SizedBox(width: 12),
-                Text(isVideo
-                    ? 'A carregar vídeo da galeria para o servidor...'
-                    : 'A carregar fotografia da galeria para a vitrine...'),
+                Expanded(
+                  child: Text(
+                    isVideo
+                        ? 'A enviar vídeo otimizado (${(fileSizeBytes / (1024 * 1024)).toStringAsFixed(1)} MB)...'
+                        : 'A enviar fotografia comprimida (${(fileSizeBytes / 1024).round()} KB)...',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
             ),
-            duration: const Duration(seconds: 4),
+            duration: const Duration(seconds: 15),
             behavior: SnackBarBehavior.floating,
           ),
         );
       }
 
       final authDio = await _buildAuthDio();
-      authDio.options.connectTimeout = const Duration(seconds: 120);
-      authDio.options.sendTimeout = const Duration(seconds: 180);
-      authDio.options.receiveTimeout = const Duration(seconds: 120);
+      authDio.options.connectTimeout = const Duration(seconds: 45);
+      authDio.options.sendTimeout = const Duration(seconds: 90);
+      authDio.options.receiveTimeout = const Duration(seconds: 45);
 
       final formData = FormData.fromMap({
         'arquivo': await MultipartFile.fromFile(
@@ -193,27 +221,44 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
         setState(() {
           onUploaded(uploadedUrl);
         });
-        // Salva e sincroniza automaticamente a nova mídia na base de dados
-        await _saveAllChanges();
+
         if (mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(isVideo
-                  ? 'Vídeo carregado e guardado fielmente na base de dados!'
-                  : 'Fotografia carregada e guardada fielmente na vitrine!'),
+                  ? 'Vídeo carregado e otimizado com sucesso!'
+                  : 'Fotografia carregada e guardada com sucesso!'),
               backgroundColor: const Color(0xFF16A34A),
               behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 3),
             ),
           );
         }
       }
     } catch (e) {
+      String msgErro = 'Falha ao exportar da galeria. Verifique a sua ligação.';
+      if (e is DioException) {
+        final code = e.response?.statusCode;
+        if (code == 502 || code == 503 || code == 504) {
+          msgErro = 'Servidor temporariamente ocupado (Erro $code). O ficheiro foi otimizado; por favor tente novamente em alguns segundos.';
+        } else if (code == 413) {
+          msgErro = 'Ficheiro demasiado pesado para o servidor. Escolha uma foto ou vídeo menor.';
+        } else if (e.type == DioExceptionType.connectionTimeout || e.type == DioExceptionType.sendTimeout) {
+          msgErro = 'A ligação à rede expirou antes de concluir o envio. Verifique a sua conexão à internet.';
+        } else if (e.response?.data is Map && e.response?.data['erro'] != null) {
+          msgErro = e.response!.data['erro'].toString();
+        }
+      }
+
       if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Falha ao exportar da galeria: $e'),
+            content: Text(msgErro),
             backgroundColor: Colors.redAccent,
             behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
           ),
         );
       }

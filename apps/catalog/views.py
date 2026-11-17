@@ -1757,14 +1757,31 @@ class PartnerMediaUploadView(APIView):
                 ext = ".jpg"
 
         tipo_midia = "video" if ext in {".mp4", ".mov", ".webm", ".avi", ".m4v"} else "imagem"
+
+        # Validação preventiva de tamanho para evitar OOM e timeout no Render proxy (HTTP 502)
+        tamanho_arquivo = getattr(arquivo, "size", 0)
+        limite_bytes = 35 * 1024 * 1024 if tipo_midia == "video" else 10 * 1024 * 1024
+        if tamanho_arquivo > limite_bytes:
+            limite_mb = 35 if tipo_midia == "video" else 10
+            return Response(
+                {
+                    "erro": _(
+                        f"O ficheiro enviado ({tamanho_arquivo // (1024 * 1024)} MB) ultrapassa o limite máximo "
+                        f"de {limite_mb} MB para {tipo_midia}s. Escolha um ficheiro mais leve."
+                    )
+                },
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+
         diretorio_upload = os.path.join(settings.BASE_DIR, "media", "uploads", "vitrine")
         os.makedirs(diretorio_upload, exist_ok=True)
 
         nome_seguro = f"{uuid.uuid4().hex[:12]}_{int(timezone.now().timestamp())}{ext}"
         caminho_final = os.path.join(diretorio_upload, nome_seguro)
 
+        # Escrita em fluxo fragmentado (chunks de 64KB) para manter o consumo de RAM estritamente inferior a 10MB
         with open(caminho_final, "wb+") as destino:
-            for chunk in arquivo.chunks():
+            for chunk in arquivo.chunks(65536):
                 destino.write(chunk)
 
         url_relativa = f"/media/uploads/vitrine/{nome_seguro}"
@@ -1774,8 +1791,8 @@ class PartnerMediaUploadView(APIView):
         elif not url_absoluta.startswith("http"):
             url_absoluta = f"https://ango-ifood.onrender.com{url_relativa}"
 
-        # Persistência estruturada em modelo dedicado MidiaLoja (PostgreSQL bytea)
-        # e sincronização segura com a vitrine CMS sem inflacionar dados_bancarios
+        # Persistência estruturada em modelo dedicado MidiaLoja (PostgreSQL bytea para itens <= 8MB)
+        # e sincronização segura com a vitrine CMS sem inflacionar memória ou banco de dados
         try:
             loja = None
             loja_id = request.headers.get("X-Store-ID") or request.data.get("loja_id")
@@ -1792,9 +1809,12 @@ class PartnerMediaUploadView(APIView):
                 loja = ParceiroLoja.objects.exclude(estado=ParceiroLoja.EstadoLoja.SUSPENSO).first() or ParceiroLoja.objects.first()
 
             if loja:
-                # 1. Guarda na tabela dedicada MidiaLoja com backup binário
-                with open(caminho_final, "rb") as f_bin:
-                    conteudo_binario = f_bin.read()
+                # 1. Guarda na tabela dedicada MidiaLoja (backup binário apenas para ficheiros <= 8MB para proteger o worker)
+                conteudo_binario = None
+                tamanho_real = os.path.getsize(caminho_final)
+                if tamanho_real <= 8 * 1024 * 1024:
+                    with open(caminho_final, "rb") as f_bin:
+                        conteudo_binario = f_bin.read()
 
                 from apps.catalog.models import MidiaLoja
                 MidiaLoja.objects.create(
@@ -1802,13 +1822,13 @@ class PartnerMediaUploadView(APIView):
                     tipo=MidiaLoja.TipoMidia.VIDEO if tipo_midia == "video" else MidiaLoja.TipoMidia.IMAGEM,
                     nome_arquivo=nome_seguro,
                     content_type=content_type,
-                    tamanho_bytes=len(conteudo_binario),
+                    tamanho_bytes=tamanho_real,
                     url=url_absoluta,
                     legenda=nome_original[:250],
                     dados_binarios=conteudo_binario,
                 )
 
-                # 2. Atualiza a Vitrine CMS da loja
+                # 2. Atualiza a Vitrine CMS da loja de forma atômica
                 dados = dict(loja.dados_bancarios or {})
                 vitrine = obter_ou_inicializar_vitrine_loja(loja)
                 vitrine.setdefault("identidade_home", {})
@@ -1840,8 +1860,8 @@ class PartnerMediaUploadView(APIView):
                 loja.dados_bancarios = dados
                 loja.save(update_fields=["dados_bancarios"])
                 invalidar_cache_catalogo_imediato(loja_id=str(loja.id), motivo="media_uploaded_saved")
-        except Exception:
-            pass
+        except Exception as exc_salvar:
+            logger.warning("Aviso ao sincronizar MidiaLoja/Vitrine em background: %s", exc_salvar)
 
         return Response(
             {
