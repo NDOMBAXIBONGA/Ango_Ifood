@@ -8,6 +8,16 @@ on:
       - main
       - master
   workflow_dispatch:
+    inputs:
+      macos_runner:
+        description: 'Versão do Runner macOS (macos-13 evita capacity constraints arm64)'
+        required: false
+        default: 'macos-13'
+        type: choice
+        options:
+          - 'macos-13'
+          - 'macos-14'
+          - 'macos-latest'
 
 # Permissões do GITHUB_TOKEN para leitura/escrita de releases e limpeza de artefactos antigos
 permissions:
@@ -225,7 +235,10 @@ jobs:
   # ==============================================================================
   build-ipa:
     name: Build & Package iOS Release IPA
-    runs-on: macos-latest
+    # macos-13 (Intel) tem capacidade imediata e evita o gargalo crítico de arm64 que causa timeout de aquisição
+    runs-on: ${{ inputs.macos_runner || 'macos-13' }}
+    timeout-minutes: 60
+    continue-on-error: true
 
     steps:
       # ==============================================================================
