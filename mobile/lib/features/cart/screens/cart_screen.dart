@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../auth/auth_bloc.dart';
+import '../../auth/storage/secure_token_storage.dart';
+import '../../auth/widgets/guest_auth_prompt_sheet.dart';
 import '../../catalog/customer_catalog_screens.dart';
 import '../../checkout/checkout_screen.dart';
 import '../services/cart_service.dart';
@@ -382,8 +386,38 @@ class CartScreen extends StatelessWidget {
     );
   }
 
-  void _navigateToCheckout(BuildContext context, CartService cart) {
+  Future<void> _navigateToCheckout(BuildContext context, CartService cart) async {
     if (cart.isEmpty || cart.lojaId == null) return;
+
+    // Guarda de Visitante (Guest Mode Checkout Gate):
+    // Visitantes navegam livremente e montam a sacola, mas a finalização exige autenticação
+    // para definir o endereço de entrega e emitir o código PIN de validação seguro
+    final token = await SecureTokenStorage().getAccessToken();
+    bool isAuthenticated = token != null && token.isNotEmpty;
+    if (!isAuthenticated) {
+      try {
+        final authState = context.read<AuthBloc>().state;
+        if (authState is AuthAuthenticated) {
+          isAuthenticated = true;
+        }
+      } catch (_) {}
+    }
+
+    if (!isAuthenticated) {
+      if (!context.mounted) return;
+      final authSuccess = await GuestAuthPromptSheet.show(
+        context,
+        lojaNome: cart.lojaNome,
+      );
+
+      // Se o utilizador não completou a autenticação, mantém o carrinho preservado e cancela o checkout
+      if (authSuccess != true) {
+        final recheckToken = await SecureTokenStorage().getAccessToken();
+        if (recheckToken == null || recheckToken.isEmpty) return;
+      }
+    }
+
+    if (!context.mounted) return;
 
     Navigator.of(context).push(
       MaterialPageRoute<void>(

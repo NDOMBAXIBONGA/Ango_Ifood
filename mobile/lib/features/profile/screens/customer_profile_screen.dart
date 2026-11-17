@@ -6,8 +6,10 @@ import '../../../core/network/app_environment_config.dart';
 import '../../auth/auth_bloc.dart';
 import '../../auth/auth_event.dart';
 import '../../auth/auth_state.dart';
+import '../../auth/screens/auth_screen.dart';
 import '../../auth/screens/role_selection_onboarding_screen.dart';
 import '../../auth/storage/secure_token_storage.dart';
+import '../../auth/theme/role_theme.dart';
 import '../../cart/cart.dart';
 import '../../catalog/customer_catalog_screens.dart';
 
@@ -164,19 +166,78 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                           ),
                         ],
                         const SizedBox(height: 10),
-                        OutlinedButton.icon(
-                          onPressed: () => _openEditProfileSheet(
-                            context,
-                            initialName: userName,
-                            initialEmail: userEmail,
-                            initialPhone: userPhone,
+                        if (userPhone.isEmpty && userEmail.isEmpty) ...[
+                          Container(
+                            margin: const EdgeInsets.only(top: 8),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF2F2),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: const Color(0xFFFECACA)),
+                            ),
+                            child: Column(
+                              children: [
+                                const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.person_outline, size: 20, color: Color(0xFFDC2626)),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'A navegar como Visitante',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF991B1B),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                const Text(
+                                  'Crie uma conta para salvar endereços favoritos, repetir pedidos e gerir dados de pagamento.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(fontSize: 12, color: Color(0xFF7F1D1D)),
+                                ),
+                                const SizedBox(height: 12),
+                                FilledButton.icon(
+                                  onPressed: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute<void>(
+                                        builder: (_) => const AuthScreen(
+                                          selectedRole: PlatformRole.cliente,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.login_rounded, size: 16),
+                                  label: const Text('Criar Conta / Iniciar Sessão'),
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: const Color(0xFFDC2626),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          icon: const Icon(Icons.person_outline, size: 18),
-                          label: const Text('Editar Dados Pessoais'),
-                          style: OutlinedButton.styleFrom(
-                            visualDensity: VisualDensity.compact,
+                        ] else ...[
+                          OutlinedButton.icon(
+                            onPressed: () => _openEditProfileSheet(
+                              context,
+                              initialName: userName,
+                              initialEmail: userEmail,
+                              initialPhone: userPhone,
+                            ),
+                            icon: const Icon(Icons.person_outline, size: 18),
+                            label: const Text('Editar Dados Pessoais'),
+                            style: OutlinedButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   ),

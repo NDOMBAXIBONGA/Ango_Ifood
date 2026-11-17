@@ -7,6 +7,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/role_theme.dart';
+import '../../catalog/customer_main_navigation_shell.dart';
 import 'auth_screen.dart';
 
 class RoleSelectionOnboardingScreen extends StatefulWidget {
@@ -56,6 +57,15 @@ class _RoleSelectionOnboardingScreenState
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => AuthScreen(selectedRole: _selectedRole),
+      ),
+    );
+  }
+
+  void _exploreAsGuest() {
+    RoleThemeManager.instance.setRole(PlatformRole.cliente);
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => const CustomerMainNavigationShell(),
       ),
     );
   }
@@ -168,7 +178,9 @@ class _RoleSelectionOnboardingScreenState
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        'Continuar como ${_selectedRole.title}',
+                        _selectedRole == PlatformRole.cliente
+                            ? 'Criar Conta ou Iniciar Sessão'
+                            : 'Continuar como ${_selectedRole.title}',
                         style: const TextStyle(
                           fontSize: 16.0,
                           fontWeight: FontWeight.w700,
@@ -180,6 +192,30 @@ class _RoleSelectionOnboardingScreenState
                     ],
                   ),
                 ),
+
+                // Modo Visitante (Guest Mode) para Clientes: Permite explorar livremente antes de comprar
+                if (_selectedRole == PlatformRole.cliente) ...[
+                  const SizedBox(height: 10.0),
+                  OutlinedButton.icon(
+                    onPressed: _exploreAsGuest,
+                    icon: const Icon(Icons.explore_outlined, size: 20.0),
+                    label: const Text(
+                      'Explorar Cardápio como Visitante',
+                      style: TextStyle(
+                        fontSize: 15.0,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFFDC2626),
+                      side: const BorderSide(color: Color(0xFFDC2626), width: 1.5),
+                      padding: const EdgeInsets.symmetric(vertical: 16.0),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16.0),
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 8.0),
               ],
             ),
