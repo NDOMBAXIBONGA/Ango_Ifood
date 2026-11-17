@@ -530,7 +530,11 @@ class StorefrontVitrineModel extends Equatable {
       gpsLinkExterno: (loc['gps_link_externo'] ?? '').toString(),
       latitude: (loc['latitude'] as num?)?.toDouble() ?? -8.8368,
       longitude: (loc['longitude'] as num?)?.toDouble() ?? 13.2343,
-      horariosSemanal: (rawHorarios ?? const [])
+      horariosSemanal: ((rawHorarios != null && rawHorarios.isNotEmpty)
+              ? rawHorarios
+              : ((loc['horarios'] as List<dynamic>?) ??
+                  (json['horarios'] as List<dynamic>?) ??
+                  const []))
           .whereType<Map<String, dynamic>>()
           .toList(),
     );
@@ -3440,7 +3444,7 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.email_outlined),
                   title: const Text('E-mail & Eventos'),
-                  subtitle: Text('$vitrine.emailContacto • ${vitrine.instagram}'),
+                  subtitle: Text('${vitrine.emailContacto} • ${vitrine.instagram}'),
                 ),
               ],
             ),
@@ -3448,7 +3452,7 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
         ),
         const SizedBox(height: 16),
 
-        // 3. Horário de Funcionamento Semanal
+        // 3. Horário de Funcionamento Semanal (RN-012)
         Card(
           elevation: 0,
           shape: RoundedRectangleBorder(
@@ -3477,11 +3481,21 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
                   final matching = vitrine.horariosSemanal
                       .where((h) => (h['dia_semana'] as num?)?.toInt() == diaIndex)
                       .toList();
-                  final horarioTexto = matching.isNotEmpty
-                      ? '${matching.first['hora_abertura']?.toString().substring(0, 5) ?? '08:00'} às ${matching.first['hora_fecho']?.toString().substring(0, 5) ?? '23:00'}'
-                      : '08:00 às 23:00';
+                  final bool isAberto = matching.isNotEmpty;
+                  final String horarioTexto;
+                  if (isAberto) {
+                    final h = matching.first;
+                    final ab = h['hora_abertura']?.toString();
+                    final fe = h['hora_fecho']?.toString();
+                    final abFmt = (ab != null && ab.length >= 5) ? ab.substring(0, 5) : '08:00';
+                    final feFmt = (fe != null && fe.length >= 5) ? fe.substring(0, 5) : '22:00';
+                    horarioTexto = '$abFmt às $feFmt';
+                  } else {
+                    horarioTexto = 'Encerrado';
+                  }
+
                   return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    padding: const EdgeInsets.symmetric(vertical: 5),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -3489,13 +3503,27 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
                           diasNomes[diaIndex],
                           style: textTheme.bodyMedium?.copyWith(
                             fontWeight: FontWeight.w600,
+                            color: isAberto ? null : const Color(0xFF64748B),
                           ),
                         ),
-                        Text(
-                          horarioTexto,
-                          style: textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.primary,
-                            fontWeight: FontWeight.bold,
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isAberto ? 0 : 8,
+                            vertical: isAberto ? 0 : 2,
+                          ),
+                          decoration: isAberto
+                              ? null
+                              : BoxDecoration(
+                                  color: const Color(0xFFF1F5F9),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                          child: Text(
+                            horarioTexto,
+                            style: textTheme.bodyMedium?.copyWith(
+                              color: isAberto ? colorScheme.primary : const Color(0xFF64748B),
+                              fontWeight: isAberto ? FontWeight.bold : FontWeight.w600,
+                              fontSize: isAberto ? 14 : 12.5,
+                            ),
                           ),
                         ),
                       ],

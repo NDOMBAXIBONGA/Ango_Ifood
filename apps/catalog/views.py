@@ -666,6 +666,11 @@ class StoreDiscoveryViewSet(viewsets.ReadOnlyModelViewSet):
         horarios_qs = loja.horarios.all().order_by("dia_semana", "hora_abertura")
         horarios_data = HorarioFuncionamentoSerializer(horarios_qs, many=True).data
 
+        # Garante injeção dos horários operacionais reais da loja na vitrine
+        vitrine["horarios"] = horarios_data
+        vitrine.setdefault("localizacao_contacto", {})
+        vitrine["localizacao_contacto"]["horarios"] = horarios_data
+
         return Response(
             {
                 "loja_id": str(loja.id),
@@ -1438,17 +1443,29 @@ class PartnerStoreHoursView(PartnerCatalogBaseMixin, APIView):
         ]
         HorarioFuncionamento.objects.bulk_create(novos_horarios)
 
+        horarios_atualizados = loja.horarios.all().order_by("dia_semana", "hora_abertura")
+        horarios_serializados = HorarioFuncionamentoSerializer(horarios_atualizados, many=True).data
+
+        # Sincronização 100% imediata da Vitrine CMS com os novos horários configurados pelo parceiro
+        vitrine = obter_ou_inicializar_vitrine_loja(loja)
+        vitrine.setdefault("localizacao_contacto", {})
+        vitrine["localizacao_contacto"]["horarios"] = horarios_serializados
+        vitrine["horarios"] = horarios_serializados
+        dados = dict(loja.dados_bancarios or {})
+        dados["vitrine_cms"] = vitrine
+        loja.dados_bancarios = dados
+        loja.save(update_fields=["dados_bancarios"])
+
         invalidar_cache_catalogo_imediato(
             loja_id=str(loja.id),
             motivo="store_hours_matrix_updated_rn012",
         )
 
-        horarios_atualizados = loja.horarios.all().order_by("dia_semana", "hora_abertura")
         return Response(
             {
                 "mensagem": _("RN-012: Matriz semanal de horários atualizada com sucesso."),
                 "loja_id": str(loja.id),
-                "horarios": HorarioFuncionamentoSerializer(horarios_atualizados, many=True).data,
+                "horarios": horarios_serializados,
             },
             status=status.HTTP_200_OK,
         )
