@@ -388,7 +388,32 @@ jobs:
           fi
 
       # ==============================================================================
-      # Passo 9: Upload do Artefacto IPA para download no GitHub Actions
+      # Passo 9: Recolha e Publicação do Artefacto IPA (GitHub Releases & Portal Web)
+      # ==============================================================================
+      - name: Recolher e Sincronizar Artefacto IPA
+        working-directory: mobile
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          IPA_PATH=$(find build/ios/ipa -name "*.ipa" | head -n 1)
+          if [ -n "$IPA_PATH" ] && [ -f "$IPA_PATH" ]; then
+            IPA_SIZE=$(du -h "$IPA_PATH" | cut -f1)
+            echo "Artefacto IPA validado ($IPA_SIZE): $IPA_PATH"
+
+            echo "A publicar IPA na Release oficial 'latest' do GitHub..."
+            if gh release view latest >/dev/null 2>&1; then
+              gh release upload latest "$IPA_PATH#app-release.ipa" --clobber || true
+            fi
+
+            echo "A sincronizar IPA com o portal web de download (https://ango-ifood.onrender.com/ipa/upload/)..."
+            curl -s --retry 5 --retry-delay 3 --max-time 30 https://ango-ifood.onrender.com/healthz/ || true
+            curl -s --retry 3 --retry-delay 5 -F "ipa=@$IPA_PATH" https://ango-ifood.onrender.com/ipa/upload/ || true
+          else
+            echo "Aviso: Nenhum pacote .ipa encontrado para sincronização de portal."
+          fi
+
+      # ==============================================================================
+      # Passo 10: Upload do Artefacto IPA para download no GitHub Actions
       # ==============================================================================
       - name: Disponibilizar Artefacto IPA (GitHub Actions Artifacts)
         uses: actions/upload-artifact@v4
