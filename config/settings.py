@@ -146,6 +146,8 @@ MIDDLEWARE = [
     # CORS em primeiro lugar absoluto para interceptar preflight OPTIONS e cabeçalhos de clientes móveis/APK
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    # Compressão HTTP Gzip automática para respostas JSON e estáticas em redes lentas (2G/3G/4G)
+    "django.middleware.gzip.GZipMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",

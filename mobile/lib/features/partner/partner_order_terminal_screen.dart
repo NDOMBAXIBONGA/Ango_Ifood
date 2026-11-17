@@ -469,43 +469,57 @@ class _PartnerOrderTerminalScreenState extends State<PartnerOrderTerminalScreen>
   final Set<String> _notifiedOrderIds = {};
   bool _mostrarHistorico = false;
   bool _isCarregando = false;
+  bool _isRequestInFlight = false;
+  late final Dio _kdsDioClient;
 
   @override
   void initState() {
     super.initState();
     _terminalBloc = PartnerTerminalBloc();
+    _kdsDioClient = Dio(
+      BaseOptions(
+        baseUrl: AppEnvironmentConfig.baseHttpUrl,
+        connectTimeout: const Duration(seconds: 25),
+        receiveTimeout: const Duration(seconds: 25),
+        headers: {
+          'Accept': 'application/json',
+          'Accept-Encoding': 'gzip, deflate, br',
+        },
+      ),
+    );
     _iniciarSincronizacaoPedidos();
   }
 
   void _iniciarSincronizacaoPedidos() {
     _carregarPedidosDoServidor();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+    // Polling inteligente e suave: executa a cada 5 segundos respeitando se a requisição anterior já concluiu
+    _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _carregarPedidosDoServidor();
     });
   }
 
   Future<void> _carregarPedidosDoServidor({bool showLoading = false}) async {
+    // Proteção estrita contra saturação de rede lenta: nunca empilha requisições concorrentes
+    if (_isRequestInFlight) return;
+    _isRequestInFlight = true;
+
     if (showLoading && mounted) {
       setState(() => _isCarregando = true);
     }
     try {
       final token = await SecureTokenStorage().getAccessToken();
-      final dio = Dio(
-        BaseOptions(
-          baseUrl: AppEnvironmentConfig.baseHttpUrl,
-          connectTimeout: const Duration(seconds: 10),
-          receiveTimeout: const Duration(seconds: 10),
+      final endpoint = _mostrarHistorico
+          ? '/api/v1/partner/store/orders/?historico=true'
+          : '/api/v1/partner/store/orders/';
+
+      final resp = await _kdsDioClient.get<List<dynamic>>(
+        endpoint,
+        options: Options(
           headers: {
             if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
           },
         ),
       );
-
-      final endpoint = _mostrarHistorico
-          ? '/api/v1/partner/store/orders/?historico=true'
-          : '/api/v1/partner/store/orders/';
-
-      final resp = await dio.get<List<dynamic>>(endpoint);
       if (resp.data != null && mounted) {
         final List<IncomingPartnerOrder> lista = [];
 
@@ -562,6 +576,7 @@ class _PartnerOrderTerminalScreenState extends State<PartnerOrderTerminalScreen>
       }
     } catch (_) {
     } finally {
+      _isRequestInFlight = false;
       if (showLoading && mounted) {
         setState(() => _isCarregando = false);
       }
