@@ -4,6 +4,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/network/app_environment_config.dart';
+import '../../../core/widgets/ango_network_image.dart';
+import '../../../core/widgets/ango_video_player_widget.dart';
 import '../../auth/storage/secure_token_storage.dart';
 import '../../catalog/customer_catalog_screens.dart';
 
@@ -733,19 +735,13 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
             if (_heroImagemUrlCtrl.text.trim().isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: ClipRRect(
+                child: AngoNetworkImage(
+                  imageUrl: _heroImagemUrlCtrl.text.trim(),
+                  height: 180,
+                  width: double.infinity,
                   borderRadius: BorderRadius.circular(14),
-                  child: AspectRatio(
-                    aspectRatio: 16 / 9,
-                    child: Image.network(
-                      _heroImagemUrlCtrl.text.trim(),
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: Colors.grey.shade200,
-                        child: const Icon(Icons.broken_image_outlined),
-                      ),
-                    ),
-                  ),
+                  fit: BoxFit.cover,
+                  fallbackIcon: Icons.image_rounded,
                 ),
               ),
             TextField(
@@ -783,6 +779,7 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
             const SizedBox(height: 12),
             TextField(
               controller: _heroVideoUrlCtrl,
+              onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
                 labelText: 'URL do Vídeo em Destaque dos Pratos Principais (MP4)',
                 prefixIcon: const Icon(Icons.videocam_rounded),
@@ -792,7 +789,10 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
                   tooltip: 'Escolher Vídeo da Galeria',
                   onPressed: () => _pickAndUploadMedia(
                     isVideo: true,
-                    onUploaded: (url) => _heroVideoUrlCtrl.text = url,
+                    onUploaded: (url) {
+                      _heroVideoUrlCtrl.text = url;
+                      setState(() {});
+                    },
                   ),
                 ),
               ),
@@ -803,7 +803,10 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
               child: TextButton.icon(
                 onPressed: () => _pickAndUploadMedia(
                   isVideo: true,
-                  onUploaded: (url) => _heroVideoUrlCtrl.text = url,
+                  onUploaded: (url) {
+                    _heroVideoUrlCtrl.text = url;
+                    setState(() {});
+                  },
                 ),
                 icon: const Icon(Icons.video_call_rounded, size: 18, color: Color(0xFFE11D48)),
                 label: const Text(
@@ -812,6 +815,14 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
                 ),
               ),
             ),
+            if (_heroVideoUrlCtrl.text.trim().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: AngoVideoPlayerWidget(
+                  videoUrl: _heroVideoUrlCtrl.text.trim(),
+                  thumbnailUrl: _heroImagemUrlCtrl.text.trim(),
+                ),
+              ),
             const SizedBox(height: 12),
             TextField(
               controller: _logoUrlCtrl,
@@ -860,16 +871,13 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
               return Card(
                 margin: const EdgeInsets.only(bottom: 8),
                 child: ListTile(
-                  leading: ClipRRect(
+                  leading: AngoNetworkImage(
+                    imageUrl: (item['midia_url'] ?? '').toString(),
+                    width: 48,
+                    height: 48,
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      (item['midia_url'] ?? '').toString(),
-                      width: 48,
-                      height: 48,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) =>
-                          const Icon(Icons.restaurant_menu_rounded),
-                    ),
+                    fit: BoxFit.cover,
+                    fallbackIcon: Icons.restaurant_menu_rounded,
                   ),
                   title: Text(
                     (item['titulo'] ?? '').toString(),
@@ -957,18 +965,13 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
           children: [
             Row(
               children: [
-                ClipRRect(
+                AngoNetworkImage(
+                  imageUrl: _chefFotoUrlCtrl.text.trim(),
+                  width: 64,
+                  height: 64,
                   borderRadius: BorderRadius.circular(32),
-                  child: Image.network(
-                    _chefFotoUrlCtrl.text.trim(),
-                    width: 64,
-                    height: 64,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const CircleAvatar(
-                      radius: 32,
-                      child: Icon(Icons.person_rounded),
-                    ),
-                  ),
+                  fit: BoxFit.cover,
+                  fallbackIcon: Icons.person_rounded,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -1051,9 +1054,13 @@ class _PartnerStorefrontCmsScreenState extends State<PartnerStorefrontCmsScreen>
               return Card(
                 margin: const EdgeInsets.only(bottom: 8),
                 child: ListTile(
-                  leading: Icon(
-                    isVideo ? Icons.videocam_rounded : Icons.photo_rounded,
-                    color: const Color(0xFF1E88E5),
+                  leading: AngoNetworkImage(
+                    imageUrl: (media['url'] ?? '').toString(),
+                    width: 48,
+                    height: 48,
+                    borderRadius: BorderRadius.circular(8),
+                    fit: BoxFit.cover,
+                    fallbackIcon: isVideo ? Icons.videocam_rounded : Icons.photo_rounded,
                   ),
                   title: Text(
                     (media['legenda'] ?? 'Mídia').toString(),

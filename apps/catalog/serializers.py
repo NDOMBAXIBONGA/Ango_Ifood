@@ -137,6 +137,20 @@ class DiscoveryQueryParamsSerializer(serializers.Serializer):
         return attrs
 
 
+def sanitizar_url_midia_absoluta(url: str | None) -> str:
+    """Garante que qualquer caminho de mídia relativo ou HTTP seja transformado em URI absoluta HTTPS."""
+    if not url:
+        return ""
+    u = str(url).strip()
+    if not u:
+        return ""
+    if u.startswith("/media/"):
+        return f"https://ango-ifood.onrender.com{u}"
+    if u.startswith("http://ango-ifood.onrender.com"):
+        return u.replace("http://", "https://", 1)
+    return u
+
+
 class StoreDiscoverySerializer(serializers.ModelSerializer):
     """
     Serializer de listagem de lojas para Descoberta e Pesquisa (RN-025 a RN-029).
@@ -195,10 +209,16 @@ class StoreDiscoverySerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_imagem_url(self, obj: ParceiroLoja) -> str:
-        return (
-            getattr(obj, "imagem_url", None)
-            or "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800"
-        )
+        dados = obj.dados_bancarios if isinstance(obj.dados_bancarios, dict) else {}
+        vitrine = dados.get("vitrine_cms") if isinstance(dados.get("vitrine_cms"), dict) else {}
+        home = vitrine.get("identidade_home") if isinstance(vitrine.get("identidade_home"), dict) else {}
+        hero_img = home.get("hero_imagem_url") or home.get("logo_url")
+        if hero_img:
+            return sanitizar_url_midia_absoluta(hero_img)
+        img = getattr(obj, "imagem_url", None)
+        if img:
+            return sanitizar_url_midia_absoluta(img)
+        return "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800"
 
     def get_tipo_cozinha(self, obj: ParceiroLoja) -> str:
         cat = obj.categorias.first()
@@ -709,6 +729,13 @@ class PartnerItemMenuSerializer(serializers.ModelSerializer):
 
         self._disparar_sincronizacao_catalogo(instance, motivo=motivo)
         return instance
+
+    def to_representation(self, instance: ItemMenu) -> dict[str, Any]:
+        ret = super().to_representation(instance)
+        if ret.get("imagem_url"):
+            ret["imagem_url"] = sanitizar_url_midia_absoluta(ret["imagem_url"])
+        return ret
+
 
 
 # ==============================================================================

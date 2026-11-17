@@ -4,6 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/network/app_environment_config.dart';
+import '../../../core/network/dio_client.dart';
+import '../../../core/widgets/ango_network_image.dart';
+import '../../auth/storage/secure_token_storage.dart';
 import '../bloc/partner_bloc.dart';
 import '../models/partner_models.dart';
 
@@ -144,7 +147,11 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
         );
       }
 
-      final dio = Dio(BaseOptions(baseUrl: AppEnvironmentConfig.baseHttpUrl));
+      final tokenStorage = const SecureTokenStorage();
+      final dio = await createSecureDioClient(tokenStorage: tokenStorage);
+      final partnerState = context.read<PartnerBloc>().state;
+      final lojaId = partnerState.storeProfile?.id ?? '';
+
       final formData = FormData.fromMap({
         'arquivo': await MultipartFile.fromFile(
           pickedFile.path,
@@ -155,6 +162,11 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
       final resp = await dio.post<Map<String, dynamic>>(
         '/api/v1/partner/store/upload/',
         data: formData,
+        options: Options(
+          headers: {
+            if (lojaId.isNotEmpty) 'X-Store-ID': lojaId,
+          },
+        ),
       );
 
       if (resp.data != null && resp.data!['url'] != null) {
@@ -307,12 +319,12 @@ class _ItemEditorFormDialogState extends State<ItemEditorFormDialog> {
                                 height: 90,
                                 color: colorScheme.surfaceContainerHighest,
                                 child: _imagemUrlController.text.isNotEmpty
-                                    ? Image.network(
-                                        _imagemUrlController.text,
+                                    ? AngoNetworkImage(
+                                        imageUrl: _imagemUrlController.text,
+                                        width: 90,
+                                        height: 90,
                                         fit: BoxFit.cover,
-                                        errorBuilder: (_, __, ___) => const Center(
-                                          child: Icon(Icons.broken_image, size: 32),
-                                        ),
+                                        fallbackIcon: Icons.fastfood,
                                       )
                                     : const Center(
                                         child: Icon(Icons.fastfood, size: 36, color: Colors.grey),

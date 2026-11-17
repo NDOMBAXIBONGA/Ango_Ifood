@@ -126,6 +126,47 @@ def limpar_artigos_estaticos_seed(loja: ParceiroLoja | None = None) -> None:
         pass
 
 
+def sanitizar_url_midia_absoluta(url: str | None) -> str:
+    """Garante que qualquer caminho de mídia relativo ou HTTP seja transformado em URI absoluta HTTPS."""
+    if not url:
+        return ""
+    u = str(url).strip()
+    if not u:
+        return ""
+    if u.startswith("/media/"):
+        return f"https://ango-ifood.onrender.com{u}"
+    if u.startswith("http://ango-ifood.onrender.com"):
+        return u.replace("http://", "https://", 1)
+    return u
+
+
+def sanitizar_urls_vitrine(vitrine: dict[str, Any]) -> dict[str, Any]:
+    """Sanitiza recursivamente todas as URLs de fotografias e vídeos da Vitrine Digital."""
+    if not isinstance(vitrine, dict):
+        return vitrine
+    home = vitrine.get("identidade_home")
+    if isinstance(home, dict):
+        for k in ("hero_imagem_url", "hero_video_url", "logo_url"):
+            if home.get(k):
+                home[k] = sanitizar_url_midia_absoluta(home[k])
+        pratos = home.get("pratos_destaque")
+        if isinstance(pratos, list):
+            for p in pratos:
+                if isinstance(p, dict) and p.get("midia_url"):
+                    p["midia_url"] = sanitizar_url_midia_absoluta(p["midia_url"])
+
+    sobre = vitrine.get("sobre_nos")
+    if isinstance(sobre, dict):
+        if sobre.get("chef_foto_url"):
+            sobre["chef_foto_url"] = sanitizar_url_midia_absoluta(sobre["chef_foto_url"])
+        galeria = sobre.get("galeria_midia")
+        if isinstance(galeria, list):
+            for g in galeria:
+                if isinstance(g, dict) and g.get("url"):
+                    g["url"] = sanitizar_url_midia_absoluta(g["url"])
+    return vitrine
+
+
 def obter_ou_inicializar_vitrine_loja(loja: ParceiroLoja) -> dict[str, Any]:
     """
     Obtém ou inicializa a configuração completa da Vitrine Digital (CMS) da loja:
@@ -284,7 +325,7 @@ def obter_ou_inicializar_vitrine_loja(loja: ParceiroLoja) -> dict[str, Any]:
         loja.dados_bancarios = dados
         loja.save(update_fields=["dados_bancarios"])
 
-    return dados["vitrine_cms"]
+    return sanitizar_urls_vitrine(dados["vitrine_cms"])
 
 
 # ==============================================================================
@@ -1730,20 +1771,44 @@ class PartnerMediaUploadView(APIView):
         url_absoluta = request.build_absolute_uri(url_relativa)
         if "onrender.com" in url_absoluta and url_absoluta.startswith("http://"):
             url_absoluta = url_absoluta.replace("http://", "https://", 1)
+        elif not url_absoluta.startswith("http"):
+            url_absoluta = f"https://ango-ifood.onrender.com{url_relativa}"
 
-        # Se houver loja associada, assegura a persistência fiel imediata dos dados tanto em disco como na base de dados PostgreSQL
+        # Persistência estruturada em modelo dedicado MidiaLoja (PostgreSQL bytea)
+        # e sincronização segura com a vitrine CMS sem inflacionar dados_bancarios
         try:
-            import base64
             loja = None
             loja_id = request.headers.get("X-Store-ID") or request.data.get("loja_id")
             if loja_id:
-                loja = ParceiroLoja.objects.filter(pk=loja_id).first()
+                try:
+                    loja = ParceiroLoja.objects.filter(pk=loja_id).first()
+                except Exception:
+                    pass
             if not loja and request.user and request.user.is_authenticated:
                 loja = getattr(request.user, "loja", None) or getattr(request.user, "loja_parceiro", None)
+                if not loja and hasattr(request.user, "lojas_geridas"):
+                    loja = request.user.lojas_geridas.first()
             if not loja:
-                loja = ParceiroLoja.objects.first()
+                loja = ParceiroLoja.objects.exclude(estado=ParceiroLoja.EstadoLoja.SUSPENSO).first() or ParceiroLoja.objects.first()
 
             if loja:
+                # 1. Guarda na tabela dedicada MidiaLoja com backup binário
+                with open(caminho_final, "rb") as f_bin:
+                    conteudo_binario = f_bin.read()
+
+                from apps.catalog.models import MidiaLoja
+                MidiaLoja.objects.create(
+                    loja=loja,
+                    tipo=MidiaLoja.TipoMidia.VIDEO if tipo_midia == "video" else MidiaLoja.TipoMidia.IMAGEM,
+                    nome_arquivo=nome_seguro,
+                    content_type=content_type,
+                    tamanho_bytes=len(conteudo_binario),
+                    url=url_absoluta,
+                    legenda=nome_original[:250],
+                    dados_binarios=conteudo_binario,
+                )
+
+                # 2. Atualiza a Vitrine CMS da loja
                 dados = dict(loja.dados_bancarios or {})
                 vitrine = obter_ou_inicializar_vitrine_loja(loja)
                 vitrine.setdefault("identidade_home", {})
@@ -1766,24 +1831,11 @@ class PartnerMediaUploadView(APIView):
                         "legenda": f"Foto: {nome_original[:30]}",
                     })
 
-                vitrine["sobre_nos"]["galeria_midia"] = galeria[:12]
+                vitrine["sobre_nos"]["galeria_midia"] = galeria[:20]
                 dados["vitrine_cms"] = vitrine
 
-                # Backup persistente em PostgreSQL caso o contentor Render seja reiniciado (ficheiros até 15MB)
-                if arquivo.size <= 15 * 1024 * 1024:
-                    try:
-                        with open(caminho_final, "rb") as f_bin:
-                            conteudo_b64 = base64.b64encode(f_bin.read()).decode("ascii")
-                        arquivos_salvos = dict(dados.get("arquivos_binarios") or {})
-                        arquivos_salvos[nome_seguro] = {
-                            "b64": conteudo_b64,
-                            "content_type": content_type,
-                            "tipo": tipo_midia,
-                            "tamanho": arquivo.size,
-                        }
-                        dados["arquivos_binarios"] = arquivos_salvos
-                    except Exception:
-                        pass
+                # Desincha dados_bancarios removendo dumps binários antigos para prevenir OOM no Render
+                dados.pop("arquivos_binarios", None)
 
                 loja.dados_bancarios = dados
                 loja.save(update_fields=["dados_bancarios"])
@@ -1809,7 +1861,8 @@ class MediaStreamView(APIView):
     """
     Serve ficheiros de mídia estáticos e uploads com suporte a HTTP 206 Partial Content
     e cabeçalhos 'Range', permitindo reprodução de vídeo fluida em Android/iOS e navegadores.
-    Restaura automaticamente ficheiros a partir do PostgreSQL se o disco temporário do Render for reiniciado.
+    Restaura automaticamente ficheiros a partir da tabela PostgreSQL `MidiaLoja`
+    se o disco temporário do Render for reiniciado.
     """
 
     authentication_classes = [OptionalJWTAuthentication]
@@ -1827,21 +1880,38 @@ class MediaStreamView(APIView):
         # Auto-recuperação do banco de dados se o contentor efêmero do Render tiver sido reiniciado
         if not os.path.isfile(caminho_ficheiro):
             nome_ficheiro = os.path.basename(caminho_ficheiro)
-            import base64
-            for loja in ParceiroLoja.objects.exclude(dados_bancarios__isnull=True)[:20]:
-                dados = loja.dados_bancarios if isinstance(loja.dados_bancarios, dict) else {}
-                arquivos = dados.get("arquivos_binarios") if isinstance(dados.get("arquivos_binarios"), dict) else {}
-                if nome_ficheiro in arquivos:
-                    info = arquivos[nome_ficheiro]
-                    b64_data = info.get("b64")
-                    if b64_data:
-                        try:
-                            os.makedirs(os.path.dirname(caminho_ficheiro), exist_ok=True)
-                            with open(caminho_ficheiro, "wb") as f_out:
-                                f_out.write(base64.b64decode(b64_data))
-                            break
-                        except Exception:
-                            pass
+
+            # 1. Recuperação rápida a partir do modelo dedicado MidiaLoja
+            recuperado = False
+            try:
+                from apps.catalog.models import MidiaLoja
+                midia_cadastrada = MidiaLoja.objects.filter(nome_arquivo=nome_ficheiro).first()
+                if midia_cadastrada and midia_cadastrada.dados_binarios:
+                    os.makedirs(os.path.dirname(caminho_ficheiro), exist_ok=True)
+                    with open(caminho_ficheiro, "wb") as f_out:
+                        f_out.write(bytes(midia_cadastrada.dados_binarios))
+                    recuperado = True
+            except Exception:
+                pass
+
+            # 2. Fallback legado em dados_bancarios['arquivos_binarios']
+            if not recuperado:
+                import base64
+                for loja in ParceiroLoja.objects.exclude(dados_bancarios__isnull=True)[:20]:
+                    dados = loja.dados_bancarios if isinstance(loja.dados_bancarios, dict) else {}
+                    arquivos = dados.get("arquivos_binarios") if isinstance(dados.get("arquivos_binarios"), dict) else {}
+                    if nome_ficheiro in arquivos:
+                        info = arquivos[nome_ficheiro]
+                        b64_data = info.get("b64")
+                        if b64_data:
+                            try:
+                                os.makedirs(os.path.dirname(caminho_ficheiro), exist_ok=True)
+                                with open(caminho_ficheiro, "wb") as f_out:
+                                    f_out.write(base64.b64decode(b64_data))
+                                recuperado = True
+                                break
+                            except Exception:
+                                pass
 
         if not os.path.isfile(caminho_ficheiro):
             from django.http import Http404
@@ -1880,6 +1950,9 @@ class MediaStreamView(APIView):
             resp["Content-Length"] = str(tamanho_total)
             resp["Accept-Ranges"] = "bytes"
             resp["Access-Control-Allow-Origin"] = "*"
+            resp["Access-Control-Allow-Headers"] = "Range, Content-Type, Accept"
+            resp["Access-Control-Expose-Headers"] = "Content-Range, Content-Length, Accept-Ranges"
+            resp["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=604800"
             return resp
 
         range_match = re.match(r"bytes=(\d+)-(\d*)", range_header)
@@ -1890,6 +1963,9 @@ class MediaStreamView(APIView):
             resp["Content-Length"] = str(tamanho_total)
             resp["Accept-Ranges"] = "bytes"
             resp["Access-Control-Allow-Origin"] = "*"
+            resp["Access-Control-Allow-Headers"] = "Range, Content-Type, Accept"
+            resp["Access-Control-Expose-Headers"] = "Content-Range, Content-Length, Accept-Ranges"
+            resp["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=604800"
             return resp
 
         inicio = int(range_match.group(1))
@@ -1907,6 +1983,9 @@ class MediaStreamView(APIView):
         resp["Content-Length"] = str(comprimento)
         resp["Accept-Ranges"] = "bytes"
         resp["Access-Control-Allow-Origin"] = "*"
+        resp["Access-Control-Allow-Headers"] = "Range, Content-Type, Accept"
+        resp["Access-Control-Expose-Headers"] = "Content-Range, Content-Length, Accept-Ranges"
+        resp["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=604800"
         return resp
 
 

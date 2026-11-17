@@ -17,6 +17,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/network/app_environment_config.dart';
+import '../../core/widgets/ango_network_image.dart';
+import '../../core/widgets/ango_video_player_widget.dart';
 import '../auth/storage/secure_token_storage.dart';
 import '../cart/cart.dart';
 import '../checkout/checkout_screen.dart';
@@ -1545,17 +1547,10 @@ class _StoreDiscoveryCard extends StatelessWidget {
                         ]),
                   child: AspectRatio(
                     aspectRatio: 16 / 8,
-                    child: Image.network(
-                      store.imagemUrl,
+                    child: AngoNetworkImage(
+                      imageUrl: store.imagemUrl,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: colorScheme.surfaceContainerHighest,
-                        child: Icon(
-                          Icons.storefront_rounded,
-                          size: 48,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
+                      fallbackIcon: Icons.storefront_rounded,
                     ),
                   ),
                 ),
@@ -1940,12 +1935,10 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
                         background: Stack(
                           fit: StackFit.expand,
                           children: [
-                            Image.network(
-                              heroBannerUrl,
+                            AngoNetworkImage(
+                              imageUrl: heroBannerUrl,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                color: colorScheme.primaryContainer,
-                              ),
+                              fallbackIcon: Icons.restaurant_rounded,
                             ),
                             const DecoratedBox(
                               decoration: BoxDecoration(
@@ -2154,23 +2147,13 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
               children: [
                 Row(
                   children: [
-                    ClipRRect(
+                    AngoNetworkImage(
+                      imageUrl: vitrine.logoUrl,
+                      width: 58,
+                      height: 58,
                       borderRadius: BorderRadius.circular(14),
-                      child: Image.network(
-                        vitrine.logoUrl,
-                        width: 58,
-                        height: 58,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          width: 58,
-                          height: 58,
-                          color: colorScheme.primary,
-                          child: const Icon(
-                            Icons.restaurant_rounded,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
+                      fit: BoxFit.cover,
+                      fallbackIcon: Icons.restaurant_rounded,
                     ),
                     const SizedBox(width: 14),
                     Expanded(
@@ -2271,12 +2254,10 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
               children: [
                 AspectRatio(
                   aspectRatio: 16 / 9,
-                  child: Image.network(
-                    vitrine.heroImagemUrl,
+                  child: AngoNetworkImage(
+                    imageUrl: vitrine.heroImagemUrl,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: colorScheme.surfaceVariant,
-                    ),
+                    fallbackIcon: Icons.restaurant_rounded,
                   ),
                 ),
                 Positioned.fill(
@@ -2785,19 +2766,13 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
               children: [
                 Row(
                   children: [
-                    ClipRRect(
+                    AngoNetworkImage(
+                      imageUrl: vitrine.chefFotoUrl,
+                      width: 72,
+                      height: 72,
                       borderRadius: BorderRadius.circular(40),
-                      child: Image.network(
-                        vitrine.chefFotoUrl,
-                        width: 72,
-                        height: 72,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => CircleAvatar(
-                          radius: 36,
-                          backgroundColor: colorScheme.primaryContainer,
-                          child: const Icon(Icons.person_rounded, size: 36),
-                        ),
-                      ),
+                      fit: BoxFit.cover,
+                      fallbackIcon: Icons.person_rounded,
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -2891,13 +2866,10 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      Image.network(
-                        isVideo ? vitrine.heroImagemUrl : url,
+                      AngoNetworkImage(
+                        imageUrl: isVideo ? (url.isNotEmpty ? url : vitrine.heroImagemUrl) : url,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          color: colorScheme.surfaceVariant,
-                          child: const Icon(Icons.image_outlined),
-                        ),
+                        fallbackIcon: isVideo ? Icons.videocam_rounded : Icons.image_outlined,
                       ),
                       if (isVideo)
                         const Center(
@@ -3680,208 +3652,82 @@ class _StoreMenuScreenState extends State<StoreMenuScreen>
     required bool isVideo,
     required String subtitle,
   }) {
-    bool isPlaying = false;
-    final bool isFallbackVideo = fallbackImageUrl.toLowerCase().endsWith('.mp4') ||
-        fallbackImageUrl.toLowerCase().endsWith('.mov') ||
-        fallbackImageUrl.toLowerCase().endsWith('.webm');
-
-    final String safeThumbnailUrl = !isFallbackVideo && fallbackImageUrl.isNotEmpty
-        ? fallbackImageUrl
-        : 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800';
-
-    final String targetImageUrl = !isVideo
-        ? (mediaUrl.isNotEmpty ? mediaUrl : safeThumbnailUrl)
-        : safeThumbnailUrl;
-
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setModalState) {
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    Icon(
-                      isVideo
-                          ? Icons.videocam_rounded
-                          : Icons.photo_camera_back_rounded,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w900,
-                            ),
-                      ),
-                    ),
-                  ],
+                Icon(
+                  isVideo
+                      ? Icons.videocam_rounded
+                      : Icons.photo_camera_back_rounded,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
-                const SizedBox(height: 12),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
-                  child: AspectRatio(
-                    aspectRatio: 16 / 9,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        if (isVideo)
-                          Image.network(
-                            targetImageUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              color: const Color(0xFF0F172A),
-                              child: const Icon(Icons.restaurant_rounded, color: Colors.white70, size: 48),
-                            ),
-                          )
-                        else
-                          InteractiveViewer(
-                            maxScale: 4.0,
-                            child: Image.network(
-                              targetImageUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Image.network(
-                                'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800',
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                          ),
-                        if (isVideo) ...[
-                          Container(
-                            color: isPlaying ? Colors.black.withOpacity(0.15) : Colors.black.withOpacity(0.38),
-                          ),
-                          Center(
-                            child: GestureDetector(
-                              onTap: () {
-                                setModalState(() {
-                                  isPlaying = !isPlaying;
-                                });
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.all(14),
-                                decoration: BoxDecoration(
-                                  color: isPlaying ? const Color(0xFF16A34A).withOpacity(0.92) : const Color(0xFFDC2626).withOpacity(0.92),
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.3),
-                                      blurRadius: 16,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
-                                ),
-                                child: Icon(
-                                  isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                                  size: 42,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            bottom: 10,
-                            left: 12,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.75),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    isPlaying ? Icons.stream_rounded : Icons.hd_rounded,
-                                    color: isPlaying ? const Color(0xFF4ADE80) : Colors.white,
-                                    size: 16,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    isPlaying ? 'A Reproduzir Vídeo HD (Stream 206)' : 'HD 1080p • Transmissão Ativa',
-                                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          if (isPlaying)
-                            Positioned(
-                              bottom: 0,
-                              left: 0,
-                              right: 0,
-                              child: LinearProgressIndicator(
-                                valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFDC2626)),
-                                backgroundColor: Colors.white.withOpacity(0.3),
-                              ),
-                            ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(subtitle),
-                if (isVideo && mediaUrl.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: () {
-                            setModalState(() {
-                              isPlaying = !isPlaying;
-                            });
-                            Clipboard.setData(ClipboardData(text: mediaUrl));
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(isPlaying
-                                    ? 'A reproduzir vídeo HD! Link copiado para a área de transferência.'
-                                    : 'Vídeo em pausa.'),
-                                behavior: SnackBarBehavior.floating,
-                                backgroundColor: const Color(0xFF16A34A),
-                              ),
-                            );
-                          },
-                          style: FilledButton.styleFrom(
-                            backgroundColor: isPlaying ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                          icon: Icon(isPlaying ? Icons.pause_circle_filled_rounded : Icons.play_circle_filled_rounded),
-                          label: Text(
-                            isPlaying ? 'Pausar Reprodução' : 'Reproduzir Vídeo HD',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton.filledTonal(
-                        onPressed: () {
-                          Clipboard.setData(ClipboardData(text: mediaUrl));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('URL direta copiada!'),
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.copy_rounded),
-                        tooltip: 'Copiar Link',
-                      ),
-                    ],
                   ),
-                ],
+                ),
+                IconButton.filledTonal(
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: mediaUrl));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Link de mídia copiado!'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.share_rounded, size: 18),
+                  tooltip: 'Partilhar Link',
+                ),
               ],
             ),
-          );
-        },
+            const SizedBox(height: 12),
+            if (isVideo)
+              AngoVideoPlayerWidget(
+                videoUrl: mediaUrl,
+                thumbnailUrl: fallbackImageUrl,
+                autoPlay: true,
+              )
+            else
+              ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: InteractiveViewer(
+                    maxScale: 4.0,
+                    child: AngoNetworkImage(
+                      imageUrl: mediaUrl.isNotEmpty ? mediaUrl : fallbackImageUrl,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 12),
+            Text(
+              subtitle,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -4077,34 +3923,13 @@ class _MenuItemTile extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        ClipRRect(
+                        AngoNetworkImage(
+                          imageUrl: item.imagemUrl,
+                          width: imageColWidth,
+                          height: 88,
                           borderRadius: BorderRadius.circular(16),
-                          child: Container(
-                            width: imageColWidth,
-                            height: 88,
-                            color: const Color(0xFFF1F5F9),
-                            child: item.imagemUrl.isNotEmpty
-                                ? Image.network(
-                                    item.imagemUrl,
-                                    width: imageColWidth,
-                                    height: 88,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => const Center(
-                                      child: Icon(
-                                        Icons.fastfood_outlined,
-                                        color: Colors.grey,
-                                        size: 28,
-                                      ),
-                                    ),
-                                  )
-                                : const Center(
-                                    child: Icon(
-                                      Icons.fastfood_outlined,
-                                      color: Colors.grey,
-                                      size: 28,
-                                    ),
-                                  ),
-                          ),
+                          fit: BoxFit.cover,
+                          fallbackIcon: Icons.fastfood_outlined,
                         ),
                         const SizedBox(height: 10),
                         if (canAdd)
@@ -4372,18 +4197,13 @@ class _ItemCustomizationSheetState extends State<_ItemCustomizationSheet> {
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
                 children: [
                   if (widget.item.imagemUrl.isNotEmpty) ...[
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: AspectRatio(
-                        aspectRatio: 16 / 9,
-                        child: Image.network(
-                          widget.item.imagemUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            color: colorScheme.surfaceContainerHighest,
-                            child: const Icon(Icons.fastfood_rounded, size: 48),
-                          ),
-                        ),
+                    AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: AngoNetworkImage(
+                        imageUrl: widget.item.imagemUrl,
+                        borderRadius: BorderRadius.circular(16),
+                        fit: BoxFit.cover,
+                        fallbackIcon: Icons.fastfood_rounded,
                       ),
                     ),
                     const SizedBox(height: 16),

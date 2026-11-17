@@ -745,3 +745,89 @@ class OpcaoItem(models.Model):
 
     def __str__(self) -> str:
         return f"{self.nome} (+{self.preco_adicional}) [{self.tipo_grupo}]"
+
+
+class MidiaLoja(models.Model):
+    """
+    Entidade 7: Armazenamento persistente de Mídia (Imagens e Vídeos) das Lojas Parceiras.
+    Resolve a volatilidade do sistema de arquivos efêmero (Render Cloud / Containers)
+    mantendo uma cópia binária segura e indexada em PostgreSQL (PostgreSQL Bytea),
+    sem sobrecarregar o JSONField de dados bancários da loja.
+    """
+
+    class TipoMidia(models.TextChoices):
+        IMAGEM = "IMAGEM", _("Imagem")
+        VIDEO = "VIDEO", _("Vídeo")
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        verbose_name=_("ID da Mídia"),
+    )
+    loja = models.ForeignKey(
+        ParceiroLoja,
+        on_delete=models.CASCADE,
+        related_name="midias",
+        verbose_name=_("Loja"),
+        help_text=_("Loja parceira proprietária deste ficheiro multimédia."),
+    )
+    tipo = models.CharField(
+        max_length=10,
+        choices=TipoMidia.choices,
+        default=TipoMidia.IMAGEM,
+        db_index=True,
+        verbose_name=_("Tipo de Mídia"),
+    )
+    nome_arquivo = models.CharField(
+        max_length=255,
+        db_index=True,
+        verbose_name=_("Nome do Ficheiro"),
+        help_text=_("Nome do ficheiro no disco/storage (ex.: uuid.mp4 ou uuid.jpg)."),
+    )
+    content_type = models.CharField(
+        max_length=100,
+        default="application/octet-stream",
+        verbose_name=_("Content Type MIME"),
+    )
+    tamanho_bytes = models.PositiveBigIntegerField(
+        default=0,
+        verbose_name=_("Tamanho em Bytes"),
+    )
+    url = models.URLField(
+        max_length=500,
+        blank=True,
+        default="",
+        verbose_name=_("URL de Acesso"),
+    )
+    legenda = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name=_("Legenda ou Título"),
+    )
+    dados_binarios = models.BinaryField(
+        null=True,
+        blank=True,
+        verbose_name=_("Conteúdo Binário Persistente"),
+        help_text=_("Backup binário (PostgreSQL bytea) para auto-recuperação do disco efêmero do Render."),
+    )
+    criado_em = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name=_("Criado em"),
+    )
+    atualizado_em = models.DateTimeField(
+        auto_now=True,
+        verbose_name=_("Atualizado em"),
+    )
+
+    class Meta:
+        db_table = "catalog_midia_loja"
+        ordering = ["-criado_em"]
+        verbose_name = _("Mídia da Loja")
+        verbose_name_plural = _("Mídias das Lojas")
+
+    def __str__(self) -> str:
+        return f"{self.tipo} - {self.nome_arquivo} ({self.loja.nome})"
+
