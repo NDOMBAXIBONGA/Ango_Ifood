@@ -231,12 +231,12 @@ jobs:
 
   # ==============================================================================
   # JOB 2: Compilação e Geração do Pacote iOS (.ipa)
-  # Executa num ambiente macOS oficial para suportar Xcode, CocoaPods e Code Signing
+  # Executa após o término do APK para evitar saturação de concorrência no GitHub Actions
   # ==============================================================================
   build-ipa:
     name: Build & Package iOS Release IPA
-    # macos-14 (Apple Silicon M1) é a versão estável recomendada pelo ecossistema Flutter para compatibilidade com CocoaPods e Xcode
-    runs-on: ${{ inputs.macos_runner || 'macos-14' }}
+    needs: build-apk
+    runs-on: macos-latest
     timeout-minutes: 60
     continue-on-error: true
 
