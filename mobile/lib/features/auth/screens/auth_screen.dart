@@ -960,6 +960,8 @@ class _AuthScreenState extends State<AuthScreen> {
         ),
       ),
     );
+  }
+
   // ============================================================================
   // WIDGET ISOLADO: Seletor Interativo e Dinâmico de Tipo de Conta (RBAC)
   // ============================================================================

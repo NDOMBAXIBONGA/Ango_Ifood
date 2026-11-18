@@ -10,13 +10,13 @@ on:
   workflow_dispatch:
     inputs:
       macos_runner:
-        description: 'Versão do Runner macOS (macos-15 / macos-latest para Apple Silicon M2)'
+        description: 'Versão do Runner macOS (macos-14 / macos-15 Apple Silicon)'
         required: false
-        default: 'macos-15'
+        default: 'macos-14'
         type: choice
         options:
-          - 'macos-15'
           - 'macos-14'
+          - 'macos-15'
           - 'macos-latest'
 
 # Permissões do GITHUB_TOKEN para leitura/escrita de releases e limpeza de artefactos antigos
@@ -235,8 +235,8 @@ jobs:
   # ==============================================================================
   build-ipa:
     name: Build & Package iOS Release IPA
-    # macos-15 (Apple Silicon M2 / macOS Sequoia) oferece compilação rápida nativa arm64 e suporte completo ao Xcode 16
-    runs-on: ${{ inputs.macos_runner || 'macos-15' }}
+    # macos-14 (Apple Silicon M1) é a versão estável recomendada pelo ecossistema Flutter para compatibilidade com CocoaPods e Xcode
+    runs-on: ${{ inputs.macos_runner || 'macos-14' }}
     timeout-minutes: 60
     continue-on-error: true
 
@@ -301,6 +301,22 @@ jobs:
       - name: Instalar CocoaPods (pod install)
         working-directory: mobile/ios
         run: |
+          echo "A configurar Podfile para compatibilidade com Swift 5.0 (Anti-Swift 6 isolation breaks)..."
+          if [ -f "Podfile" ] && ! grep -q "SWIFT_VERSION" Podfile; then
+            cat << 'EOF' >> Podfile
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+    target.build_configurations.each do |config|
+      config.build_settings['SWIFT_VERSION'] = '5.0'
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
+    end
+  end
+end
+EOF
+          fi
+
           echo "A instalar pods e dependências nativas iOS via CocoaPods..."
           if [ ! -d "Pods" ] || [ ! -f "Podfile.lock" ]; then
             pod repo update --silent || true
