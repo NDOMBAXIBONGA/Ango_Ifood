@@ -41,6 +41,7 @@ class _AuthScreenState extends State<AuthScreen> {
   final FocusNode _passwordFocusNode = FocusNode();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
+  late PlatformRole _currentRole;
   bool _isEmailValid = false;
   bool _isGoogleSigningIn = false;
   bool _usePasswordMode = false;
@@ -54,6 +55,8 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   void initState() {
     super.initState();
+    _currentRole = widget.selectedRole;
+    RoleThemeManager.instance.setRole(_currentRole);
     _emailController.addListener(_validateEmail);
   }
 
@@ -182,7 +185,7 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final activeColor = widget.selectedRole.primaryColor;
+    final activeColor = _currentRole.primaryColor;
 
     return BlocConsumer<AuthBloc, AuthState>(
       // ========================================================================
@@ -196,14 +199,14 @@ class _AuthScreenState extends State<AuthScreen> {
               builder: (_) => isEmail
                   ? EmailOtpVerificationScreen(
                       email: state.phone,
-                      selectedRole: widget.selectedRole,
+                      selectedRole: _currentRole,
                       otpHint: state.otpHint,
                     )
                   : OtpVerificationScreen(
                       phone: state.phone,
                       expiraEm: state.expiraEm,
                       validadeMinutos: state.validadeMinutos,
-                      selectedRole: widget.selectedRole,
+                      selectedRole: _currentRole,
                       otpHint: state.otpHint,
                     ),
             ),
@@ -253,7 +256,7 @@ class _AuthScreenState extends State<AuthScreen> {
             MaterialPageRoute(
               builder: (ctx) => getAuthorizedHomeScreen(
                 user: state.user,
-                requestedRole: widget.selectedRole,
+                requestedRole: _currentRole,
                 context: ctx,
               ),
             ),
@@ -323,7 +326,7 @@ class _AuthScreenState extends State<AuthScreen> {
               side: BorderSide(color: activeColor.withOpacity(0.3)),
               avatar: Icon(Icons.shield_outlined, size: 16, color: activeColor),
               label: Text(
-                widget.selectedRole.displayName,
+                _currentRole.displayName,
                 style: TextStyle(
                   color: activeColor,
                   fontWeight: FontWeight.w700,
@@ -343,7 +346,12 @@ class _AuthScreenState extends State<AuthScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 4),
+
+                        // Seletor Dinâmico de Tipo de Conta (Cliente / Parceiro / Estafeta)
+                        _buildRoleSelector(activeColor: activeColor),
+
+                        const SizedBox(height: 12),
 
                         // Seletor de Modo: Código OTP vs Entrar com Senha
                         Container(
@@ -945,6 +953,159 @@ class _AuthScreenState extends State<AuthScreen> {
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF334155),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  // ============================================================================
+  // WIDGET ISOLADO: Seletor Interativo e Dinâmico de Tipo de Conta (RBAC)
+  // ============================================================================
+  Widget _buildRoleSelector({required Color activeColor}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.badge_outlined, size: 16, color: activeColor),
+            const SizedBox(width: 6),
+            const Text(
+              'Tipo de Conta:',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF475569),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(4.0),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(14.0),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Row(
+            children: [
+              _buildRoleOption(
+                role: PlatformRole.cliente,
+                icon: Icons.shopping_bag_outlined,
+                label: 'Cliente',
+              ),
+              const SizedBox(width: 4),
+              _buildRoleOption(
+                role: PlatformRole.parceiro,
+                icon: Icons.storefront_outlined,
+                label: 'Parceiro',
+              ),
+              const SizedBox(width: 4),
+              _buildRoleOption(
+                role: PlatformRole.estafeta,
+                icon: Icons.two_wheeler_outlined,
+                label: 'Estafeta',
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Explicação contextual e orientativa para o utilizador
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: _currentRole.primaryColor.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: _currentRole.primaryColor.withOpacity(0.2)),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                _currentRole == PlatformRole.cliente
+                    ? Icons.shopping_cart_outlined
+                    : _currentRole == PlatformRole.parceiro
+                        ? Icons.store_mall_directory_outlined
+                        : Icons.delivery_dining_outlined,
+                size: 16,
+                color: _currentRole.primaryColor,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _currentRole == PlatformRole.cliente
+                      ? 'Conta de Cliente para comprar refeições e produtos com entrega.'
+                      : _currentRole == PlatformRole.parceiro
+                          ? 'Portal do Restaurante/Loja: gestão de produtos, menu e vendas.'
+                          : 'Central do Estafeta: aceitação e rotas de entregas credenciadas.',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: _currentRole.primaryColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRoleOption({
+    required PlatformRole role,
+    required IconData icon,
+    required String label,
+  }) {
+    final isSelected = _currentRole == role;
+    final roleColor = role.primaryColor;
+
+    return Expanded(
+      child: InkWell(
+        onTap: () {
+          if (_currentRole != role) {
+            setState(() {
+              _currentRole = role;
+            });
+            RoleThemeManager.instance.setRole(role);
+          }
+        },
+        borderRadius: BorderRadius.circular(10.0),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(10.0),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.06),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+            border: isSelected
+                ? Border.all(color: roleColor.withOpacity(0.3), width: 1.2)
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 16.0,
+                color: isSelected ? roleColor : const Color(0xFF64748B),
+              ),
+              const SizedBox(width: 5.0),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                  color: isSelected ? roleColor : const Color(0xFF64748B),
                 ),
               ),
             ],

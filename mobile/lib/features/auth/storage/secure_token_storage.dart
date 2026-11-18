@@ -5,9 +5,14 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Contrato abstrato de armazenamento seguro de tokens para desacoplamento e testes.
 abstract class ISecureTokenStorage {
-  Future<void> saveTokens({required String accessToken, required String refreshToken});
+  Future<void> saveTokens({
+    required String accessToken,
+    required String refreshToken,
+    String? userRole,
+  });
   Future<String?> getAccessToken();
   Future<String?> getRefreshToken();
+  Future<String?> getUserRole();
   Future<void> clearTokens();
   Future<bool> hasValidToken();
 }
@@ -18,6 +23,7 @@ class SecureTokenStorage implements ISecureTokenStorage {
 
   static const String _keyAccessToken = 'auth_access_token';
   static const String _keyRefreshToken = 'auth_refresh_token';
+  static const String _keyUserRole = 'auth_user_role';
 
   SecureTokenStorage({FlutterSecureStorage? storage})
       : _storage = storage ??
@@ -34,11 +40,16 @@ class SecureTokenStorage implements ISecureTokenStorage {
   Future<void> saveTokens({
     required String accessToken,
     required String refreshToken,
+    String? userRole,
   }) async {
-    await Future.wait([
+    final writes = <Future<void>>[
       _storage.write(key: _keyAccessToken, value: accessToken),
       _storage.write(key: _keyRefreshToken, value: refreshToken),
-    ]);
+    ];
+    if (userRole != null && userRole.isNotEmpty) {
+      writes.add(_storage.write(key: _keyUserRole, value: userRole.toUpperCase()));
+    }
+    await Future.wait(writes);
   }
 
   @override
@@ -52,10 +63,16 @@ class SecureTokenStorage implements ISecureTokenStorage {
   }
 
   @override
+  Future<String?> getUserRole() async {
+    return _storage.read(key: _keyUserRole);
+  }
+
+  @override
   Future<void> clearTokens() async {
     await Future.wait([
       _storage.delete(key: _keyAccessToken),
       _storage.delete(key: _keyRefreshToken),
+      _storage.delete(key: _keyUserRole),
     ]);
   }
 

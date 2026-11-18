@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../auth/screens/role_selection_onboarding_screen.dart';
+import '../../auth/storage/secure_token_storage.dart';
+import '../../auth/theme/role_theme.dart';
+import '../../catalog/customer_main_navigation_shell.dart';
+import '../../partner/screens/partner_main_navigation_shell.dart';
+import '../../courier/screens/courier_main_navigation_shell.dart';
 import '../bloc/app_initialization_bloc.dart';
 
 /// Ecrã de Splash Inicial Absoluto (`SplashScreen`).
@@ -63,13 +67,31 @@ class _SplashScreenState extends State<SplashScreen>
 
     return Scaffold(
       body: BlocConsumer<AppInitializationBloc, AppInitializationState>(
-        listener: (context, state) {
+        listener: (context, state) async {
           if (state is AppInitializationSuccess) {
-            // Transição suave para o ecrã de onboarding após handshake confirmado
+            Widget destination;
+            if (state.hasPersistedToken) {
+              final userRole = await SecureTokenStorage().getUserRole();
+              if (userRole == 'PARCEIRO') {
+                RoleThemeManager.instance.setRole(PlatformRole.parceiro);
+                destination = const PartnerMainNavigationShell();
+              } else if (userRole == 'ESTAFETA') {
+                RoleThemeManager.instance.setRole(PlatformRole.estafeta);
+                destination = const CourierMainNavigationShell();
+              } else {
+                RoleThemeManager.instance.setRole(PlatformRole.cliente);
+                destination = const CustomerMainNavigationShell();
+              }
+            } else {
+              // Entrada direta em Modo Visitante (zero fricção / exploração imediata)
+              RoleThemeManager.instance.setRole(PlatformRole.cliente);
+              destination = const CustomerMainNavigationShell();
+            }
+
+            if (!context.mounted) return;
             Navigator.of(context).pushReplacement(
               PageRouteBuilder(
-                pageBuilder: (_, animation, secondaryAnimation) =>
-                    const RoleSelectionOnboardingScreen(),
+                pageBuilder: (_, animation, secondaryAnimation) => destination,
                 transitionsBuilder: (_, animation, __, child) =>
                     FadeTransition(opacity: animation, child: child),
                 transitionDuration: const Duration(milliseconds: 400),

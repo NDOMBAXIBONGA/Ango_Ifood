@@ -317,6 +317,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await _tokenStorage.saveTokens(
           accessToken: result.tokens!.accessToken,
           refreshToken: result.tokens!.refreshToken,
+          userRole: result.userProfile!.tipoUtilizador,
         );
         emit(Authenticated(tokens: result.tokens!, user: result.userProfile!));
       } else {
@@ -351,6 +352,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await _tokenStorage.saveTokens(
           accessToken: result.tokens!.accessToken,
           refreshToken: result.tokens!.refreshToken,
+          userRole: result.userProfile!.tipoUtilizador,
         );
 
         emit(
@@ -440,6 +442,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await _tokenStorage.saveTokens(
           accessToken: result.tokens!.accessToken,
           refreshToken: result.tokens!.refreshToken,
+          userRole: result.userProfile!.tipoUtilizador,
         );
 
         emit(
@@ -514,6 +517,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await _tokenStorage.saveTokens(
           accessToken: result.tokens!.accessToken,
           refreshToken: result.tokens!.refreshToken,
+          userRole: result.userProfile!.tipoUtilizador,
         );
 
         emit(

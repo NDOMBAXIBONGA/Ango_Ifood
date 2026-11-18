@@ -7,7 +7,7 @@ import '../../auth/auth_bloc.dart';
 import '../../auth/auth_event.dart';
 import '../../auth/auth_state.dart';
 import '../../auth/screens/auth_screen.dart';
-import '../../auth/screens/role_selection_onboarding_screen.dart';
+import '../../catalog/customer_main_navigation_shell.dart';
 import '../../auth/storage/secure_token_storage.dart';
 import '../../auth/theme/role_theme.dart';
 import '../../cart/cart.dart';
@@ -219,6 +219,39 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                   ),
+                                ),
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  alignment: WrapAlignment.center,
+                                  spacing: 6,
+                                  children: [
+                                    TextButton.icon(
+                                      onPressed: () {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute<void>(
+                                            builder: (_) => const AuthScreen(
+                                              selectedRole: PlatformRole.parceiro,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      icon: const Icon(Icons.storefront_outlined, size: 14),
+                                      label: const Text('Portal do Parceiro', style: TextStyle(fontSize: 12)),
+                                    ),
+                                    TextButton.icon(
+                                      onPressed: () {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute<void>(
+                                            builder: (_) => const AuthScreen(
+                                              selectedRole: PlatformRole.estafeta,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      icon: const Icon(Icons.two_wheeler_outlined, size: 14),
+                                      label: const Text('Central do Estafeta', style: TextStyle(fontSize: 12)),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -956,7 +989,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                 context.read<AuthBloc>().add(const LogoutRequested());
                 Navigator.of(context).pushAndRemoveUntil(
                   MaterialPageRoute<void>(
-                    builder: (_) => const RoleSelectionOnboardingScreen(),
+                    builder: (_) => const CustomerMainNavigationShell(),
                   ),
                   (route) => false,
                 );

@@ -4,7 +4,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../auth/auth_bloc.dart';
 import '../../auth/auth_event.dart';
 import '../../auth/auth_state.dart';
-import '../../auth/screens/role_selection_onboarding_screen.dart';
+import '../../auth/theme/role_theme.dart';
+import '../../catalog/customer_main_navigation_shell.dart';
 
 /// Ecrã de Perfil, Viatura e Documentos do Estafeta (`CourierProfileScreen`).
 class CourierProfileScreen extends StatelessWidget {
@@ -232,9 +233,10 @@ class CourierProfileScreen extends StatelessWidget {
               onPressed: () {
                 Navigator.of(dialogContext).pop();
                 context.read<AuthBloc>().add(const LogoutRequested());
+                RoleThemeManager.instance.setRole(PlatformRole.cliente);
                 Navigator.of(context).pushAndRemoveUntil(
                   MaterialPageRoute<void>(
-                    builder: (_) => const RoleSelectionOnboardingScreen(),
+                    builder: (_) => const CustomerMainNavigationShell(),
                   ),
                   (route) => false,
                 );
