@@ -10,12 +10,12 @@ on:
   workflow_dispatch:
     inputs:
       macos_runner:
-        description: 'Versão do Runner macOS (macos-13 evita capacity constraints arm64)'
+        description: 'Versão do Runner macOS (macos-15 / macos-latest para Apple Silicon M2)'
         required: false
-        default: 'macos-13'
+        default: 'macos-15'
         type: choice
         options:
-          - 'macos-13'
+          - 'macos-15'
           - 'macos-14'
           - 'macos-latest'
 
@@ -235,8 +235,8 @@ jobs:
   # ==============================================================================
   build-ipa:
     name: Build & Package iOS Release IPA
-    # macos-13 (Intel) tem capacidade imediata e evita o gargalo crítico de arm64 que causa timeout de aquisição
-    runs-on: ${{ inputs.macos_runner || 'macos-13' }}
+    # macos-15 (Apple Silicon M2 / macOS Sequoia) oferece compilação rápida nativa arm64 e suporte completo ao Xcode 16
+    runs-on: ${{ inputs.macos_runner || 'macos-15' }}
     timeout-minutes: 60
     continue-on-error: true
 
@@ -258,10 +258,11 @@ jobs:
           cache-key: "flutter-:os:-:channel:-:version:-:arch:-:hash:"
 
       # ==============================================================================
-      # Passo 3: Verificação do Xcode instalado no macOS Runner
+      # Passo 3: Verificação e seleção da versão do Xcode no macOS Runner
       # ==============================================================================
-      - name: Verificar Versão do Xcode
+      - name: Verificar e Configurar o Xcode
         run: |
+          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer || true
           xcodebuild -version
           xcrun --version
 
@@ -282,14 +283,31 @@ jobs:
           flutter pub get
 
       # ==============================================================================
+      # Passo 4b: Cache dos CocoaPods (Pods & Spec Repos) para acelerar compilação
+      # ==============================================================================
+      - name: Cache de CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: |
+            mobile/ios/Pods
+            ~/.cocoapods/repos
+          key: ${{ runner.os }}-pods-${{ hashFiles('mobile/ios/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-
+
+      # ==============================================================================
       # Passo 5: Instalação dos CocoaPods na pasta ios
       # ==============================================================================
       - name: Instalar CocoaPods (pod install)
         working-directory: mobile/ios
         run: |
           echo "A instalar pods e dependências nativas iOS via CocoaPods..."
-          pod repo update --silent || true
-          pod install
+          if [ ! -d "Pods" ] || [ ! -f "Podfile.lock" ]; then
+            pod repo update --silent || true
+            pod install --repo-update
+          else
+            pod install
+          fi
 
       # ==============================================================================
       # Passo 6: Configuração de Assinatura de Código (Certificado .p12 & Provisioning Profile)
