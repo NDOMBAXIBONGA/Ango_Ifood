@@ -310,8 +310,20 @@ jobs:
         run: |
           echo "A configurar Podfile para compatibilidade com Swift 5.0 (Anti-Swift 6 isolation breaks)..."
           if [ -f "Podfile" ] && ! grep -q "SWIFT_VERSION" Podfile; then
-            printf '\npost_install do |installer|\n  installer.pods_project.targets.each do |target|\n    flutter_additional_ios_build_settings(target)\n    target.build_configurations.each do |config|\n      config.build_settings["SWIFT_VERSION"] = "5.0"\n      config.build_settings["IPHONEOS_DEPLOYMENT_TARGET"] = "14.0"\n    end\n  end\nend\n' >> Podfile
+            if grep -q "flutter_additional_ios_build_settings" Podfile; then
+              sed -i.bak '/flutter_additional_ios_build_settings(target)/a \
+    target.build_configurations.each do |config|\
+      config.build_settings["SWIFT_VERSION"] = "5.0"\
+      config.build_settings["IPHONEOS_DEPLOYMENT_TARGET"] = "14.0"\
+      config.build_settings["ENABLE_BITCODE"] = "NO"\
+    end' Podfile || true
+            else
+              printf '\npost_install do |installer|\n  installer.pods_project.targets.each do |target|\n    flutter_additional_ios_build_settings(target)\n    target.build_configurations.each do |config|\n      config.build_settings["SWIFT_VERSION"] = "5.0"\n      config.build_settings["IPHONEOS_DEPLOYMENT_TARGET"] = "14.0"\n      config.build_settings["ENABLE_BITCODE"] = "NO"\n    end\n  end\nend\n' >> Podfile
+            fi
           fi
+
+          echo "A verificar integridade do Podfile:"
+          cat Podfile
 
           echo "A instalar pods e dependências nativas iOS via CocoaPods..."
           if [ ! -d "Pods" ] || [ ! -f "Podfile.lock" ]; then
