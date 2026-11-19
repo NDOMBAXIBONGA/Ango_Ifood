@@ -17,7 +17,7 @@ dependencies:
   flutter_secure_storage: ^9.2.2
   google_sign_in: ^6.2.1
   google_maps_flutter: ^2.5.3
-  web_socket_channel: ^2.4.5
+  web_socket_channel: ^3.0.3
   image_picker: ^1.1.2
   video_player: ^2.9.2
   flutter_map: ^7.0.2
@@ -25,6 +25,7 @@ dependencies:
   geolocator: ^13.0.2
 
 dependency_overrides:
+  web_socket_channel: ^3.0.3
   # Corrige erro de compilação 'Extra argument isolation in call' no Swift 6 / Xcode 16
   video_player_avfoundation: ^2.6.2
 
