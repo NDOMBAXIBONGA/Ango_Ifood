@@ -213,23 +213,39 @@ GEOS_LIBRARY_PATH = env("GEOS_LIBRARY_PATH", default=None)
 
 if os.name == "nt":
     import glob
+    import ctypes
 
     if not GDAL_LIBRARY_PATH:
         possible_gdal = [
-            r"C:\Program Files\MySQL\MySQL Workbench 8.0\gdal.dll",
             *glob.glob(r"C:\OSGeo4W*\bin\gdal*.dll"),
             *glob.glob(r"C:\Program Files\PostgreSQL\*\bin\gdal*.dll"),
             *glob.glob(str(BASE_DIR / "venv" / "Lib" / "site-packages" / "**" / "gdal*.dll"), recursive=True),
         ]
         for p in possible_gdal:
             if os.path.exists(p):
-                GDAL_LIBRARY_PATH = p
-                break
+                try:
+                    dll_dir = os.path.dirname(p)
+                    if hasattr(os, "add_dll_directory"):
+                        os.add_dll_directory(dll_dir)
+                    os.environ["PATH"] = dll_dir + os.pathsep + os.environ.get("PATH", "")
+                    ctypes.CDLL(p)
+                    GDAL_LIBRARY_PATH = p
+                    break
+                except Exception:
+                    continue
 
     if not GEOS_LIBRARY_PATH:
         possible_geos = glob.glob(str(BASE_DIR / "venv" / "Lib" / "site-packages" / "shapely.libs" / "geos_c*.dll"))
         if possible_geos and os.path.exists(possible_geos[0]):
-            GEOS_LIBRARY_PATH = possible_geos[0]
+            try:
+                dll_dir = os.path.dirname(possible_geos[0])
+                if hasattr(os, "add_dll_directory"):
+                    os.add_dll_directory(dll_dir)
+                os.environ["PATH"] = dll_dir + os.pathsep + os.environ.get("PATH", "")
+                ctypes.CDLL(possible_geos[0])
+                GEOS_LIBRARY_PATH = possible_geos[0]
+            except Exception:
+                pass
 
 # ==============================================================================
 # 6. CACHE & REDIS CONFIGURATION (REDIS_URL)
