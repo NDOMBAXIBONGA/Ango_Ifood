@@ -67,7 +67,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
   /// Conecta ao WebSocket do Django Channels para receber telemetria em tempo real
   void _conectarWebSocket() {
     try {
-      final wsBaseUrl = AppEnvironmentConfig.baseWebSocketUrl;
+      final wsBaseUrl = AppEnvironmentConfig.baseWebsocketUrl;
       final uri = Uri.parse('$wsBaseUrl/ws/entrega/${widget.pedidoId}/');
 
       _channel = WebSocketChannel.connect(uri);
@@ -155,19 +155,18 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
                 maxZoom: 19,
               ),
 
-              // Rota Viária Traçada (Polyline) vinda do OSRM ou Traçado Tracejado em Fallback
+              // Rota Viária Traçada (Polyline) vinda do OSRM ou Traçado em Fallback
               if (widget.rotaCoordinates.isNotEmpty)
                 PolylineLayer(
                   polylines: [
                     Polyline(
                       points: widget.rotaCoordinates,
-                      strokeWidth: 4.5,
+                      strokeWidth: (widget.isFallback || widget.rotaCoordinates.length == 2) ? 3.5 : 5.0,
                       color: (widget.isFallback || widget.rotaCoordinates.length == 2)
-                          ? const Color(0xFFF59E0B) // Âmbar para rota estimada por linha reta
+                          ? const Color(0xFFF59E0B) // Âmbar para rota estimada por linha reta (Fallback)
                           : const Color(0xFFEA1D2C), // Vermelho Pro para malha OSRM
                       borderColor: Colors.white,
                       borderStrokeWidth: 1.5,
-                      isDotted: widget.isFallback || widget.rotaCoordinates.length == 2,
                     ),
                   ],
                 ),

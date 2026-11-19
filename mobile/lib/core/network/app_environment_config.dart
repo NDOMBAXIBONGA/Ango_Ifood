@@ -38,6 +38,9 @@ class AppEnvironmentConfig {
     defaultValue: 'wss://ango-ifood.onrender.com',
   );
 
+  /// Getter canónico com camelCase alternativo para compatibilidade total
+  static String get baseWebSocketUrl => baseWebsocketUrl;
+
   /// Web Client ID do Google Cloud Console para o backend Django
   /// Configurado via `--dart-define=GOOGLE_SERVER_CLIENT_ID=...` ou padrão
   static const String googleServerClientId = String.fromEnvironment(

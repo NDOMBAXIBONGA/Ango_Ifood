@@ -54,7 +54,7 @@ class CourierGpsService {
 
     // 2. Conectar ao WebSocket do Django Channels
     try {
-      final wsBaseUrl = AppEnvironmentConfig.baseWebSocketUrl;
+      final wsBaseUrl = AppEnvironmentConfig.baseWebsocketUrl;
       final uri = Uri.parse('$wsBaseUrl/ws/entrega/$pedidoId/');
       _channel = WebSocketChannel.connect(uri);
     } catch (e) {
