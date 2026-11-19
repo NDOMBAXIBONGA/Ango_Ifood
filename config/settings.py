@@ -124,6 +124,7 @@ THIRD_PARTY_APPS = [
 ]
 
 LOCAL_APPS = [
+    "core",
     "apps.accounts",
     "apps.catalog",
     "apps.cart",

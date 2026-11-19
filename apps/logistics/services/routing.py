@@ -18,11 +18,29 @@ logger = logging.getLogger(__name__)
 OSRM_BASE_URL = os.getenv("OSRM_BASE_URL", "http://osrm:5000").rstrip("/")
 OSRM_TIMEOUT_SECONDS = float(os.getenv("OSRM_TIMEOUT_SECONDS", "3.0"))
 
-# Parâmetros de precificação de entrega para Angola (AOA - Kwanzas)
+# Parâmetros padrão de contingência para Angola (AOA - Kwanzas)
 TAXA_BASE_AOA = float(os.getenv("TAXA_BASE_ENTREGA_AOA", "500.0"))
 VALOR_KM_AOA = float(os.getenv("VALOR_POR_KM_AOA", "150.0"))
 FATOR_CORRECAO_URBANA = float(os.getenv("FATOR_CORRECAO_URBANA", "1.3"))
 VELOCIDADE_MEDIA_URBANA_KMH = float(os.getenv("VELOCIDADE_MEDIA_URBANA_KMH", "25.0"))
+
+
+def obter_parametros_governança() -> Tuple[float, float, float, bool]:
+    """
+    Obtém dinamicamente as regras de negócio a partir do modelo SystemConfiguration do Admin.
+    Se a base de dados ou tabela estiverem em migração, utiliza os valores padrão de ambiente.
+    """
+    try:
+        from core.models import SystemConfiguration
+
+        config = SystemConfiguration.get_settings()
+        taxa_base = float(config.taxa_base_entrega_aoa)
+        valor_km = float(config.valor_km_entrega_aoa)
+        fator_correcao = float(config.fator_correcao_urbana)
+        entregas_ativas = bool(config.entregas_ativas and not config.modo_manutencao)
+        return taxa_base, valor_km, fator_correcao, entregas_ativas
+    except Exception:
+        return TAXA_BASE_AOA, VALOR_KM_AOA, FATOR_CORRECAO_URBANA, True
 
 
 def calcular_distancia_haversine(
@@ -51,13 +69,15 @@ def calcular_distancia_haversine(
 def calcular_preco_frete(distancia_km: float) -> int:
     """
     Calcula a taxa de entrega em Kwanzas (AOA) com base na distância percorrida:
-      Preço = Taxa Base (500 AOA) + (Distância * 150 AOA/km)
-    Aplica arredondamento comercial justo para múltiplos de 50 Kz (moeda corrente em Angola).
+      Preço = Taxa Base + (Distância * Valor por km)
+    Lê os parâmetros dinamicamente do SystemConfiguration gerenciado no Django Admin.
+    Aplica arredondamento comercial justo para múltiplos de 50 Kz.
     """
-    preco_bruto = TAXA_BASE_AOA + (max(0.0, distancia_km) * VALOR_KM_AOA)
+    taxa_base, valor_km, _, _ = obter_parametros_governança()
+    preco_bruto = taxa_base + (max(0.0, distancia_km) * valor_km)
     # Arredonda para o múltiplo de 50 mais próximo (ex: 650, 700, 750)
     preco_arredondado = int(round(preco_bruto / 50.0) * 50)
-    return max(int(TAXA_BASE_AOA), preco_arredondado)
+    return max(int(taxa_base), preco_arredondado)
 
 
 def calcular_rota_e_frete(
@@ -136,11 +156,12 @@ def calcular_rota_e_frete(
             exc,
         )
 
-    # 2. Fallback de Alta Resiliência: Fórmula de Haversine * Fator de Correção Urbana (1.3)
+    # 2. Fallback de Alta Resiliência: Fórmula de Haversine * Fator de Correção Urbana Dinâmico
+    _, _, fator_correcao, _ = obter_parametros_governança()
     distancia_linha_reta = calcular_distancia_haversine(
         lat_origem, lon_origem, lat_destino, lon_destino
     )
-    distancia_estimada_km = round(distancia_linha_reta * FATOR_CORRECAO_URBANA, 2)
+    distancia_estimada_km = round(distancia_linha_reta * fator_correcao, 2)
 
     # Duração estimada com base na velocidade média urbana em Angola
     horas_estimadas = distancia_estimada_km / max(5.0, VELOCIDADE_MEDIA_URBANA_KMH)

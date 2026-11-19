@@ -5,6 +5,7 @@ Gere Pedidos (OMS), Linhas de Pedidos e Opções Selecionadas.
 from django.contrib import admin
 from django.utils.translation import gettext_lazy as _
 
+from core.admin_base import MasterModelAdmin
 from apps.orders.models import LinhaPedido, LinhaPedidoOpcaoSelecionada, Pedido
 
 
@@ -22,7 +23,8 @@ class LinhaPedidoInline(admin.TabularInline):
 
 
 @admin.register(Pedido)
-class PedidoAdmin(admin.ModelAdmin):
+class PedidoAdmin(MasterModelAdmin):
+    protected_from_deletion = True  # Proteção de integridade contra deleção de pedidos
     list_display = (
         "id_curto",
         "cliente",
@@ -42,6 +44,7 @@ class PedidoAdmin(admin.ModelAdmin):
     )
     ordering = ("-data_criacao",)
     inlines = [LinhaPedidoInline]
+    actions = ["export_to_csv"]
 
     fieldsets = (
         (
@@ -95,7 +98,7 @@ class PedidoAdmin(admin.ModelAdmin):
 
 
 @admin.register(LinhaPedido)
-class LinhaPedidoAdmin(admin.ModelAdmin):
+class LinhaPedidoAdmin(MasterModelAdmin):
     list_display = ("pedido", "item", "quantidade", "preco_unitario_base", "total_linha")
     list_filter = ("pedido__estado", "pedido__loja")
     search_fields = ("pedido__id", "item__nome")
@@ -103,6 +106,6 @@ class LinhaPedidoAdmin(admin.ModelAdmin):
 
 
 @admin.register(LinhaPedidoOpcaoSelecionada)
-class LinhaPedidoOpcaoSelecionadaAdmin(admin.ModelAdmin):
+class LinhaPedidoOpcaoSelecionadaAdmin(MasterModelAdmin):
     list_display = ("linha_pedido", "opcao", "preco_unitario_cobrado")
     search_fields = ("opcao__nome", "linha_pedido__pedido__id")

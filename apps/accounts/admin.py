@@ -2,10 +2,12 @@
 Configuração do Django Admin para a aplicação 'accounts'.
 Disponibiliza a gestão de Utilizadores (CustomUser), Moradas, Consentimentos e Sessões OTP.
 """
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin
+from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
 
+from core.admin_base import MasterModelAdmin
 from apps.accounts.models import (
     CustomUser,
     Morada,
@@ -112,9 +114,26 @@ class CustomUserAdmin(UserAdmin):
         ),
     )
 
+    actions = ["ativar_contas", "suspender_contas", "bloquear_contas"]
+
+    @admin.action(description="🟢 Ativar Contas Selecionadas")
+    def ativar_contas(self, request: HttpRequest, queryset):
+        qtd = queryset.update(estado=CustomUser.EstadoConta.ATIVO, is_active=True)
+        self.message_user(request, f"{qtd} conta(s) ativada(s) com sucesso.", level=messages.SUCCESS)
+
+    @admin.action(description="🟡 Suspender Contas Selecionadas")
+    def suspender_contas(self, request: HttpRequest, queryset):
+        qtd = queryset.update(estado=CustomUser.EstadoConta.SUSPENSO, is_active=False)
+        self.message_user(request, f"{qtd} conta(s) suspensa(s).", level=messages.WARNING)
+
+    @admin.action(description="🔴 Bloquear Contas Selecionadas (Fraude / Violação)")
+    def bloquear_contas(self, request: HttpRequest, queryset):
+        qtd = queryset.update(estado=CustomUser.EstadoConta.BLOQUEADO, is_active=False)
+        self.message_user(request, f"{qtd} conta(s) bloqueada(s) definitivamente.", level=messages.ERROR)
+
 
 @admin.register(Morada)
-class MoradaAdmin(admin.ModelAdmin):
+class MoradaAdmin(MasterModelAdmin):
     """
     Gestão de moradas de clientes e endereços georreferenciados.
     """
@@ -139,10 +158,11 @@ class MoradaAdmin(admin.ModelAdmin):
 
 
 @admin.register(PerfilConsentimento)
-class PerfilConsentimentoAdmin(admin.ModelAdmin):
+class PerfilConsentimentoAdmin(MasterModelAdmin):
     """
     Auditoria e registo de consentimentos legais e RGPD dos utilizadores.
     """
+    protected_from_deletion = True
 
     list_display = (
         "utilizador",
@@ -163,10 +183,11 @@ class PerfilConsentimentoAdmin(admin.ModelAdmin):
 
 
 @admin.register(RegistoOTP)
-class RegistoOTPAdmin(admin.ModelAdmin):
+class RegistoOTPAdmin(MasterModelAdmin):
     """
     Registo e auditoria de códigos OTP enviados por SMS.
     """
+    protected_from_deletion = True
 
     list_display = (
         "telemovel",
@@ -183,10 +204,11 @@ class RegistoOTPAdmin(admin.ModelAdmin):
 
 
 @admin.register(RegistoOTPEmail)
-class RegistoOTPEmailAdmin(admin.ModelAdmin):
+class RegistoOTPEmailAdmin(MasterModelAdmin):
     """
     Registo e auditoria de códigos OTP enviados por E-mail.
     """
+    protected_from_deletion = True
 
     list_display = (
         "email",
