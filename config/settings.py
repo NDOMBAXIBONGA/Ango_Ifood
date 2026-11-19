@@ -139,6 +139,12 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 # Modelo de utilizador personalizado onde o 'telemovel' é o USERNAME_FIELD (RN-001)
 AUTH_USER_MODEL = "accounts.CustomUser"
 
+# Backends de autenticação: Suporta login tanto por Telemóvel quanto por E-mail no Django Admin
+AUTHENTICATION_BACKENDS = [
+    "apps.accounts.backends.EmailOrPhoneBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
+
 # ==============================================================================
 # 4. MIDDLEWARE
 # ==============================================================================
