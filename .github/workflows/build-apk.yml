@@ -231,12 +231,10 @@ jobs:
 
   # ==============================================================================
   # JOB 2: Compilação e Geração do Pacote iOS (.ipa)
-  # Executa após o término do APK para evitar saturação de concorrência no GitHub Actions
+  # Executa em paralelo no macOS Runner para compilação rápida e independente
   # ==============================================================================
   build-ipa:
     name: Build & Package iOS Release IPA
-    needs: build-apk
-    if: ${{ !cancelled() }}
     runs-on: macos-latest
     timeout-minutes: 60
 
