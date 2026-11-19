@@ -13,5 +13,11 @@ websocket_urlpatterns = [
         consumers.DeliveryTrackingConsumer.as_asgi(),
         name="ws_delivery_tracking",
     ),
+    # Rota leve em tempo real para rastreamento de entrega (app cliente e estafeta)
+    path(
+        "ws/entrega/<str:pedido_id>/",
+        consumers.TrackingEntregaConsumer.as_asgi(),
+        name="ws_tracking_entrega",
+    ),
 ]
 

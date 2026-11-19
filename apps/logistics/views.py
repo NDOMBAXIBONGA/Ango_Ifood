@@ -831,3 +831,62 @@ class OrderTrackingTelemetryView(APIView):
             status=status.HTTP_200_OK,
         )
 
+
+class CalcularFreteView(APIView):
+    """
+    Endpoint para cálculo de frete, distância viária, duração estimada e rota GeoJSON.
+    100% Gratuito e Self-Hosted via OSRM + dados OpenStreetMap de Angola.
+    Suporta POST em /api/v1/logistics/calcular-frete/ e /api/entregas/calcular-frete/
+    Payload esperado:
+    {
+        "lat_origem": -14.9172,
+        "lon_origem": 13.4925,
+        "lat_destino": -14.9250,
+        "lon_destino": 13.5010
+    }
+    """
+
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        data = request.data
+        try:
+            lat_origem = float(data.get("lat_origem") or data.get("origem_lat"))
+            lon_origem = float(
+                data.get("lon_origem")
+                or data.get("origem_lon")
+                or data.get("lng_origem")
+            )
+            lat_destino = float(data.get("lat_destino") or data.get("destino_lat"))
+            lon_destino = float(
+                data.get("lon_destino")
+                or data.get("destino_lon")
+                or data.get("lng_destino")
+            )
+        except (TypeError, ValueError):
+            return Response(
+                {
+                    "erro": "Coordenadas numéricas inválidas. Envie lat_origem, lon_origem, lat_destino e lon_destino."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validação de limites geográficos globais (-90 a 90 para lat, -180 a 180 para lon)
+        if not (
+            -90.0 <= lat_origem <= 90.0
+            and -90.0 <= lat_destino <= 90.0
+            and -180.0 <= lon_origem <= 180.0
+            and -180.0 <= lon_destino <= 180.0
+        ):
+            return Response(
+                {"erro": "Coordenadas fora dos limites do globo terrestre."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from apps.logistics.services.routing import calcular_rota_e_frete
+
+        resultado = calcular_rota_e_frete(
+            lat_origem, lon_origem, lat_destino, lon_destino
+        )
+        return Response(resultado, status=status.HTTP_200_OK)
+

@@ -16,7 +16,7 @@ import uuid
 from typing import Any, Optional
 
 from channels.db import database_sync_to_async
-from channels.generic.websocket import AsyncWebsocketConsumer
+from channels.generic.websocket import AsyncJsonWebsocketConsumer, AsyncWebsocketConsumer
 from django.contrib.auth import get_user_model
 from django.contrib.gis.geos import Point
 from django.utils import timezone
@@ -398,4 +398,83 @@ class DeliveryTrackingConsumer(AsyncWebsocketConsumer):
             }
         except Entrega.DoesNotExist:
             return None
+
+
+class TrackingEntregaConsumer(AsyncJsonWebsocketConsumer):
+    """
+    Consumer WebSockets leve e em tempo real para rastreamento de entregas.
+    Rota: ws/entrega/<str:pedido_id>/
+    Transmite posições GPS do estafeta instantaneamente para o cliente na mesma sala.
+    """
+
+    async def connect(self):
+        self.pedido_id = str(self.scope["url_route"]["kwargs"].get("pedido_id", "default"))
+        self.room_group_name = f"entrega_{self.pedido_id}"
+
+        # Entrar no grupo da entrega
+        await self.channel_layer.group_add(self.room_group_name, self.channel_name)
+        await self.accept()
+
+        # Envia confirmação de conexão
+        await self.send_json({
+            "tipo": "conexao_estabelecida",
+            "mensagem": f"Conectado à sala de rastreamento do pedido {self.pedido_id}",
+            "sala": self.room_group_name,
+        })
+
+    async def disconnect(self, close_code):
+        if hasattr(self, "room_group_name"):
+            await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
+
+    async def receive_json(self, content):
+        """
+        Recebe pacote GPS enviado pelo app do estafeta:
+        {"lat": -14.917, "lon": 13.492, "heading": 90.0, "velocidade": 30.5}
+        """
+        lat = content.get("lat") if content.get("lat") is not None else content.get("latitude")
+        lon = (
+            content.get("lon")
+            if content.get("lon") is not None
+            else (content.get("lng") or content.get("longitude"))
+        )
+
+        if lat is None or lon is None:
+            await self.send_json({"erro": "Latitude ('lat') e longitude ('lon') são obrigatórias."})
+            return
+
+        try:
+            lat = float(lat)
+            lon = float(lon)
+        except (ValueError, TypeError):
+            await self.send_json({"erro": "Coordenadas com formato numérico inválido."})
+            return
+
+        heading = float(content.get("heading") or 0.0)
+        velocidade = float(content.get("velocidade") or 0.0)
+
+        # Transmite imediatamente para todos os clientes conectados na sala da entrega
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                "type": "broadcast_posicao_estafeta",
+                "lat": lat,
+                "lon": lon,
+                "heading": heading,
+                "velocidade": velocidade,
+                "timestamp": content.get("timestamp") or timezone.now().isoformat(),
+            },
+        )
+
+    async def broadcast_posicao_estafeta(self, event):
+        """
+        Handler que entrega os dados atualizados aos WebSockets dos clientes e lojas na sala.
+        """
+        await self.send_json({
+            "tipo": "posicao_atualizada",
+            "lat": event["lat"],
+            "lon": event["lon"],
+            "heading": event.get("heading", 0.0),
+            "velocidade": event.get("velocidade", 0.0),
+            "timestamp": event.get("timestamp"),
+        })
 

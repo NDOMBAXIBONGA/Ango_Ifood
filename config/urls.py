@@ -14,6 +14,7 @@ from rest_framework_simplejwt.views import (
 )
 
 from apps.catalog.urls import partner_router as partner_catalog_router
+from apps.logistics.views import CalcularFreteView
 
 
 def health_check(request):
@@ -1086,6 +1087,7 @@ urlpatterns = [
     path("api/v1/orders/", include("apps.orders.urls", namespace="orders")),
     # Endpoints de Logística, Entregas e Verificação de PIN (RN-094 a RN-097)
     path("api/v1/logistics/", include("apps.logistics.urls", namespace="logistics")),
+    path("api/entregas/calcular-frete/", CalcularFreteView.as_view(), name="entregas-calcular-frete"),
     # Endpoints de Administração e Dashboard Operacional de KPIs (Secção 10 e Secção 8.1)
     path("api/v1/admin/", include("apps.orders.admin_urls", namespace="admin-portal")),
     # Endpoints de Suporte, Mediação de Disputas e Incidentes (RN-106, RN-138 a RN-142)

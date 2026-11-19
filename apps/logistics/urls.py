@@ -5,6 +5,7 @@ Implementa os endpoints de encerramento de entrega, verificação de PIN e repor
 from django.urls import path
 
 from apps.logistics.views import (
+    CalcularFreteView,
     CourierAvailabilityView,
     CourierProfileMeView,
     CourierTripActionView,
@@ -19,6 +20,8 @@ from apps.logistics.views import (
 app_name = "logistics"
 
 urlpatterns = [
+    # Cálculo de frete, distância viária e polilinha OSRM (100% gratuito)
+    path("calcular-frete/", CalcularFreteView.as_view(), name="calcular-frete"),
     # Perfil real do estafeta autenticado
     path("couriers/me/", CourierProfileMeView.as_view(), name="courier-me"),
     # Disponibilidade operacional Online/Offline e atualização de GPS PostGIS
