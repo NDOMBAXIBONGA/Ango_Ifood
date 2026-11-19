@@ -19,6 +19,7 @@ class OrderTrackingScreen extends StatefulWidget {
   final List<LatLng> rotaCoordinates;
   final String nomeLoja;
   final String statusPedido;
+  final bool isFallback;
 
   const OrderTrackingScreen({
     super.key,
@@ -29,6 +30,7 @@ class OrderTrackingScreen extends StatefulWidget {
     this.rotaCoordinates = const [],
     this.nomeLoja = 'Restaurante / Loja',
     this.statusPedido = 'A caminho da sua morada',
+    this.isFallback = false,
   });
 
   @override
@@ -153,16 +155,19 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
                 maxZoom: 19,
               ),
 
-              // Rota Viária Traçada (Polyline) vinda do OSRM
+              // Rota Viária Traçada (Polyline) vinda do OSRM ou Traçado Tracejado em Fallback
               if (widget.rotaCoordinates.isNotEmpty)
                 PolylineLayer(
                   polylines: [
                     Polyline(
                       points: widget.rotaCoordinates,
                       strokeWidth: 4.5,
-                      color: const Color(0xFFEA1D2C),
+                      color: (widget.isFallback || widget.rotaCoordinates.length == 2)
+                          ? const Color(0xFFF59E0B) // Âmbar para rota estimada por linha reta
+                          : const Color(0xFFEA1D2C), // Vermelho Pro para malha OSRM
                       borderColor: Colors.white,
                       borderStrokeWidth: 1.5,
+                      isDotted: widget.isFallback || widget.rotaCoordinates.length == 2,
                     ),
                   ],
                 ),
