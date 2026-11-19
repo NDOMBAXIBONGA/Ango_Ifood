@@ -239,7 +239,6 @@ jobs:
     if: ${{ !cancelled() }}
     runs-on: macos-latest
     timeout-minutes: 60
-    continue-on-error: true
 
     steps:
       # ==============================================================================
@@ -416,29 +415,31 @@ jobs:
               --dart-define=BASE_HTTP_URL=https://ango-ifood.onrender.com \
               --dart-define=BASE_WEBSOCKET_URL=wss://ango-ifood.onrender.com
           else
-            echo "A compilar binário nativo iOS com '--no-codesign' para verificação de compilação..."
+            echo "A compilar binário nativo iOS com '--no-codesign'..."
             flutter build ios --release --no-codesign --no-tree-shake-icons \
               --dart-define=BASE_HTTP_URL=https://ango-ifood.onrender.com \
               --dart-define=BASE_WEBSOCKET_URL=wss://ango-ifood.onrender.com
 
-            # Empacota em .ipa não assinado para que o artefacto esteja sempre disponível para inspeção e download
+            # Empacota Runner.app no formato .ipa (Payload/Runner.app compactado em zip)
             mkdir -p build/ios/ipa
             RUNNER_APP_PATH=$(find build/ios -name "Runner.app" -type d | head -n 1)
             if [ -n "$RUNNER_APP_PATH" ] && [ -d "$RUNNER_APP_PATH" ]; then
               echo "App nativo localizado em: $RUNNER_APP_PATH"
-              APP_DIR=$(dirname "$RUNNER_APP_PATH")
-              cd "$APP_DIR"
-              mkdir -p Payload
-              cp -R Runner.app Payload/
-              zip -r -q DeliveryPro-unsigned.ipa Payload
-              mkdir -p ../../ipa 2>/dev/null || true
-              mkdir -p ../ipa 2>/dev/null || true
-              cd - >/dev/null
-              find build/ios -name "*unsigned.ipa" -exec cp {} build/ios/ipa/DeliveryPro-unsigned.ipa \; 2>/dev/null || true
-              echo "✅ Pacote IPA gerado com sucesso em: build/ios/ipa/DeliveryPro-unsigned.ipa"
+              rm -rf build/ios/ipa/Payload
+              mkdir -p build/ios/ipa/Payload
+              cp -R "$RUNNER_APP_PATH" build/ios/ipa/Payload/
+              cd build/ios/ipa
+              zip -r -q app-release.ipa Payload
+              cp app-release.ipa DeliveryPro-unsigned.ipa
+              cp app-release.ipa DeliveryPro-release.ipa
+              rm -rf Payload
+              cd ../../..
+              echo "✅ Pacote IPA gerado com sucesso em: build/ios/ipa/app-release.ipa"
+              ls -la build/ios/ipa/
             else
-              echo "Aviso: Diretório Runner.app não localizado automaticamente. A listar diretório build/ios:"
+              echo "❌ Erro crítico: Runner.app não localizado em build/ios."
               ls -la build/ios || true
+              exit 1
             fi
           fi
 
@@ -477,7 +478,7 @@ jobs:
           path: |
             mobile/build/ios/ipa/*.ipa
             mobile/build/ios/archive/*.xcarchive
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 14
 
       # ==============================================================================
