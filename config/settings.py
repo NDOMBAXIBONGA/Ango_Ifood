@@ -616,6 +616,7 @@ EXPOSE_OTP_HINT = env.bool("EXPOSE_OTP_HINT", default=False)
 # 13. CONFIGURAÇÃO VISUAL & UX MODERNA (DJANGO UNFOLD / TAILWIND)
 # ==============================================================================
 from django.urls import reverse_lazy
+from core.admin_theme import get_admin_colors
 
 UNFOLD = {
     "SITE_TITLE": "Ango_Ifood Admin",
@@ -623,21 +624,8 @@ UNFOLD = {
     "SITE_SUBHEADER": "Centro de Operações & Logística",
     "SITE_URL": "/",
     "THEME": "light",
-    "COLORS": {
-        "primary": {
-            "50": "254 242 242",
-            "100": "254 226 226",
-            "200": "254 202 202",
-            "300": "252 165 165",
-            "400": "248 113 113",
-            "500": "234 29 44",   # #EA1D2C (Vermelho Ango_Ifood)
-            "600": "220 38 38",
-            "700": "185 28 28",
-            "800": "153 27 27",
-            "900": "127 29 29",
-            "950": "69 10 10",
-        },
-    },
+    # Resolução dinâmica e manipulável de cores visuais (via URL, cookie, DB ou .env)
+    "COLORS": lambda request: get_admin_colors(request),
     "SIDEBAR": {
         "show_search": True,
         "show_all_applications": False,
