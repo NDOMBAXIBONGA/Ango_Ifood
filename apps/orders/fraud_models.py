@@ -72,7 +72,8 @@ class DispositivoUtilizador(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"Device {self.device_id[:12]}... (User: {self.utilizador_id})"
+        dev_id = self.device_id[:12] if self.device_id else "Sem Device ID"
+        return f"Device {dev_id}... (User: {self.utilizador_id})"
 
 
 class ImpressaoDigitalCartao(models.Model):
@@ -217,7 +218,8 @@ class ListaBloqueioImutavel(models.Model):
         )
 
     def __str__(self) -> str:
-        return f"BLACKLIST [{self.tipo_identificador}] {self.valor_identificador} - {self.motivo[:40]}"
+        motivo_resumo = self.motivo[:40] if self.motivo else "Sem motivo"
+        return f"BLACKLIST [{self.tipo_identificador}] {self.valor_identificador} - {motivo_resumo}"
 
 
 class RegistoAlertaFraude(models.Model):
@@ -309,5 +311,6 @@ class RegistoAlertaFraude(models.Model):
         ordering = ["-data_criacao"]
 
     def __str__(self) -> str:
-        return f"[{self.severidade}] {self.tipo_fraude} (Score: {self.score_atribuido}) @ {self.data_criacao.isoformat()}"
+        data_str = self.data_criacao.isoformat() if self.data_criacao else "Sem Data"
+        return f"[{self.severidade}] {self.tipo_fraude} (Score: {self.score_atribuido}) @ {data_str}"
 

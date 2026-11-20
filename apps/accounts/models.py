@@ -320,7 +320,12 @@ class PerfilConsentimento(models.Model):
             )
 
     def __str__(self) -> str:
-        return f"Consentimento de {self.utilizador.telemovel} @ {self.timestamp.isoformat()}"
+        try:
+            user_str = self.utilizador.telemovel if self.utilizador_id else "Sem Utilizador"
+        except Exception:
+            user_str = "Sem Utilizador"
+        ts_str = self.timestamp.isoformat() if getattr(self, "timestamp", None) else "Sem Data"
+        return f"Consentimento de {user_str} @ {ts_str}"
 
 
 class Morada(gis_models.Model):
@@ -402,7 +407,14 @@ class Morada(gis_models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.texto_endereco} ({self.andar_porta}) - {self.utilizador.telemovel}"
+        try:
+            user_str = self.utilizador.telemovel if self.utilizador_id else "Sem Utilizador"
+        except Exception:
+            user_str = "Sem Utilizador"
+        endereco = getattr(self, "texto_endereco", "") or "Endereço não definido"
+        andar = getattr(self, "andar_porta", "")
+        porta = f" ({andar})" if andar else ""
+        return f"{endereco}{porta} - {user_str}"
 
 
 class RegistoOTP(models.Model):

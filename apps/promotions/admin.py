@@ -33,7 +33,7 @@ class CupaoDescontoAdmin(MasterModelAdmin):
         },
     )
     def tipo_desconto_badge(self, obj: CupaoDesconto) -> str:
-        return obj.tipo_desconto
+        return obj.tipo_desconto or "PERCENTAGEM"
 
     @display(
         description=_("Financiador"),
@@ -44,4 +44,4 @@ class CupaoDescontoAdmin(MasterModelAdmin):
         },
     )
     def financiador_badge(self, obj: CupaoDesconto) -> str:
-        return obj.financiador
+        return obj.financiador or "PLATAFORMA"

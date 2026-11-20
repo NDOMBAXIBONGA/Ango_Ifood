@@ -57,7 +57,7 @@ class ParceiroLojaAdmin(MasterModelAdmin):
         },
     )
     def estado_badge(self, obj: ParceiroLoja) -> str:
-        return obj.estado
+        return obj.estado or "PENDENTE"
 
     fieldsets = (
         (

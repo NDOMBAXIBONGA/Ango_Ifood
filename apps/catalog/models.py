@@ -392,9 +392,15 @@ class HorarioFuncionamento(models.Model):
         ]
 
     def __str__(self) -> str:
-        dia_label = self.get_dia_semana_display()
-        pausa_str = " [PAUSA TEMPORÁRIA]" if self.is_pausa_temporaria else ""
-        return f"{self.loja.nome} - {dia_label}: {self.hora_abertura:%H:%M} às {self.hora_fecho:%H:%M}{pausa_str}"
+        try:
+            loja_nome = self.loja.nome if self.loja_id else "Sem Loja"
+        except Exception:
+            loja_nome = "Sem Loja"
+        dia_label = self.get_dia_semana_display() if hasattr(self, "get_dia_semana_display") else str(getattr(self, "dia_semana", ""))
+        pausa_str = " [PAUSA TEMPORÁRIA]" if getattr(self, "is_pausa_temporaria", False) else ""
+        abertura = self.hora_abertura.strftime("%H:%M") if getattr(self, "hora_abertura", None) else "--:--"
+        fecho = self.hora_fecho.strftime("%H:%M") if getattr(self, "hora_fecho", None) else "--:--"
+        return f"{loja_nome} - {dia_label}: {abertura} às {fecho}{pausa_str}"
 
 
 class CategoriaItem(models.Model):
@@ -449,7 +455,12 @@ class CategoriaItem(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.loja.nome} -> {self.nome} (#{self.ordem_exibicao})"
+        try:
+            loja_nome = self.loja.nome if self.loja_id else "Sem Loja"
+        except Exception:
+            loja_nome = "Sem Loja"
+        ordem = getattr(self, "ordem_exibicao", 0)
+        return f"{loja_nome} -> {self.nome or 'Sem Nome'} (#{ordem})"
 
     @property
     def itens(self):
@@ -652,8 +663,14 @@ class GrupoOpcao(models.Model):
             )
 
     def __str__(self) -> str:
-        obrigatorio_str = "Obrigatório" if self.is_obrigatorio else "Opcional"
-        return f"{self.item.nome} -> {self.nome} ({obrigatorio_str}: {self.minimo_escolhas}..{self.maximo_escolhas})"
+        try:
+            item_nome = self.item.nome if self.item_id else "Sem Item"
+        except Exception:
+            item_nome = "Sem Item"
+        obrigatorio_str = "Obrigatório" if getattr(self, "is_obrigatorio", False) else "Opcional"
+        min_e = getattr(self, "minimo_escolhas", 0)
+        max_e = getattr(self, "maximo_escolhas", 1)
+        return f"{item_nome} -> {self.nome or 'Sem Nome'} ({obrigatorio_str}: {min_e}..{max_e})"
 
     @property
     def opcoes(self):
@@ -831,5 +848,11 @@ class MidiaLoja(models.Model):
         verbose_name_plural = _("Mídias das Lojas")
 
     def __str__(self) -> str:
-        return f"{self.tipo} - {self.nome_arquivo} ({self.loja.nome})"
+        try:
+            loja_nome = self.loja.nome if self.loja_id else "Sem Loja"
+        except Exception:
+            loja_nome = "Sem Loja"
+        tipo = getattr(self, "tipo", "MIDIA")
+        nome = getattr(self, "nome_arquivo", "arquivo")
+        return f"{tipo} - {nome} ({loja_nome})"
 

@@ -185,8 +185,17 @@ class Estafeta(gis_models.Model):
             )
 
     def __str__(self) -> str:
-        online_str = "ONLINE" if self.is_online else "OFFLINE"
-        return f"Estafeta {self.utilizador.nome} [{self.tipo_veiculo} | {online_str}]"
+        online_str = "ONLINE" if getattr(self, "is_online", False) else "OFFLINE"
+        try:
+            user_nome = (
+                self.utilizador.nome
+                if (self.utilizador_id and self.utilizador and self.utilizador.nome)
+                else (self.utilizador.telemovel if (self.utilizador_id and self.utilizador) else "Sem Utilizador")
+            )
+        except Exception:
+            user_nome = "Sem Utilizador"
+        tipo = getattr(self, "tipo_veiculo", "Veículo")
+        return f"Estafeta {user_nome} [{tipo} | {online_str}]"
 
 
 class Entrega(gis_models.Model):
@@ -342,5 +351,14 @@ class Entrega(gis_models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:
-        estafeta_nome = self.estafeta.utilizador.nome if self.estafeta else "Sem Estafeta"
-        return f"Entrega {self.id} (Pedido {self.pedido_id}) - {self.estado_logistico} [{estafeta_nome}]"
+        try:
+            estafeta_nome = (
+                self.estafeta.utilizador.nome
+                if (self.estafeta_id and self.estafeta and self.estafeta.utilizador_id and self.estafeta.utilizador and self.estafeta.utilizador.nome)
+                else (f"Estafeta #{str(self.estafeta_id)[:6]}" if self.estafeta_id else "Sem Estafeta")
+            )
+        except Exception:
+            estafeta_nome = "Sem Estafeta"
+        estado = getattr(self, "estado_logistico", "PENDENTE")
+        ped_id = getattr(self, "pedido_id", "Sem Pedido")
+        return f"Entrega {self.id} (Pedido {ped_id}) - {estado} [{estafeta_nome}]"

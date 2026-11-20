@@ -115,17 +115,28 @@ class SystemConfigurationAdmin(MasterModelAdmin):
 
     @admin.display(description="Taxa Base")
     def taxa_base_formatada(self, obj: SystemConfiguration) -> str:
-        return f"{obj.taxa_base_entrega_aoa:,.2f} Kz"
+        if obj.taxa_base_entrega_aoa is not None:
+            try:
+                return f"{obj.taxa_base_entrega_aoa:,.2f} Kz"
+            except (ValueError, TypeError):
+                return f"{obj.taxa_base_entrega_aoa} Kz"
+        return "0,00 Kz"
 
     @admin.display(description="Valor / KM")
     def valor_km_formatado(self, obj: SystemConfiguration) -> str:
-        return f"{obj.valor_km_entrega_aoa:,.2f} Kz/km"
+        if obj.valor_km_entrega_aoa is not None:
+            try:
+                return f"{obj.valor_km_entrega_aoa:,.2f} Kz/km"
+            except (ValueError, TypeError):
+                return f"{obj.valor_km_entrega_aoa} Kz/km"
+        return "0,00 Kz/km"
 
     @admin.display(description="Comissão Marketplace")
     def comissao_marketplace_badge(self, obj: SystemConfiguration):
+        val = obj.comissao_marketplace_percentagem if obj.comissao_marketplace_percentagem is not None else 0
         return format_html(
             '<strong style="color: #2563eb;">{}%</strong>',
-            obj.comissao_marketplace_percentagem,
+            val,
         )
 
     @admin.display(description="Entregas Ativas")

@@ -121,8 +121,12 @@ class PedidoAdmin(MasterModelAdmin):
 
     @admin.display(description="Total")
     def total_formatado(self, obj: Pedido) -> str:
-        # Se os valores são armazenados como cêntimos ou valor inteiro de Kz
-        return f"{obj.total_cobrado:,.2f} Kz" if obj.total_cobrado else "0.00 Kz"
+        if obj.total_cobrado is not None:
+            try:
+                return f"{obj.total_cobrado:,.2f} Kz"
+            except (ValueError, TypeError):
+                return f"{obj.total_cobrado} Kz"
+        return "0.00 Kz"
 
 
 @admin.register(LinhaPedido)

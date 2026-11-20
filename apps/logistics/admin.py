@@ -127,7 +127,12 @@ class EntregaAdmin(MasterModelAdmin):
 
     @admin.display(description="Distância (km)")
     def distancia_km(self, obj: Entrega) -> str:
-        return f"{obj.distancia_metros / 1000.0:.2f} km" if obj.distancia_metros else "0.00 km"
+        if obj.distancia_metros is not None:
+            try:
+                return f"{float(obj.distancia_metros) / 1000.0:.2f} km"
+            except (ValueError, TypeError):
+                return f"{obj.distancia_metros} m"
+        return "0.00 km"
 
     @admin.display(description="Entrega")
     def id_curto(self, obj: Entrega) -> str:

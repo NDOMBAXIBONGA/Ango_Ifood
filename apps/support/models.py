@@ -261,10 +261,11 @@ class TicketDisputa(models.Model):
         )
 
     def __str__(self) -> str:
-        return (
-            f"Ticket {self.id} | Pedido {self.pedido_id} | "
-            f"{self.tipo_incidente} ({self.prioridade}) | {self.estado} [{self.decisao}]"
-        )
+        incidente = self.tipo_incidente or "Incidente"
+        prio = self.prioridade or "Normal"
+        est = self.estado or "Aberto"
+        dec = self.decisao or "Pendente"
+        return f"Ticket {self.id} | Pedido {self.pedido_id} | {incidente} ({prio}) | {est} [{dec}]"
 
 
 class Parametro(models.Model):
@@ -453,27 +454,36 @@ class Parametro(models.Model):
         if self.tipo_dado == self.TipoDado.BOOLEAN:
             if self.valor_booleano is not None:
                 return self.valor_booleano
-            return self.valor.lower() in ("true", "1", "sim", "yes", "t")
+            if self.valor is not None:
+                return str(self.valor).strip().lower() in ("true", "1", "sim", "yes", "t")
+            return False
         elif self.tipo_dado == self.TipoDado.NUMBER:
             if self.valor_numerico is not None:
                 return float(self.valor_numerico)
-            try:
-                return float(self.valor.replace(",", "."))
-            except (ValueError, TypeError):
-                return 0.0
+            if self.valor is not None:
+                try:
+                    return float(str(self.valor).replace(",", "."))
+                except (ValueError, TypeError):
+                    return 0.0
+            return 0.0
         elif self.tipo_dado == self.TipoDado.JSON:
             if self.valor_json is not None:
                 return self.valor_json
-            try:
-                import json
-                return json.loads(self.valor)
-            except Exception:
-                return {}
+            if self.valor is not None:
+                try:
+                    import json
+                    return json.loads(str(self.valor))
+                except Exception:
+                    return {}
+            return {}
         elif self.tipo_dado == self.TipoDado.FILE_ASSET:
-            if self.ficheiro_asset:
-                return self.ficheiro_asset.url
-            return self.valor
-        return self.valor
+            try:
+                if self.ficheiro_asset and hasattr(self.ficheiro_asset, "url"):
+                    return self.ficheiro_asset.url
+            except (ValueError, Exception):
+                pass
+            return self.valor or ""
+        return self.valor or ""
 
 
 class ParametroHistorico(models.Model):
@@ -529,7 +539,14 @@ class ParametroHistorico(models.Model):
         ordering = ["-versao", "-criado_em"]
 
     def __str__(self) -> str:
-        return f"{self.parametro.chave} v{self.versao} ({self.alterado_por} em {self.criado_em.strftime('%d/%m/%Y %H:%M')})"
+        try:
+            chave = self.parametro.chave if self.parametro_id else "Sem Parâmetro"
+        except Exception:
+            chave = "Sem Parâmetro"
+        data_formatada = self.criado_em.strftime("%d/%m/%Y %H:%M") if getattr(self, "criado_em", None) else "Sem Data"
+        versao = getattr(self, "versao", 1)
+        autor = getattr(self, "alterado_por", "Admin")
+        return f"{chave} v{versao} ({autor} em {data_formatada})"
 
     def reverter(self, utilizador_solicitante: str = "Admin") -> None:
         """Restaura o estado do parâmetro para os dados salvos neste snapshot."""
@@ -656,6 +673,9 @@ class AppBannerDinamico(models.Model):
 
     @property
     def url_imagem_final(self) -> str:
-        if self.imagem:
-            return self.imagem.url
-        return self.imagem_url_externa
+        try:
+            if self.imagem and hasattr(self.imagem, "url"):
+                return self.imagem.url
+        except (ValueError, Exception):
+            pass
+        return self.imagem_url_externa or ""

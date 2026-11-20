@@ -295,7 +295,9 @@ class AppVersion(models.Model):
     def __str__(self) -> str:
         status = " [OBRIGATÓRIA]" if self.obrigatoria else ""
         ativo = " [INATIVA]" if not self.ativa else ""
-        return f"{self.plataforma} v{self.versao_nome} (build {self.versao_codigo}){status}{ativo}"
+        v_nome = self.versao_nome or "0.0.0"
+        v_cod = self.versao_codigo or 0
+        return f"{self.plataforma} v{v_nome} (build {v_cod}){status}{ativo}"
 
     def clean(self) -> None:
         """

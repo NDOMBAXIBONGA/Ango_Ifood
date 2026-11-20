@@ -399,7 +399,14 @@ class LinhaPedido(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:
-        return f"{self.quantidade}x {self.item.nome} @ {self.preco_unitario_historico} (Pedido {self.pedido_id})"
+        try:
+            item_nome = self.item.nome if self.item_id else "Item Removido"
+        except Exception:
+            item_nome = "Item Removido"
+        qtd = getattr(self, "quantidade", 1)
+        preco = getattr(self, "preco_unitario_historico", 0) or 0
+        ped_id = getattr(self, "pedido_id", "Sem Pedido")
+        return f"{qtd}x {item_nome} @ {preco} (Pedido {ped_id})"
 
 
 class LinhaPedidoOpcaoSelecionada(models.Model):
@@ -465,7 +472,13 @@ class LinhaPedidoOpcaoSelecionada(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:
-        return f"{self.opcao.nome} (+{self.preco_adicional_historico}) -> Linha {self.linha_pedido_id}"
+        try:
+            opcao_nome = self.opcao.nome if self.opcao_id else "Opção Removida"
+        except Exception:
+            opcao_nome = "Opção Removida"
+        preco = getattr(self, "preco_adicional_historico", 0) or 0
+        linha_id = getattr(self, "linha_pedido_id", "Sem Linha")
+        return f"{opcao_nome} (+{preco}) -> Linha {linha_id}"
 
 
 # Alias retrocompatível para importações existentes

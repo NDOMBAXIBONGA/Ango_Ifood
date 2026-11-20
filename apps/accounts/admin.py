@@ -77,7 +77,7 @@ class CustomUserAdmin(MasterModelAdmin, UserAdmin):
         },
     )
     def tipo_utilizador_badge(self, obj: CustomUser) -> str:
-        return obj.tipo_utilizador
+        return obj.tipo_utilizador or "CLIENTE"
 
     @display(
         description=_("Estado"),
@@ -89,7 +89,7 @@ class CustomUserAdmin(MasterModelAdmin, UserAdmin):
         },
     )
     def estado_badge(self, obj: CustomUser) -> str:
-        return obj.estado
+        return obj.estado or "ATIVO"
 
     fieldsets = (
         (

@@ -60,8 +60,11 @@ class TicketDisputaAdmin(MasterModelAdmin):
 
     @admin.display(description="Cliente / Reclamante")
     def utilizador_reclamante(self, obj: TicketDisputa) -> str:
-        if obj.pedido and getattr(obj.pedido, "cliente", None):
-            return obj.pedido.cliente.nome or obj.pedido.cliente.telemovel
+        try:
+            if obj.pedido_id and obj.pedido and getattr(obj.pedido, "cliente", None):
+                return obj.pedido.cliente.nome or obj.pedido.cliente.telemovel or "-"
+        except Exception:
+            pass
         return "-"
 
 
@@ -203,30 +206,39 @@ class ParametroAdmin(MasterModelAdmin):
 
     @admin.display(description="Valor Ativo")
     def valor_preview(self, obj: Parametro):
-        if obj.tipo_dado == Parametro.TipoDado.COLOR_HEX and obj.valor.startswith("#"):
-            return format_html(
-                '<div style="display: flex; align-items: center; gap: 6px;">'
-                '<span style="width: 14px; height: 14px; border-radius: 50%; background-color: {}; border: 1px solid #cbd5e1; display: inline-block;"></span>'
-                '<code>{}</code></div>',
-                obj.valor,
-                obj.valor,
-            )
-        elif obj.tipo_dado == Parametro.TipoDado.BOOLEAN:
-            val = obj.get_valor_resolvido()
-            return format_html(
-                '<span style="color: {}; font-weight: bold;">{}</span>',
-                "#16a34a" if val else "#dc2626",
-                "✔ Ativo" if val else "✖ Inativo",
-            )
-        elif obj.tipo_dado == Parametro.TipoDado.FILE_ASSET and obj.ficheiro_asset:
-            return format_html(
-                '<a href="{}" target="_blank" style="color: #2563eb; text-decoration: underline;">Visualizar Ficheiro</a>',
-                obj.ficheiro_asset.url,
-            )
-        res = str(obj.get_valor_resolvido())
-        if len(res) > 40:
-            return res[:37] + "..."
-        return res
+        try:
+            if obj.tipo_dado == Parametro.TipoDado.COLOR_HEX and obj.valor and str(obj.valor).strip().startswith("#"):
+                clean_hex = str(obj.valor).strip()
+                return format_html(
+                    '<div style="display: flex; align-items: center; gap: 6px;">'
+                    '<span style="width: 14px; height: 14px; border-radius: 50%; background-color: {}; border: 1px solid #cbd5e1; display: inline-block;"></span>'
+                    '<code>{}</code></div>',
+                    clean_hex,
+                    clean_hex,
+                )
+            elif obj.tipo_dado == Parametro.TipoDado.BOOLEAN:
+                val = obj.get_valor_resolvido()
+                return format_html(
+                    '<span style="color: {}; font-weight: bold;">{}</span>',
+                    "#16a34a" if val else "#dc2626",
+                    "✔ Ativo" if val else "✖ Inativo",
+                )
+            elif obj.tipo_dado == Parametro.TipoDado.FILE_ASSET:
+                try:
+                    if obj.ficheiro_asset and hasattr(obj.ficheiro_asset, "url"):
+                        return format_html(
+                            '<a href="{}" target="_blank" style="color: #2563eb; text-decoration: underline;">Visualizar Ficheiro</a>',
+                            obj.ficheiro_asset.url,
+                        )
+                except (ValueError, Exception):
+                    pass
+            val_resolvido = obj.get_valor_resolvido()
+            res = str(val_resolvido) if val_resolvido is not None else ""
+            if len(res) > 40:
+                return res[:37] + "..."
+            return res or "-"
+        except Exception:
+            return str(obj.valor or "-")
 
     @admin.display(description="Versão")
     def versao_badge(self, obj: Parametro):
