@@ -9,6 +9,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'core/localization/app_localizations_pt_ao.dart';
 import 'core/network/app_environment_config.dart';
+import 'core/services/update_service.dart';
 import 'core/theme/theme.dart';
 import 'features/auth/auth_bloc.dart';
 import 'features/catalog/customer_catalog_screens.dart';
@@ -124,7 +125,9 @@ void main() {
 // ==============================================================================
 // 2. APLICAÇÃO PRINCIPAL (DeliveryApp)
 // ==============================================================================
-class DeliveryApp extends StatelessWidget {
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
+
+class DeliveryApp extends StatefulWidget {
   final Dio dio;
   final ISecureTokenStorage tokenStorage;
   final AuthRepository authRepository;
@@ -137,26 +140,45 @@ class DeliveryApp extends StatelessWidget {
   });
 
   @override
+  State<DeliveryApp> createState() => _DeliveryAppState();
+}
+
+class _DeliveryAppState extends State<DeliveryApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Inicialização do observador de ciclo de vida para verificação OTA / Kill Switch
+    UpdateService.instance.initLifecycleObserver(navigatorKey: rootNavigatorKey);
+  }
+
+  @override
+  void dispose() {
+    UpdateService.instance.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     // Injeta os BLoCs de infraestrutura no topo da árvore para evitar erros de ProviderNotFound
     return MultiBlocProvider(
       providers: [
         BlocProvider<AppInitializationBloc>(
           create: (_) => AppInitializationBloc(
-            dio: dio,
-            tokenStorage: tokenStorage,
+            dio: widget.dio,
+            tokenStorage: widget.tokenStorage,
           ),
         ),
         BlocProvider<AuthBloc>(
           create: (_) => AuthBloc(
-            authRepository: authRepository,
-            tokenStorage: tokenStorage,
+            authRepository: widget.authRepository,
+            tokenStorage: widget.tokenStorage,
           )..add(const CheckAuthStatusRequested()),
         ),
       ],
       child: RepositoryProvider<CatalogRepository>.value(
         value: CatalogRepository(baseUrl: AppEnvironmentConfig.baseHttpUrl),
         child: MaterialApp(
+          navigatorKey: rootNavigatorKey,
           title: 'Delivery Ango_Ifood',
           debugShowCheckedModeBanner: false,
           locale: AppLocalizationsPtAo.locale,

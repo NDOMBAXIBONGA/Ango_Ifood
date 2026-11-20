@@ -7,6 +7,7 @@ import '../../auth/theme/role_theme.dart';
 import '../../catalog/customer_main_navigation_shell.dart';
 import '../../partner/screens/partner_main_navigation_shell.dart';
 import '../../courier/screens/courier_main_navigation_shell.dart';
+import '../../../core/services/session_recovery_service.dart';
 import '../bloc/app_initialization_bloc.dart';
 
 /// Ecrã de Splash Inicial Absoluto (`SplashScreen`).
@@ -86,6 +87,20 @@ class _SplashScreenState extends State<SplashScreen>
               // Entrada direta em Modo Visitante (zero fricção / exploração imediata)
               RoleThemeManager.instance.setRole(PlatformRole.cliente);
               destination = const CustomerMainNavigationShell();
+            }
+
+            // 1. Verificação de Restauro de Estado de Navegação pós-atualização OTA
+            final recovered = await SessionRecoveryService.instance.checkAndRecoverSession();
+            if (recovered != null && context.mounted) {
+              try {
+                Navigator.of(context).pushReplacementNamed(
+                  recovered.routeName,
+                  arguments: recovered.arguments,
+                );
+                return;
+              } catch (_) {
+                // Se a rota falhar, prossegue normalmente para o shell de destino
+              }
             }
 
             if (!context.mounted) return;
