@@ -3,12 +3,20 @@ Sinais Django para a aplicação 'support'.
 Implementa o gatilho automático de alerta de SLA de Suporte para Incidentes de Segurança (RN-139, RN-140).
 """
 import logging
-from django.db.models.signals import post_save
+from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
-from apps.support.models import TicketDisputa
+from apps.support.models import AppBannerDinamico, Parametro, TicketDisputa
 
 logger = logging.getLogger("support.signals")
+
+
+@receiver([post_save, post_delete], sender=Parametro)
+@receiver([post_save, post_delete], sender=AppBannerDinamico)
+def invalidar_cache_bootstrap_sistema_post_save(sender, **kwargs) -> None:
+    """Invalida a chave de cache de bootstrap sempre que um parâmetro ou banner for alterado."""
+    from apps.support.bootstrap_views import invalidate_bootstrap_cache
+    invalidate_bootstrap_cache()
 
 
 @receiver(post_save, sender=TicketDisputa)

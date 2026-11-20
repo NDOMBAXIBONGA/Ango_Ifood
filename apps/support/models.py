@@ -270,9 +270,8 @@ class TicketDisputa(models.Model):
 class Parametro(models.Model):
     """
     Entidade de Governação e Configuração Operacional do Sistema (Secção 8 e Secção 11).
-    Armazena todos os parâmetros configuráveis de SLAs, timeouts e limites da plataforma.
-    Atributos principais da Secção 11: chave, valor, âmbito, vigência, versão, autor.
-    Consumido transversalmente por todos os módulos do ecossistema.
+    Armazena todos os parâmetros configuráveis de SLAs, timeouts, limites da plataforma,
+    branding, cores, textos dinâmicos (CMS) e feature flags com 100% de controlo remoto.
     """
 
     class AmbitoParametro(models.TextChoices):
@@ -284,6 +283,25 @@ class Parametro(models.Model):
         LOJA = "Loja", _("Loja")
         CONTRATO = "Contrato", _("Contrato")
         PERFIL = "Perfil", _("Perfil / Agente")
+
+    class CategoriaParametro(models.TextChoices):
+        BRANDING = "BRANDING", _("🎨 Identidade Visual, Ícone & Assets")
+        DESIGN_SYSTEM = "DESIGN_SYSTEM", _("🌈 Cores, Temas & Estilização")
+        TEXTOS_CMS = "TEXTOS_CMS", _("📝 Textos, Avisos & Microcopy")
+        FINANCAS_TAXAS = "FINANCAS_TAXAS", _("💰 Taxas, Tarifas & Comissões")
+        LOGISTICA = "LOGISTICA", _("🛵 Logística & Regras de Frete")
+        FEATURE_FLAGS = "FEATURE_FLAGS", _("⚡ Ativação de Módulos (Feature Flags)")
+        OUTRO = "OUTRO", _("⚙️ Outros Parâmetros")
+
+    class TipoDado(models.TextChoices):
+        STRING = "STRING", _("Texto Simples")
+        NUMBER = "NUMBER", _("Numérico")
+        BOOLEAN = "BOOLEAN", _("Verdadeiro / Falso (Booleano)")
+        COLOR_HEX = "COLOR_HEX", _("Cor Hexadecimal (#RRGGBB)")
+        JSON = "JSON", _("Estrutura JSON / Configuração")
+        IMAGE_URL = "IMAGE_URL", _("URL de Imagem / Ícone Externo")
+        FILE_ASSET = "FILE_ASSET", _("Ficheiro / Mídia Carregada")
+        MARKDOWN = "MARKDOWN", _("Texto Formatado (Markdown/HTML)")
 
     id = models.UUIDField(
         primary_key=True,
@@ -297,7 +315,23 @@ class Parametro(models.Model):
         unique=True,
         db_index=True,
         verbose_name=_("Chave do Parâmetro"),
-        help_text=_("Identificador canónico único do parâmetro (ex.: 'JANELA_CANCELAMENTO_GRATUITO')."),
+        help_text=_("Identificador canónico único do parâmetro (ex.: 'APP_PRIMARY_COLOR', 'TAXA_BASE_ENTREGA')."),
+    )
+    categoria = models.CharField(
+        max_length=30,
+        choices=CategoriaParametro.choices,
+        default=CategoriaParametro.OUTRO,
+        db_index=True,
+        verbose_name=_("Categoria Operacional"),
+        help_text=_("Classificação funcional para organização no painel administrativo."),
+    )
+    tipo_dado = models.CharField(
+        max_length=20,
+        choices=TipoDado.choices,
+        default=TipoDado.STRING,
+        db_index=True,
+        verbose_name=_("Tipo de Dado"),
+        help_text=_("Formato estrito do valor armazenado."),
     )
     nome = models.CharField(
         max_length=150,
@@ -306,12 +340,11 @@ class Parametro(models.Model):
         verbose_name=_("Nome do Parâmetro"),
         help_text=_("Designação amigável descrita na tabela da Secção 8 (ex.: 'Janela de cancelamento gratuito')."),
     )
-    valor = models.CharField(
-        max_length=100,
+    valor = models.TextField(
         blank=True,
         default="",
-        verbose_name=_("Valor Configurado"),
-        help_text=_("Valor predefinido e formatado conforme a Secção 8 (ex.: '60s', '3 min', '30s', '3 km', '2000 Kz', '5%')."),
+        verbose_name=_("Valor Textual"),
+        help_text=_("Valor configurado em formato texto ou representação canónica."),
     )
     valor_numerico = models.DecimalField(
         max_digits=14,
@@ -320,6 +353,25 @@ class Parametro(models.Model):
         blank=True,
         verbose_name=_("Valor Numérico Base"),
         help_text=_("Representação numérica padrão para operações lógicas diretas (segundos, metros, cêntimos, percentagem)."),
+    )
+    valor_booleano = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name=_("Valor Booleano (Sim/Não)"),
+        help_text=_("Ativação ou desativação direta de funcionalidades e feature flags."),
+    )
+    valor_json = models.JSONField(
+        null=True,
+        blank=True,
+        verbose_name=_("Configuração Estruturada (JSON)"),
+        help_text=_("Estrutura avançada de dados (listas, menus, matrizes de estilo)."),
+    )
+    ficheiro_asset = models.FileField(
+        upload_to="system_assets/",
+        null=True,
+        blank=True,
+        verbose_name=_("Ficheiro / Imagem de Asset"),
+        help_text=_("Upload direto de logótipos, ícones da app, banners ou documentos."),
     )
     unidade = models.CharField(
         max_length=30,
@@ -386,11 +438,224 @@ class Parametro(models.Model):
         db_table = "support_parametro"
         verbose_name = _("Parâmetro de Sistema")
         verbose_name_plural = _("Parâmetros de Sistema")
-        ordering = ["ambito", "chave"]
+        ordering = ["categoria", "chave"]
         indexes = [
             models.Index(fields=["chave", "vigencia_inicio"], name="idx_param_chave_vigencia"),
+            models.Index(fields=["categoria", "chave"], name="idx_param_cat_chave"),
             models.Index(fields=["ambito", "chave"], name="idx_param_ambito_chave"),
         ]
 
     def __str__(self) -> str:
-        return f"[{self.ambito}] {self.chave} = {self.valor} ({self.regra_associada})"
+        return f"[{self.categoria}] {self.chave} = {self.get_valor_resolvido()} ({self.nome or self.regra_associada})"
+
+    def get_valor_resolvido(self) -> Any:
+        """Retorna o valor nativo tipado conforme a definição de 'tipo_dado'."""
+        if self.tipo_dado == self.TipoDado.BOOLEAN:
+            if self.valor_booleano is not None:
+                return self.valor_booleano
+            return self.valor.lower() in ("true", "1", "sim", "yes", "t")
+        elif self.tipo_dado == self.TipoDado.NUMBER:
+            if self.valor_numerico is not None:
+                return float(self.valor_numerico)
+            try:
+                return float(self.valor.replace(",", "."))
+            except (ValueError, TypeError):
+                return 0.0
+        elif self.tipo_dado == self.TipoDado.JSON:
+            if self.valor_json is not None:
+                return self.valor_json
+            try:
+                import json
+                return json.loads(self.valor)
+            except Exception:
+                return {}
+        elif self.tipo_dado == self.TipoDado.FILE_ASSET:
+            if self.ficheiro_asset:
+                return self.ficheiro_asset.url
+            return self.valor
+        return self.valor
+
+
+class ParametroHistorico(models.Model):
+    """
+    Tabela de Auditoria Imutável de Parâmetros com Capacidade de Rollback (Reversão em 1 Clique).
+    Regista cada mutação de valor, autor e IP de origem.
+    """
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        verbose_name=_("ID do Histórico"),
+    )
+    parametro = models.ForeignKey(
+        Parametro,
+        on_delete=models.CASCADE,
+        related_name="historico_versoes",
+        verbose_name=_("Parâmetro"),
+    )
+    versao = models.PositiveIntegerField(
+        verbose_name=_("Versão Registada"),
+    )
+    snapshot_valor = models.JSONField(
+        verbose_name=_("Snapshot dos Valores"),
+        help_text=_("Dicionário completo com estado do parâmetro antes da alteração."),
+    )
+    alterado_por = models.CharField(
+        max_length=150,
+        default="Sistema",
+        verbose_name=_("Alterado por"),
+    )
+    ip_origem = models.CharField(
+        max_length=50,
+        default="127.0.0.1",
+        verbose_name=_("Endereço IP"),
+    )
+    motivo_alteracao = models.CharField(
+        max_length=255,
+        blank=True,
+        default="Atualização de rotina",
+        verbose_name=_("Motivo / Justificação"),
+    )
+    criado_em = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_("Data da Mutação"),
+    )
+
+    class Meta:
+        db_table = "support_parametro_historico"
+        verbose_name = _("Histórico de Versão do Parâmetro")
+        verbose_name_plural = _("Históricos de Versões dos Parâmetros")
+        ordering = ["-versao", "-criado_em"]
+
+    def __str__(self) -> str:
+        return f"{self.parametro.chave} v{self.versao} ({self.alterado_por} em {self.criado_em.strftime('%d/%m/%Y %H:%M')})"
+
+    def reverter(self, utilizador_solicitante: str = "Admin") -> None:
+        """Restaura o estado do parâmetro para os dados salvos neste snapshot."""
+        p = self.parametro
+        data = self.snapshot_valor or {}
+        p.valor = data.get("valor", p.valor)
+        p.valor_numerico = data.get("valor_numerico", p.valor_numerico)
+        p.valor_booleano = data.get("valor_booleano", p.valor_booleano)
+        p.valor_json = data.get("valor_json", p.valor_json)
+        p.versao += 1
+        p.autor = f"Rollback para v{self.versao} por {utilizador_solicitante}"
+        p.save()
+
+
+class AppBannerDinamico(models.Model):
+    """
+    Modelo de Banners Promocionais, Avisos Globais e Pop-ups Segmentados para Mobile & Web.
+    Totalmente configurável remotamente pelo Django Admin.
+    """
+
+    class TipoBanner(models.TextChoices):
+        HOME_CAROUSEL = "HOME_CAROUSEL", _("🎠 Carrossel da Home")
+        TOP_BAR_AVISO = "TOP_BAR_AVISO", _("📢 Faixa de Aviso no Topo (Top Bar)")
+        POPUP_MODAL = "POPUP_MODAL", _("🛑 Pop-up Modal Interativo")
+
+    class PublicoAlvo(models.TextChoices):
+        TODOS = "TODOS", _("Todos os Utilizadores")
+        CLIENTE = "CLIENTE", _("Apenas Clientes")
+        ESTAFETA = "ESTAFETA", _("Apenas Estafetas")
+        PARCEIRO = "PARCEIRO", _("Apenas Restaurantes / Parceiros")
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        verbose_name=_("ID do Banner"),
+    )
+    titulo = models.CharField(
+        max_length=150,
+        verbose_name=_("Título do Banner"),
+    )
+    subtitulo = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name=_("Subtítulo / Mensagem Curta"),
+    )
+    imagem = models.FileField(
+        upload_to="banners/",
+        null=True,
+        blank=True,
+        verbose_name=_("Imagem do Banner (.png, .jpg, .svg, .webp)"),
+    )
+    imagem_url_externa = models.URLField(
+        max_length=500,
+        blank=True,
+        default="",
+        verbose_name=_("URL Externa da Imagem (Alternativo)"),
+    )
+    deeplink = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name=_("Deeplink / Ação ao Clicar"),
+        help_text=_("Exemplo: 'ango://catalog/store/UUID', 'ango://promotions', ou link web externo."),
+    )
+    tipo_banner = models.CharField(
+        max_length=20,
+        choices=TipoBanner.choices,
+        default=TipoBanner.HOME_CAROUSEL,
+        db_index=True,
+        verbose_name=_("Tipo de Exibição"),
+    )
+    publico_alvo = models.CharField(
+        max_length=15,
+        choices=PublicoAlvo.choices,
+        default=PublicoAlvo.TODOS,
+        db_index=True,
+        verbose_name=_("Público-Alvo"),
+    )
+    cor_fundo_hex = models.CharField(
+        max_length=10,
+        blank=True,
+        default="#EA1D2C",
+        verbose_name=_("Cor de Fundo (Hex)"),
+    )
+    cor_texto_hex = models.CharField(
+        max_length=10,
+        blank=True,
+        default="#FFFFFF",
+        verbose_name=_("Cor do Texto (Hex)"),
+    )
+    ativo = models.BooleanField(
+        default=True,
+        db_index=True,
+        verbose_name=_("Banner Ativo"),
+    )
+    ordem = models.PositiveIntegerField(
+        default=0,
+        verbose_name=_("Ordem de Exibição"),
+    )
+    inicio_vigencia = models.DateTimeField(
+        default=timezone.now,
+        verbose_name=_("Início de Exibição"),
+    )
+    fim_vigencia = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Fim de Exibição (Opcional)"),
+    )
+    criado_em = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_("Criado em"),
+    )
+
+    class Meta:
+        db_table = "support_app_banner_dinamico"
+        verbose_name = _("Banner / Aviso Dinâmico")
+        verbose_name_plural = _("Banners & Avisos Dinâmicos")
+        ordering = ["ordem", "-criado_em"]
+
+    def __str__(self) -> str:
+        return f"[{self.tipo_banner}][{self.publico_alvo}] {self.titulo} ({'Ativo' if self.ativo else 'Inativo'})"
+
+    @property
+    def url_imagem_final(self) -> str:
+        if self.imagem:
+            return self.imagem.url
+        return self.imagem_url_externa

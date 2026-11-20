@@ -15,6 +15,7 @@ from rest_framework_simplejwt.views import (
 
 from apps.catalog.urls import partner_router as partner_catalog_router
 from apps.logistics.views import CalcularFreteView
+from apps.support.bootstrap_views import system_bootstrap_api_view
 from core.admin_theme import (
     admin_dynamic_css_view,
     admin_theme_picker_view,
@@ -44,7 +45,7 @@ def health_check(request):
         return JsonResponse(
             {
                 "status": "healthy",
-                "version": "v1.0.7-fix-500",
+                "version": "v1.0.8-full-system-control",
                 "service": "delivery-backend-api",
                 "timestamp": timezone.now().isoformat(),
             },
@@ -1116,6 +1117,9 @@ urlpatterns = [
     # Endpoints de Logística, Entregas e Verificação de PIN (RN-094 a RN-097)
     path("api/v1/logistics/", include("apps.logistics.urls", namespace="logistics")),
     path("api/entregas/calcular-frete/", CalcularFreteView.as_view(), name="entregas-calcular-frete"),
+    # Bootstrap Unificado do Sistema & Server-Driven UI (100% Controlo Remoto)
+    path("api/v1/system/bootstrap/", system_bootstrap_api_view, name="system-bootstrap"),
+    path("api/system/bootstrap/", system_bootstrap_api_view, name="system-bootstrap-alias"),
     # Endpoints de Administração e Dashboard Operacional de KPIs (Secção 10 e Secção 8.1)
     path("api/v1/admin/", include("apps.orders.admin_urls", namespace="admin-portal")),
     # Endpoints de Suporte, Mediação de Disputas e Incidentes (RN-106, RN-138 a RN-142)

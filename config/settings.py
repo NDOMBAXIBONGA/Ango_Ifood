@@ -844,7 +844,7 @@ UNFOLD = {
             {
                 "title": "⚙️ Governança & Sistema",
                 "separator": True,
-                "collapsible": True,
+                "collapsible": False,
                 "items": [
                     {
                         "title": "Configuração da Plataforma",
@@ -852,9 +852,29 @@ UNFOLD = {
                         "link": reverse_lazy("admin:core_systemconfiguration_changelist"),
                     },
                     {
-                        "title": "Parâmetros do Sistema",
+                        "title": "Versões da App (OTA / Kill Switch)",
+                        "icon": "system_update",
+                        "link": reverse_lazy("admin:core_appversion_changelist"),
+                    },
+                    {
+                        "title": "Parâmetros do Sistema (Controlo Total)",
                         "icon": "settings",
                         "link": reverse_lazy("admin:support_parametro_changelist"),
+                    },
+                    {
+                        "title": "Banners & Avisos Dinâmicos",
+                        "icon": "campaign",
+                        "link": reverse_lazy("admin:support_appbannerdinamico_changelist"),
+                    },
+                    {
+                        "title": "Histórico & Rollback de Parâmetros",
+                        "icon": "history",
+                        "link": reverse_lazy("admin:support_parametrohistorico_changelist"),
+                    },
+                    {
+                        "title": "Página Web Download iOS",
+                        "icon": "download",
+                        "link": reverse_lazy("ios-download-page"),
                     },
                 ],
             },

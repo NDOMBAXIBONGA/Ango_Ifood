@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../services/app_config_service.dart';
 
 /// Localização Oficial da Aplicação Mobile para Angola (pt-AO).
 /// Plataforma: Delivery / Ango_Ifood.
@@ -17,6 +18,12 @@ class AppLocalizationsPtAo {
   static AppLocalizationsPtAo of(BuildContext context) {
     return Localizations.of<AppLocalizationsPtAo>(context, AppLocalizationsPtAo) ??
         const AppLocalizationsPtAo();
+  }
+
+  /// Retorna o texto dinâmico gerenciado remotamente pelo Django Admin (Headless CMS)
+  /// ou recorre ao fallback indicado caso ainda não esteja configurado no servidor.
+  String remote(String key, String fallback) {
+    return AppConfigService.instance.getString(key, fallback: fallback);
   }
 
   // ===========================================================================

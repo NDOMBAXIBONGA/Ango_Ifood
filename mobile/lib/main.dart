@@ -9,8 +9,10 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'core/localization/app_localizations_pt_ao.dart';
 import 'core/network/app_environment_config.dart';
+import 'core/services/app_config_service.dart';
 import 'core/services/update_service.dart';
 import 'core/theme/theme.dart';
+import 'core/widgets/maintenance_mode_screen.dart';
 import 'features/auth/auth_bloc.dart';
 import 'features/catalog/customer_catalog_screens.dart';
 import 'features/splash/bloc/app_initialization_bloc.dart';
@@ -86,7 +88,17 @@ void main() {
 
   // Requisito 2: Encapsulamento em runZonedGuarded para proteger o arranque do APK
   runZonedGuarded(
-    () {
+    () async {
+      // 1. Carregamento instantâneo do cache de parâmetros (Offline-First / 0ms)
+      await AppConfigService.instance.loadCachedConfig();
+
+      // Sincronização em segundo plano das configurações remotas (ETag HTTP 304)
+      unawaited(
+        AppConfigService.instance.syncWithRemote(
+          customBaseUrl: AppEnvironmentConfig.baseHttpUrl,
+        ),
+      );
+
       // Instanciação dos serviços essenciais de infraestrutura e tokens
       final tokenStorage = SecureTokenStorage();
       final dio = createSecureDioClient(tokenStorage: tokenStorage);
@@ -159,45 +171,57 @@ class _DeliveryAppState extends State<DeliveryApp> {
 
   @override
   Widget build(BuildContext context) {
-    // Injeta os BLoCs de infraestrutura no topo da árvore para evitar erros de ProviderNotFound
-    return MultiBlocProvider(
-      providers: [
-        BlocProvider<AppInitializationBloc>(
-          create: (_) => AppInitializationBloc(
-            dio: widget.dio,
-            tokenStorage: widget.tokenStorage,
+    return ListenableBuilder(
+      listenable: AppConfigService.instance,
+      builder: (context, _) {
+        final configService = AppConfigService.instance;
+        final dynamicTheme = configService.buildDynamicThemeData();
+
+        // Injeta os BLoCs de infraestrutura no topo da árvore para evitar erros de ProviderNotFound
+        return MultiBlocProvider(
+          providers: [
+            BlocProvider<AppInitializationBloc>(
+              create: (_) => AppInitializationBloc(
+                dio: widget.dio,
+                tokenStorage: widget.tokenStorage,
+              ),
+            ),
+            BlocProvider<AuthBloc>(
+              create: (_) => AuthBloc(
+                authRepository: widget.authRepository,
+                tokenStorage: widget.tokenStorage,
+              )..add(const CheckAuthStatusRequested()),
+            ),
+          ],
+          child: RepositoryProvider<CatalogRepository>.value(
+            value: CatalogRepository(baseUrl: AppEnvironmentConfig.baseHttpUrl),
+            child: MaterialApp(
+              navigatorKey: rootNavigatorKey,
+              title: configService.branding.appName.isNotEmpty
+                  ? configService.branding.appName
+                  : 'Delivery Ango_Ifood',
+              debugShowCheckedModeBanner: false,
+              locale: AppLocalizationsPtAo.locale,
+              supportedLocales: const [
+                AppLocalizationsPtAo.locale,
+                Locale('pt', 'PT'),
+                Locale('pt', 'BR'),
+                Locale('en', 'US'),
+              ],
+              localizationsDelegates: const [
+                AppLocalizationsPtAoDelegate(),
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              theme: dynamicTheme,
+              home: configService.isMaintenanceActive
+                  ? MaintenanceModeScreen(message: configService.maintenanceMessage)
+                  : const SplashScreen(),
+            ),
           ),
-        ),
-        BlocProvider<AuthBloc>(
-          create: (_) => AuthBloc(
-            authRepository: widget.authRepository,
-            tokenStorage: widget.tokenStorage,
-          )..add(const CheckAuthStatusRequested()),
-        ),
-      ],
-      child: RepositoryProvider<CatalogRepository>.value(
-        value: CatalogRepository(baseUrl: AppEnvironmentConfig.baseHttpUrl),
-        child: MaterialApp(
-          navigatorKey: rootNavigatorKey,
-          title: 'Delivery Ango_Ifood',
-          debugShowCheckedModeBanner: false,
-          locale: AppLocalizationsPtAo.locale,
-          supportedLocales: const [
-            AppLocalizationsPtAo.locale,
-            Locale('pt', 'PT'),
-            Locale('pt', 'BR'),
-            Locale('en', 'US'),
-          ],
-          localizationsDelegates: const [
-            AppLocalizationsPtAoDelegate(),
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          theme: AppThemeData.lightTheme,
-          home: const SplashScreen(),
-        ),
-      ),
+        );
+      },
     );
   }
 }
