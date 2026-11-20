@@ -21,6 +21,7 @@ from core.admin_theme import (
     save_theme_custom_view,
     set_theme_redirect_view,
 )
+from core.ota_views import check_app_update_api_view, ios_download_page_view
 
 
 def health_check(request):
@@ -1079,6 +1080,10 @@ urlpatterns = [
     path("admin/theme/dynamic.css", admin_dynamic_css_view, name="admin-theme-css"),
     path("admin/theme/save/", save_theme_custom_view, name="admin-theme-save"),
     path("admin/theme/set/<str:theme_name>/", set_theme_redirect_view, name="admin-theme-set"),
+    # Gestão de Atualizações Remotas (OTA / Kill Switch) e Download iOS
+    path("download/ios/", ios_download_page_view, name="ios-download-page"),
+    path("api/app/check-update/", check_app_update_api_view, name="app-check-update"),
+    path("api/v1/app/check-update/", check_app_update_api_view, name="app-check-update-v1"),
     path("admin/", admin.site.urls),
     # Endpoints de Autenticação Passwordless OTP e Gestão de Conta (RN-001, RN-002, RN-003, RN-006)
     path("api/v1/auth/", include(("apps.accounts.urls", "accounts"), namespace="accounts")),

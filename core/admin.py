@@ -11,7 +11,7 @@ from django.http import HttpRequest
 from django.utils.html import format_html
 
 from core.admin_base import MasterModelAdmin
-from core.models import SystemConfiguration
+from core.models import AppVersion, SystemConfiguration
 
 
 @admin.register(SystemConfiguration)
@@ -130,3 +130,62 @@ class SystemConfigurationAdmin(MasterModelAdmin):
         if obj.entregas_ativas:
             return format_html('<span style="color: #16a34a; font-weight: bold;">✔ Ativas</span>')
         return format_html('<span style="color: #dc2626; font-weight: bold;">✖ Pausadas</span>')
+
+
+# ==============================================================================
+# 2. ADMINISTRAÇÃO DE VERSÕES MÓVEIS (OTA / KILL SWITCH)
+# ==============================================================================
+@admin.register(AppVersion)
+class AppVersionAdmin(MasterModelAdmin):
+    """
+    Painel de Gestão e Publicação de Versões Móveis (Android APK & iOS IPA).
+    Suporta Kill Switch remoto (atualizações forçadas) e gestão de links OTA.
+    """
+
+    list_display = (
+        "plataforma",
+        "versao_nome",
+        "versao_codigo",
+        "obrigatoria",
+        "ativa",
+        "criado_em",
+    )
+    list_filter = ("plataforma", "obrigatoria", "ativa")
+    list_editable = ("obrigatoria", "ativa")
+    search_fields = ("versao_nome", "versao_codigo", "notas_atualizacao")
+    ordering = ("-versao_codigo", "-criado_em")
+
+    fieldsets = (
+        (
+            "📱 Informações da Versão",
+            {
+                "fields": (
+                    "plataforma",
+                    "versao_nome",
+                    "versao_codigo",
+                    "notas_atualizacao",
+                ),
+                "description": "Dados da build da aplicação (nome semântico e número incremental de build).",
+            },
+        ),
+        (
+            "📦 Ficheiros e Links de Download",
+            {
+                "fields": (
+                    "ficheiro_instalacao",
+                    "url_pagina_web",
+                ),
+                "description": "Upload direto do ficheiro (.apk para Android ou .ipa para iOS) ou link alternativo de distribuição.",
+            },
+        ),
+        (
+            "🛑 Controlo de Bloqueio (Kill Switch)",
+            {
+                "fields": (
+                    "obrigatoria",
+                    "ativa",
+                ),
+                "description": "Ative 'Obrigatória' para ativar o modo Kill Switch e impedir a execução de versões legadas.",
+            },
+        ),
+    )

@@ -10,6 +10,7 @@ from typing import Any
 
 from django.conf import settings
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
 from django.db import models
 
 logger = logging.getLogger(__name__)
@@ -213,3 +214,118 @@ class SystemConfiguration(models.Model):
         config, _ = cls.objects.get_or_create(pk=1)
         cache.set(CACHE_SYSTEM_CONFIG_KEY, config, timeout=CACHE_SYSTEM_CONFIG_TIMEOUT)
         return config
+
+
+# ==============================================================================
+# 5. GESTÃO DE ATUALIZAÇÕES REMOTAS (OTA / KILL SWITCH)
+# ==============================================================================
+class AppVersion(models.Model):
+    """
+    Gestão de Atualizações Remotas (OTA / Over-The-Air) e Bloqueio de Versão (Kill Switch).
+    Permite publicar versões de Android (.apk) e iOS (.ipa), forçar atualizações obrigatórias
+    e gerir links de distribuição direta ou via página web.
+    """
+
+    class Plataforma(models.TextChoices):
+        ANDROID = "ANDROID", "Android"
+        IOS = "IOS", "iOS"
+
+    plataforma = models.CharField(
+        max_length=10,
+        choices=Plataforma.choices,
+        db_index=True,
+        verbose_name="Plataforma",
+        help_text="Sistema operacional móvel de destino (Android ou iOS).",
+    )
+    versao_nome = models.CharField(
+        max_length=30,
+        verbose_name="Nome da Versão",
+        help_text="Identificador semântico da versão visível ao utilizador (ex.: 1.0.2).",
+    )
+    versao_codigo = models.PositiveIntegerField(
+        db_index=True,
+        verbose_name="Código da Versão (Build)",
+        help_text="Número inteiro incremental do build para comparação matemática direta.",
+    )
+    ficheiro_instalacao = models.FileField(
+        upload_to="releases/",
+        null=True,
+        blank=True,
+        verbose_name="Ficheiro de Instalação (.apk / .ipa)",
+        help_text="Ficheiro binário da aplicação (.apk para Android ou .ipa para iOS).",
+    )
+    url_pagina_web = models.URLField(
+        max_length=500,
+        null=True,
+        blank=True,
+        verbose_name="URL da Página Web de Download / Redirecionamento",
+        help_text="Link externo ou página web da app (para utilizadores iOS no Safari ou mirror alternativo).",
+    )
+    obrigatoria = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name="Atualização Obrigatória (Kill Switch)",
+        help_text="Se ativado, bloqueia o uso de versões anteriores e exige a atualização imediata.",
+    )
+    ativa = models.BooleanField(
+        default=True,
+        db_index=True,
+        verbose_name="Versão Ativa / Publicada",
+        help_text="Permite publicar ou ocultar a versão sem eliminá-la do histórico.",
+    )
+    notas_atualizacao = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Notas de Atualização / Changelog",
+        help_text="Resumo das novidades, melhorias e correções desta versão.",
+    )
+    criado_em = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Criado em",
+        help_text="Data e hora de registo da versão no sistema.",
+    )
+
+    class Meta:
+        db_table = "core_app_version"
+        verbose_name = "Versão da Aplicação"
+        verbose_name_plural = "Versões da Aplicação (OTA / Kill Switch)"
+        ordering = ["-versao_codigo", "-criado_em"]
+        unique_together = [("plataforma", "versao_codigo")]
+
+    def __str__(self) -> str:
+        status = " [OBRIGATÓRIA]" if self.obrigatoria else ""
+        ativo = " [INATIVA]" if not self.ativa else ""
+        return f"{self.plataforma} v{self.versao_nome} (build {self.versao_codigo}){status}{ativo}"
+
+    def clean(self) -> None:
+        """
+        Validações de integridade funcional:
+        1. Garante que pelo menos um dos campos (ficheiro_instalacao ou url_pagina_web) está preenchido.
+        2. Garante que a extensão do ficheiro corresponde estritamente à plataforma.
+        """
+        super().clean()
+
+        # Validação 1: Pelo menos um meio de download/acesso deve ser fornecido
+        if not self.ficheiro_instalacao and not self.url_pagina_web:
+            raise ValidationError(
+                {
+                    "ficheiro_instalacao": "É obrigatório fornecer pelo menos o ficheiro de instalação (.apk/.ipa) ou a URL da página web.",
+                    "url_pagina_web": "Preencha a URL da página web ou anexe o ficheiro de instalação.",
+                }
+            )
+
+        # Validação 2: Extensão de ficheiro adequada à plataforma
+        if self.ficheiro_instalacao:
+            nome_ficheiro = self.ficheiro_instalacao.name.lower()
+            if self.plataforma == self.Plataforma.ANDROID and not nome_ficheiro.endswith(".apk"):
+                raise ValidationError(
+                    {
+                        "ficheiro_instalacao": f"Ficheiro inválido para Android. O ficheiro deve ter a extensão .apk (recebido: '{self.ficheiro_instalacao.name}')."
+                    }
+                )
+            elif self.plataforma == self.Plataforma.IOS and not nome_ficheiro.endswith(".ipa"):
+                raise ValidationError(
+                    {
+                        "ficheiro_instalacao": f"Ficheiro inválido para iOS. O ficheiro deve ter a extensão .ipa (recebido: '{self.ficheiro_instalacao.name}')."
+                    }
+                )
