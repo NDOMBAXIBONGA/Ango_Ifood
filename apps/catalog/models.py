@@ -120,6 +120,8 @@ class ParceiroLoja(gis_models.Model):
         srid=4326,
         geography=True,
         spatial_index=True,
+        null=True,
+        blank=True,
         verbose_name=_("Geolocalização da Loja (PostGIS)"),
         help_text=_(
             "RN-010 / RN-025: Ponto geográfico PostGIS (SRID 4326) onde se situa a loja para cálculo de rotas e raio."
