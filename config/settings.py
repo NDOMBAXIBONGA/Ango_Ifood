@@ -200,11 +200,15 @@ DATABASES = {
         engine="django.contrib.gis.db.backends.postgis",
     )
 }
-DATABASES["default"]["ENGINE"] = "django.contrib.gis.db.backends.postgis"
-DATABASES["default"]["CONN_MAX_AGE"] = env.int("DB_CONN_MAX_AGE")
+# Assegura que tanto 'postgres://' como 'postgresql://' utilizem o backend PostGIS
+if "postgis" in DATABASES["default"]["ENGINE"] or "postgresql" in DATABASES["default"]["ENGINE"]:
+    DATABASES["default"]["ENGINE"] = "django.contrib.gis.db.backends.postgis"
+
+DATABASES["default"]["CONN_MAX_AGE"] = env.int("DB_CONN_MAX_AGE", default=0)
 DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
 
-if env.bool("DB_SSL_REQUIRE"):
+# Suporte automático a conexões remotas seguras (ex: Render / Supabase / Neon / RDS)
+if env.bool("DB_SSL_REQUIRE", default=False) or "sslmode=require" in env("DATABASE_URL", default=""):
     DATABASES["default"].setdefault("OPTIONS", {})["sslmode"] = "require"
 
 # Suporte a caminhos explícitos para bibliotecas nativas C (GDAL / GEOS), útil em Windows/Docker customizado
