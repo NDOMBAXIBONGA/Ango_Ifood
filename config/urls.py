@@ -43,7 +43,7 @@ def health_check(request):
         return JsonResponse(
             {
                 "status": "healthy",
-                "version": "v1.0.6-release",
+                "version": "v1.0.7-fix-500",
                 "service": "delivery-backend-api",
                 "timestamp": timezone.now().isoformat(),
             },
