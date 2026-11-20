@@ -15,6 +15,7 @@ from rest_framework_simplejwt.views import (
 
 from apps.catalog.urls import partner_router as partner_catalog_router
 from apps.logistics.views import CalcularFreteView
+from core.admin_theme import admin_theme_picker_view, set_theme_redirect_view
 
 
 def health_check(request):
@@ -1068,6 +1069,9 @@ urlpatterns = [
     # Endpoints de Saúde e Despertar do Contentor Render (Cold Start Wake-up)
     path("api/v1/health/", health_check, name="health-check"),
     path("healthz/", health_check, name="healthz"),
+    # Endpoints de Personalização Visual e Temas do Django Admin (Unfold / Tailwind)
+    path("admin/theme/", admin_theme_picker_view, name="admin-theme-picker"),
+    path("admin/theme/set/<str:theme_name>/", set_theme_redirect_view, name="admin-theme-set"),
     path("admin/", admin.site.urls),
     # Endpoints de Autenticação Passwordless OTP e Gestão de Conta (RN-001, RN-002, RN-003, RN-006)
     path("api/v1/auth/", include(("apps.accounts.urls", "accounts"), namespace="accounts")),

@@ -631,6 +631,48 @@ UNFOLD = {
         "show_all_applications": False,
         "navigation": [
             {
+                "title": "🎨 Personalização Visual & Cores",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Seletor de Cores & Temas",
+                        "icon": "palette",
+                        "link": reverse_lazy("admin-theme-picker"),
+                    },
+                    {
+                        "title": "🔴 Vermelho Ango_Ifood",
+                        "icon": "circle",
+                        "link": reverse_lazy("admin-theme-set", kwargs={"theme_name": "red"}),
+                    },
+                    {
+                        "title": "🟢 Verde Esmeralda",
+                        "icon": "circle",
+                        "link": reverse_lazy("admin-theme-set", kwargs={"theme_name": "emerald"}),
+                    },
+                    {
+                        "title": "🔵 Azul Corporativo",
+                        "icon": "circle",
+                        "link": reverse_lazy("admin-theme-set", kwargs={"theme_name": "blue"}),
+                    },
+                    {
+                        "title": "🟣 Roxo Tech",
+                        "icon": "circle",
+                        "link": reverse_lazy("admin-theme-set", kwargs={"theme_name": "purple"}),
+                    },
+                    {
+                        "title": "🟠 Âmbar Restaurante",
+                        "icon": "circle",
+                        "link": reverse_lazy("admin-theme-set", kwargs={"theme_name": "amber"}),
+                    },
+                    {
+                        "title": "⚪ Slate Minimalista",
+                        "icon": "circle",
+                        "link": reverse_lazy("admin-theme-set", kwargs={"theme_name": "slate"}),
+                    },
+                ],
+            },
+            {
                 "title": "Operações & Pedidos",
                 "separator": True,
                 "collapsible": True,
