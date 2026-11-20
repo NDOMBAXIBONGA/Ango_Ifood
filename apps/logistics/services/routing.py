@@ -10,7 +10,10 @@ import math
 import os
 from typing import Any, Dict, List, Tuple
 
-import requests
+try:
+    import requests
+except ImportError:
+    requests = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +118,8 @@ def calcular_rota_e_frete(
     )
 
     try:
+        if requests is None:
+            raise RuntimeError("Módulo 'requests' não disponível; a acionar fallback.")
         response = requests.get(endpoint_url, timeout=OSRM_TIMEOUT_SECONDS)
         if response.status_code == 200:
             data = response.json()

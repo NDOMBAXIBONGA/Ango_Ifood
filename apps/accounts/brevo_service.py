@@ -8,9 +8,14 @@ import logging
 import os
 from typing import Any
 
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util import Retry
+try:
+    import requests
+    from requests.adapters import HTTPAdapter
+    from urllib3.util import Retry
+except ImportError:
+    requests = None  # type: ignore
+    HTTPAdapter = None  # type: ignore
+    Retry = None  # type: ignore
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -29,10 +34,14 @@ class BrevoEmailService:
     DEFAULT_TIMEOUT_SECONDS = 15
 
     # Sessão HTTP reutilizável com Connection Pooling para evitar re-negociação TLS e DNS contínuos
-    _session: requests.Session | None = None
+    _session: Any = None
 
     @classmethod
-    def get_session(cls) -> requests.Session:
+    def get_session(cls) -> Any:
+        if requests is None:
+            raise ImportError(
+                "O pacote 'requests' é necessário para envio de e-mails. Instale-o com: pip install requests"
+            )
         if cls._session is None:
             s = requests.Session()
             adapter = HTTPAdapter(
