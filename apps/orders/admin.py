@@ -12,14 +12,14 @@ from apps.orders.models import LinhaPedido, LinhaPedidoOpcaoSelecionada, Pedido
 class LinhaPedidoOpcaoSelecionadaInline(admin.TabularInline):
     model = LinhaPedidoOpcaoSelecionada
     extra = 0
-    readonly_fields = ("opcao", "preco_unitario_cobrado")
+    readonly_fields = ("opcao", "preco_adicional_historico")
 
 
 class LinhaPedidoInline(admin.TabularInline):
     model = LinhaPedido
     extra = 0
-    fields = ("item", "quantidade", "preco_unitario_base", "total_linha", "instrucoes_especiais")
-    readonly_fields = ("total_linha",)
+    fields = ("item", "quantidade", "preco_unitario_historico", "preco_unitario_no_momento", "notas")
+    readonly_fields = ("preco_unitario_historico",)
 
 
 @admin.register(Pedido)
@@ -99,7 +99,7 @@ class PedidoAdmin(MasterModelAdmin):
 
 @admin.register(LinhaPedido)
 class LinhaPedidoAdmin(MasterModelAdmin):
-    list_display = ("pedido", "item", "quantidade", "preco_unitario_base", "total_linha")
+    list_display = ("pedido", "item", "quantidade", "preco_unitario_historico", "preco_unitario_no_momento")
     list_filter = ("pedido__estado", "pedido__loja")
     search_fields = ("pedido__id", "item__nome")
     inlines = [LinhaPedidoOpcaoSelecionadaInline]
@@ -107,5 +107,5 @@ class LinhaPedidoAdmin(MasterModelAdmin):
 
 @admin.register(LinhaPedidoOpcaoSelecionada)
 class LinhaPedidoOpcaoSelecionadaAdmin(MasterModelAdmin):
-    list_display = ("linha_pedido", "opcao", "preco_unitario_cobrado")
+    list_display = ("linha_pedido", "opcao", "preco_adicional_historico", "preco_no_momento")
     search_fields = ("opcao__nome", "linha_pedido__pedido__id")

@@ -139,22 +139,22 @@ class MoradaAdmin(MasterModelAdmin):
     """
 
     list_display = (
-        "rotulo",
+        "id",
         "utilizador",
-        "endereco_formatado",
-        "cidade",
-        "e_padrao",
-        "data_criacao",
+        "texto_endereco",
+        "referencia",
+        "andar_porta",
     )
-    list_filter = ("cidade", "e_padrao", "data_criacao")
+    list_filter = ("utilizador",)
     search_fields = (
-        "rotulo",
-        "endereco_formatado",
+        "texto_endereco",
+        "referencia",
+        "andar_porta",
         "utilizador__nome",
         "utilizador__telemovel",
         "utilizador__email",
     )
-    ordering = ("-data_criacao",)
+    ordering = ("utilizador",)
 
 
 @admin.register(PerfilConsentimento)
@@ -166,20 +166,20 @@ class PerfilConsentimentoAdmin(MasterModelAdmin):
 
     list_display = (
         "utilizador",
-        "termos_servico",
+        "termos_utilizacao",
         "politica_privacidade",
         "marketing",
         "localizacao_segundo_plano",
-        "data_atualizacao",
+        "timestamp",
     )
     list_filter = (
-        "termos_servico",
+        "termos_utilizacao",
         "politica_privacidade",
         "marketing",
         "localizacao_segundo_plano",
     )
     search_fields = ("utilizador__nome", "utilizador__telemovel", "utilizador__email")
-    readonly_fields = ("data_atualizacao",)
+    readonly_fields = ("timestamp",)
 
 
 @admin.register(RegistoOTP)
@@ -191,16 +191,16 @@ class RegistoOTPAdmin(MasterModelAdmin):
 
     list_display = (
         "telemovel",
-        "codigo_hash",
-        "tentativas",
-        "utilizado",
+        "codigo_otp",
+        "tentativas_restantes",
         "expira_em",
-        "data_criacao",
+        "bloqueado_ate",
+        "contagem_envios_hora",
     )
-    list_filter = ("utilizado", "expira_em", "data_criacao")
+    list_filter = ("expira_em", "bloqueado_ate")
     search_fields = ("telemovel",)
-    readonly_fields = ("data_criacao",)
-    ordering = ("-data_criacao",)
+    readonly_fields = ("expira_em",)
+    ordering = ("-expira_em",)
 
 
 @admin.register(RegistoOTPEmail)
@@ -213,12 +213,12 @@ class RegistoOTPEmailAdmin(MasterModelAdmin):
     list_display = (
         "email",
         "codigo_hash",
-        "tentativas",
-        "utilizado",
+        "tentativas_restantes",
+        "is_verificado",
         "expira_em",
-        "data_criacao",
+        "criado_em",
     )
-    list_filter = ("utilizado", "expira_em", "data_criacao")
-    search_fields = ("email",)
-    readonly_fields = ("data_criacao",)
-    ordering = ("-data_criacao",)
+    list_filter = ("is_verificado", "expira_em", "criado_em")
+    search_fields = ("email", "ip_origem")
+    readonly_fields = ("criado_em", "atualizado_em")
+    ordering = ("-criado_em",)

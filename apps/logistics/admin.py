@@ -15,20 +15,20 @@ class EstafetaAdmin(MasterModelAdmin):
     list_display = (
         "utilizador",
         "tipo_veiculo",
-        "matricula",
+        "carta_conducao",
         "status_onboarding",
-        "ativo",
-        "disponivel",
-        "classificacao_media",
+        "is_online",
+        "score_reputacao",
+        "saldo_carteira",
     )
-    list_filter = ("status_onboarding", "ativo", "disponivel", "tipo_veiculo")
+    list_filter = ("status_onboarding", "is_online", "tipo_veiculo")
     search_fields = (
         "utilizador__nome",
         "utilizador__telemovel",
         "utilizador__email",
-        "matricula",
+        "carta_conducao",
     )
-    ordering = ("-ativo", "utilizador__nome")
+    ordering = ("-score_reputacao", "utilizador__nome")
     actions = ["aprovar_onboarding", "bloquear_estafeta", "export_to_csv"]
 
     fieldsets = (
@@ -38,19 +38,19 @@ class EstafetaAdmin(MasterModelAdmin):
                 "fields": (
                     "utilizador",
                     "tipo_veiculo",
-                    "matricula",
-                    "modelo_veiculo",
+                    "carta_conducao",
+                    "documentos_veiculo_url",
                 )
             },
         ),
         (
-            _("Operação e Disponibilidade"),
+            _("Operação e Desempenho"),
             {
                 "fields": (
                     "status_onboarding",
-                    "ativo",
-                    "disponivel",
-                    "classificacao_media",
+                    "is_online",
+                    "score_reputacao",
+                    "saldo_carteira",
                 )
             },
         ),
@@ -58,12 +58,12 @@ class EstafetaAdmin(MasterModelAdmin):
 
     @admin.action(description="✅ Aprovar Onboarding dos Estafetas Selecionados")
     def aprovar_onboarding(self, request: HttpRequest, queryset):
-        atualizados = queryset.update(status_onboarding="APROVADO", ativo=True)
+        atualizados = queryset.update(status_onboarding="APROVADO")
         self.message_user(request, f"{atualizados} estafeta(s) aprovado(s) com sucesso.", level=messages.SUCCESS)
 
     @admin.action(description="🛑 Bloquear Estafetas Selecionados")
     def bloquear_estafeta(self, request: HttpRequest, queryset):
-        atualizados = queryset.update(ativo=False, disponivel=False)
+        atualizados = queryset.update(is_online=False, status_onboarding="BLOQUEADO")
         self.message_user(request, f"{atualizados} estafeta(s) bloqueado(s) temporariamente.", level=messages.WARNING)
 
 
@@ -75,7 +75,7 @@ class EntregaAdmin(MasterModelAdmin):
         "pedido",
         "estafeta",
         "estado_logistico",
-        "codigo_confirmacao_pin",
+        "pin_entrega",
         "distancia_km",
         "eta_estimada",
     )
@@ -85,7 +85,7 @@ class EntregaAdmin(MasterModelAdmin):
         "pedido__id",
         "estafeta__utilizador__nome",
         "estafeta__utilizador__telemovel",
-        "codigo_confirmacao_pin",
+        "pin_entrega",
     )
     readonly_fields = ("id", "eta_estimada")
     ordering = ("-eta_estimada",)
