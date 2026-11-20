@@ -11,11 +11,32 @@ from ctypes import CFUNCTYPE, c_char_p, c_int
 
 
 def ensure_gdal_compatibility() -> None:
-    """Garante que comandos de gestão Django funcionam no Windows sem GDAL C++."""
+    """Garante que comandos de gestão Django funcionam no Windows sem falhas em GDAL/GEOS."""
     if os.name != "nt":
         return
 
-    # Se já foi importado, não reconfigura
+    # 1. Adiciona diretórios de bibliotecas do venv (como shapely.libs) ao caminho de DLLs do Windows
+    try:
+        from pathlib import Path
+        base_dir = Path(__file__).resolve().parent.parent
+        possible_dll_dirs = [
+            base_dir / "venv" / "Lib" / "site-packages" / "shapely.libs",
+            base_dir / "venv" / "Lib" / "site-packages" / "numpy.libs",
+            base_dir / "venv" / "Lib" / "site-packages" / "psycopg2_binary.libs",
+        ]
+        for d in possible_dll_dirs:
+            if d.exists():
+                dll_str = str(d)
+                if hasattr(os, "add_dll_directory"):
+                    try:
+                        os.add_dll_directory(dll_str)
+                    except Exception:
+                        pass
+                os.environ["PATH"] = dll_str + os.pathsep + os.environ.get("PATH", "")
+    except Exception:
+        pass
+
+    # 2. Se o GDAL já foi importado, não reconfigura
     if "django.contrib.gis.gdal.libgdal" in sys.modules:
         return
 

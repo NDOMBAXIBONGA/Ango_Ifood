@@ -215,6 +215,34 @@ if os.name == "nt":
     import glob
     import ctypes
 
+    # Validação rigorosa de caminhos GDAL/GEOS definidos manualmente
+    if GDAL_LIBRARY_PATH:
+        if not os.path.exists(GDAL_LIBRARY_PATH):
+            GDAL_LIBRARY_PATH = None
+        else:
+            try:
+                dll_dir = os.path.dirname(GDAL_LIBRARY_PATH)
+                if hasattr(os, "add_dll_directory"):
+                    os.add_dll_directory(dll_dir)
+                os.environ["PATH"] = dll_dir + os.pathsep + os.environ.get("PATH", "")
+                ctypes.CDLL(GDAL_LIBRARY_PATH)
+            except Exception:
+                GDAL_LIBRARY_PATH = None
+
+    if GEOS_LIBRARY_PATH:
+        if not os.path.exists(GEOS_LIBRARY_PATH):
+            GEOS_LIBRARY_PATH = None
+        else:
+            try:
+                dll_dir = os.path.dirname(GEOS_LIBRARY_PATH)
+                if hasattr(os, "add_dll_directory"):
+                    os.add_dll_directory(dll_dir)
+                os.environ["PATH"] = dll_dir + os.pathsep + os.environ.get("PATH", "")
+                ctypes.CDLL(GEOS_LIBRARY_PATH)
+            except Exception:
+                GEOS_LIBRARY_PATH = None
+
+    # Autodescoberta inteligente de GDAL no Windows
     if not GDAL_LIBRARY_PATH:
         possible_gdal = [
             *glob.glob(r"C:\OSGeo4W*\bin\gdal*.dll"),
@@ -234,18 +262,21 @@ if os.name == "nt":
                 except Exception:
                     continue
 
+    # Autodescoberta inteligente de GEOS no Windows (via shapely.libs no venv)
     if not GEOS_LIBRARY_PATH:
         possible_geos = glob.glob(str(BASE_DIR / "venv" / "Lib" / "site-packages" / "shapely.libs" / "geos_c*.dll"))
-        if possible_geos and os.path.exists(possible_geos[0]):
-            try:
-                dll_dir = os.path.dirname(possible_geos[0])
-                if hasattr(os, "add_dll_directory"):
-                    os.add_dll_directory(dll_dir)
-                os.environ["PATH"] = dll_dir + os.pathsep + os.environ.get("PATH", "")
-                ctypes.CDLL(possible_geos[0])
-                GEOS_LIBRARY_PATH = possible_geos[0]
-            except Exception:
-                pass
+        for p in possible_geos:
+            if os.path.exists(p):
+                try:
+                    dll_dir = os.path.dirname(p)
+                    if hasattr(os, "add_dll_directory"):
+                        os.add_dll_directory(dll_dir)
+                    os.environ["PATH"] = dll_dir + os.pathsep + os.environ.get("PATH", "")
+                    ctypes.CDLL(p)
+                    GEOS_LIBRARY_PATH = p
+                    break
+                except Exception:
+                    continue
 
 # ==============================================================================
 # 6. CACHE & REDIS CONFIGURATION (REDIS_URL)
