@@ -194,7 +194,8 @@ class SystemConfiguration(models.Model):
         super().save(*args, **kwargs)
         # Invalidação imediata do cache para propagação instantânea a todos os workers
         cache.delete(CACHE_SYSTEM_CONFIG_KEY)
-        logger.info("[GOVERNANCE] Configurações do sistema atualizadas e cache invalidado.")
+        cache.delete("app_system_bootstrap_cache")
+        logger.info("[GOVERNANCE] Configurações do sistema e bootstrap atualizados; cache invalidado.")
 
     def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:
         """Impede a eliminação do Singleton."""

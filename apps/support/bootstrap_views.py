@@ -87,6 +87,24 @@ def build_system_bootstrap_data(request: HttpRequest) -> Dict[str, Any]:
         )
     )
 
+    # Sincroniza com SystemConfiguration (Singleton de Governança Global)
+    try:
+        from core.models import SystemConfiguration
+        sys_config = SystemConfiguration.objects.filter(pk=1).first()
+        if sys_config:
+            if sys_config.modo_manutencao:
+                modo_manutencao = True
+            if sys_config.mensagem_manutencao and "MENSAGEM_MANUTENCAO" not in raw_params:
+                msg_manutencao = sys_config.mensagem_manutencao
+            if "TAXA_BASE_ENTREGA_AOA" not in raw_params and sys_config.taxa_base_entrega_aoa is not None:
+                raw_params["TAXA_BASE_ENTREGA_AOA"] = float(sys_config.taxa_base_entrega_aoa)
+            if "VALOR_KM_ENTREGA_AOA" not in raw_params and sys_config.valor_km_entrega_aoa is not None:
+                raw_params["VALOR_KM_ENTREGA_AOA"] = float(sys_config.valor_km_entrega_aoa)
+            if "COMISSAO_MARKETPLACE_PERCENTAGEM" not in raw_params and sys_config.comissao_marketplace_percentagem is not None:
+                raw_params["COMISSAO_MARKETPLACE_PERCENTAGEM"] = float(sys_config.comissao_marketplace_percentagem)
+    except Exception:
+        pass
+
     data: Dict[str, Any] = {
         "schema_version": "1.0.0",
         "timestamp": agora.isoformat(),
