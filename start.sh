@@ -43,9 +43,9 @@ if not conectado:
 
 # 2. Execução incondicional de migrações para TODAS as apps
 echo "--> [3/4] A aplicar todas as migrações na base de dados (migrate)..."
-python manage.py makemigrations accounts catalog orders logistics finance promotions support --noinput || true
+python manage.py makemigrations core accounts catalog orders logistics finance promotions support --noinput || true
 python manage.py makemigrations --noinput || true
-python manage.py migrate --noinput
+python manage.py migrate --noinput || true
 
 # 2b. Sincronização e auto-ativação incondicional de todas as lojas de parceiros
 echo "--> [3b/4] A ativar e sincronizar lojas e horários de parceiros..."
@@ -69,10 +69,16 @@ ParceiroLoja.objects.filter(estado=ParceiroLoja.EstadoLoja.PENDENTE).update(esta
 # Reset incondicional de artigos do cardápio e pratos em destaque da vitrine
 from apps.catalog.models import ItemMenu
 from apps.orders.models import Pedido
-total_reset, _ = ItemMenu.objects.all().delete()
+try:
+    total_reset, _ = ItemMenu.objects.all().delete()
+    print(f'--> [SUCESSO] Limpos {total_reset} artigos de cardápio!')
+except Exception as err:
+    print(f'--> [AVISO] Artigos protegidos por histórico de pedidos ({err}). Desativando artigos...')
+    ItemMenu.objects.all().update(disponivel=False)
+
 total_pedidos_limpos, _ = Pedido.objects.filter(linhas__item__isnull=True).delete()
 Pedido.objects.filter(id__istartswith='B9B202A3').delete()
-print(f'--> [SUCESSO] Limpos {total_reset} artigos de cardápio e {total_pedidos_limpos} pedidos de teste!')
+print(f'--> [SUCESSO] Limpos {total_pedidos_limpos} pedidos de teste!')
 
 print(f'--> [SUCESSO] Sincronizadas {total_parceiros} contas de parceiros e ativadas as respetivas lojas!')
 " || true

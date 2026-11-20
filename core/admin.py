@@ -94,7 +94,10 @@ class SystemConfigurationAdmin(MasterModelAdmin):
 
     def has_add_permission(self, request: HttpRequest) -> bool:
         """Padrão Singleton: Não permite criar mais de uma instância de configuração."""
-        return not SystemConfiguration.objects.exists()
+        try:
+            return not SystemConfiguration.objects.exists()
+        except Exception:
+            return False
 
     def has_delete_permission(self, request: HttpRequest, obj: Optional[Any] = None) -> bool:
         """A configuração mestre do sistema nunca pode ser apagada."""

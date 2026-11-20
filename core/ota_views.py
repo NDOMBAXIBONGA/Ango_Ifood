@@ -168,3 +168,4 @@ def check_app_update_api_view(request: HttpRequest) -> JsonResponse:
     )
 
     return JsonResponse(resposta, status=200)
+

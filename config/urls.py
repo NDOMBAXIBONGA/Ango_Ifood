@@ -72,7 +72,7 @@ def health_check(request):
 
             todas_apps = [
                 "contenttypes", "auth", "accounts", "sessions", "token_blacklist",
-                "catalog", "orders", "logistics", "finance", "promotions", "support"
+                "core", "catalog", "orders", "logistics", "finance", "promotions", "support"
             ]
             for app_target in todas_apps:
                 try:

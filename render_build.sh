@@ -20,7 +20,7 @@ pip install -r requirements.txt
 
 # 2. Tentativa preliminar de migrações na fase de build (caso o banco esteja acessível)
 echo "--> [3/4] A executar verificação preliminar de migrações..."
-python manage.py makemigrations accounts catalog orders logistics finance promotions support --noinput || true
+python manage.py makemigrations core accounts catalog orders logistics finance promotions support --noinput || true
 python manage.py makemigrations --noinput || true
 python manage.py migrate --noinput || echo "--> [Nota] Banco de dados inacessível na rede de build. As migrações serão aplicadas no arranque via start.sh / preDeployCommand."
 
