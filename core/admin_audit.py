@@ -12,17 +12,22 @@ from django.contrib import admin
 
 logger = logging.getLogger(__name__)
 
-# Modelos ou aplicações de sistema de terceiros que podem ser ignoradas caso necessário
-IGNORE_APPS: Set[str] = {
-    "contenttypes",
-    "sessions",
-    "token_blacklist",
+# Aplicações proprietárias do projeto sob governança estrita
+LOCAL_APPS: Set[str] = {
+    "accounts",
+    "catalog",
+    "orders",
+    "logistics",
+    "finance",
+    "support",
+    "promotions",
+    "core",
 }
 
 
 def audit_and_register_orphaned_models() -> int:
     """
-    Varre todas as aplicações registadas no Django.
+    Varre as aplicações do projeto.
     Identifica qualquer modelo de dados que não possua uma classe correspondente
     no Django Admin e efetua o registo automático via AutoMasterAdmin.
     
@@ -37,8 +42,8 @@ def audit_and_register_orphaned_models() -> int:
     for model in all_models:
         meta = model._meta
 
-        # Ignorar modelos não-gerenciados (views/unmanaged) ou de apps técnicas ignoradas
-        if not meta.managed or meta.app_label in IGNORE_APPS:
+        # Audita estritamente aplicações locais e modelos gerenciados
+        if meta.app_label not in LOCAL_APPS or not meta.managed:
             continue
 
         if model not in registered_models:

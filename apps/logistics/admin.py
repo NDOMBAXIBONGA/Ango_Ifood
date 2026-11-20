@@ -77,9 +77,9 @@ class EntregaAdmin(MasterModelAdmin):
         "estado_logistico",
         "codigo_confirmacao_pin",
         "distancia_km",
-        "criado_em",
+        "eta_estimada",
     )
-    list_filter = ("estado_logistico", "criado_em")
+    list_filter = ("estado_logistico", "eta_estimada")
     search_fields = (
         "id",
         "pedido__id",
@@ -87,9 +87,13 @@ class EntregaAdmin(MasterModelAdmin):
         "estafeta__utilizador__telemovel",
         "codigo_confirmacao_pin",
     )
-    readonly_fields = ("id", "criado_em", "atualizado_em")
-    ordering = ("-criado_em",)
+    readonly_fields = ("id", "eta_estimada")
+    ordering = ("-eta_estimada",)
     actions = ["marcar_entregue_manual", "export_to_csv"]
+
+    @admin.display(description="Distância (km)")
+    def distancia_km(self, obj: Entrega) -> str:
+        return f"{obj.distancia_metros / 1000.0:.2f} km" if obj.distancia_metros else "0.00 km"
 
     @admin.display(description="Entrega")
     def id_curto(self, obj: Entrega) -> str:

@@ -40,7 +40,6 @@ class MasterModelAdmin(admin.ModelAdmin):
     4. Exportação Padronizada para CSV com suporte nativo a caracteres especiais (UTF-8 com BOM).
     """
     # Performance padrão para bases de dados em crescimento rápido
-    list_select_related = True
     list_per_page = 30
     show_full_result_count = False
 
@@ -206,33 +205,32 @@ class AutoMasterAdmin(MasterModelAdmin):
     """
     Administrador Gerado Automaticamente para qualquer Modelo Órfão detetado.
     Garante visibilidade instantânea sem deixar nenhuma tabela fora da supervisão do admin.
+    Utiliza métodos dinâmicos de runtime para garantir conformidade total com o system check do Django.
     """
-    def __init__(self, model: type[models.Model], admin_site: admin.AdminSite | None) -> None:
-        # Extrai campos dinâmicos para exibição, filtro e pesquisa
-        campos_visiveis = []
-        campos_filtro = []
-        campos_busca = []
+    list_display = ("__str__",)
+    list_filter = ()
+    search_fields = ()
 
-        for field in model._meta.fields:
-            name = field.name
-            if "password" in name or "secret" in name:
-                continue
+    def get_list_display(self, request: HttpRequest) -> Sequence[str]:
+        campos = [
+            f.name
+            for f in self.model._meta.fields
+            if not f.is_relation and "password" not in f.name and "secret" not in f.name
+        ]
+        return tuple(campos[:7]) or ("__str__",)
 
-            if len(campos_visiveis) < 7:
-                campos_visiveis.append(name)
+    def get_list_filter(self, request: HttpRequest) -> Sequence[str]:
+        filtros = [
+            f.name
+            for f in self.model._meta.fields
+            if isinstance(f, (models.BooleanField, models.DateField, models.DateTimeField))
+        ]
+        return tuple(filtros[:3])
 
-            if isinstance(field, (models.BooleanField, models.DateField, models.DateTimeField)):
-                if len(campos_filtro) < 4:
-                    campos_filtro.append(name)
-            elif isinstance(field, (models.CharField, models.EmailField, models.UUIDField)):
-                if len(campos_busca) < 3:
-                    campos_busca.append(name)
-
-        if not self.list_display or self.list_display == ("__str__",):
-            self.list_display = tuple(campos_visiveis) or ("__str__",)
-        if not self.list_filter and campos_filtro:
-            self.list_filter = tuple(campos_filtro)
-        if not self.search_fields and campos_busca:
-            self.search_fields = tuple(campos_busca)
-
-        super().__init__(model, admin_site)
+    def get_search_fields(self, request: HttpRequest) -> Sequence[str]:
+        buscas = [
+            f.name
+            for f in self.model._meta.fields
+            if isinstance(f, (models.CharField, models.EmailField, models.UUIDField))
+        ]
+        return tuple(buscas[:3])
