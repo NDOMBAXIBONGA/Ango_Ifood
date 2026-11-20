@@ -53,6 +53,7 @@ if not SECRET_KEY:
     SECRET_KEY = secrets.token_urlsafe(50)
 
 DEBUG = env.bool("DJANGO_DEBUG", default=False)
+# Origens confiáveis para proteção CSRF e Hosts permitidos
 ALLOWED_HOSTS = env.list(
     "DJANGO_ALLOWED_HOSTS",
     default=[
@@ -65,6 +66,10 @@ ALLOWED_HOSTS = env.list(
         "*",
     ],
 )
+for _host in [".onrender.com", "ango-ifood.onrender.com", "delivery-backend-api.onrender.com", "*"]:
+    if _host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_host)
+
 CSRF_TRUSTED_ORIGINS = env.list(
     "DJANGO_CSRF_TRUSTED_ORIGINS",
     default=[
@@ -73,6 +78,13 @@ CSRF_TRUSTED_ORIGINS = env.list(
         "https://delivery-backend-api.onrender.com",
     ],
 )
+for _origin in [
+    "https://*.onrender.com",
+    "https://ango-ifood.onrender.com",
+    "https://delivery-backend-api.onrender.com",
+]:
+    if _origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(_origin)
 
 # Deteta automaticamente o hostname externo do Render (ex.: *.onrender.com)
 render_external_hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
@@ -507,14 +519,17 @@ STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"] if (BASE_DIR / "static").exists() else []
 
+# Armazenamento resiliente de ficheiros estáticos (WhiteNoise)
+# CompressedStaticFilesStorage evita erros 500 caso algum ficheiro estático ou fonte não esteja no manifesto
 STORAGES = {
     "default": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
     },
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
     },
 }
+WHITENOISE_MANIFEST_STRICT = False
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
