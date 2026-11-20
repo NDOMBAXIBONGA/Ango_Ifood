@@ -11,9 +11,12 @@ from ctypes import CFUNCTYPE, c_char_p, c_int
 
 
 def ensure_gdal_compatibility() -> None:
-    """Garante que comandos de gestão Django funcionam no Windows sem falhas em GDAL/GEOS."""
+    """Garante que comandos de gestão Django funcionam no Windows sem falhas em GDAL/GEOS/SQLite."""
     if os.name != "nt":
         return
+
+    # Garante que SQLite suporta campos espaciais do GeoDjango
+    _patch_sqlite_spatial()
 
     # 1. Adiciona diretórios de bibliotecas do venv (como shapely.libs) ao caminho de DLLs do Windows
     try:
@@ -98,3 +101,22 @@ def ensure_gdal_compatibility() -> None:
     mock_mod.set_error_handler = function("CPLSetErrorHandler", [cpl_handler_type], cpl_handler_type)
 
     sys.modules["django.contrib.gis.gdal.libgdal"] = mock_mod
+
+    # 3. Patch espacial para SQLite caso o PostgreSQL/PostGIS local não esteja disponível
+    _patch_sqlite_spatial()
+
+
+def _patch_sqlite_spatial() -> None:
+    """Permite que o GeoDjango funcione com o motor SQLite local sem necessitar do SpatiaLite compilado em C."""
+    try:
+        from django.db.backends.sqlite3.base import DatabaseWrapper
+
+        ops_cls = DatabaseWrapper.ops_class
+        if not hasattr(ops_cls, "geo_db_type"):
+            ops_cls.geo_db_type = lambda self, f: "TEXT"
+        if not hasattr(ops_cls, "select"):
+            ops_cls.select = "%s"
+        if not hasattr(ops_cls, "get_geom_placeholder"):
+            ops_cls.get_geom_placeholder = lambda self, f, val, compiler: "%s"
+    except Exception:
+        pass

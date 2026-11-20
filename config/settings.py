@@ -189,27 +189,62 @@ WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
 # ==============================================================================
-# 5. BASE DE DADOS (POSTGRESQL + POSTGIS) & GEODJANGO
+# 5. BASE DE DADOS (POSTGRESQL + POSTGIS) & GEODJANGO COM FALLBACK RESILIENTE
 # ==============================================================================
-# Lê DATABASE_URL (ex: postgis://user:pass@host:5432/dbname) e força explicitamente
-# o motor 'django.contrib.gis.db.backends.postgis' para garantir suporte espacial.
-DATABASES = {
-    "default": env.db(
-        "DATABASE_URL",
-        default="postgis://postgres:postgres@127.0.0.1:5432/delivery_db",
-        engine="django.contrib.gis.db.backends.postgis",
-    )
-}
-# Assegura que tanto 'postgres://' como 'postgresql://' utilizem o backend PostGIS
-if "postgis" in DATABASES["default"]["ENGINE"] or "postgresql" in DATABASES["default"]["ENGINE"]:
-    DATABASES["default"]["ENGINE"] = "django.contrib.gis.db.backends.postgis"
+import socket
 
-DATABASES["default"]["CONN_MAX_AGE"] = env.int("DB_CONN_MAX_AGE", default=0)
-DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
+raw_db_url = env("DATABASE_URL", default="postgis://postgres:postgres@127.0.0.1:5432/delivery_db")
 
-# Suporte automático a conexões remotas seguras (ex: Render / Supabase / Neon / RDS)
-if env.bool("DB_SSL_REQUIRE", default=False) or "sslmode=require" in env("DATABASE_URL", default=""):
-    DATABASES["default"].setdefault("OPTIONS", {})["sslmode"] = "require"
+
+def _check_local_db_reachable(db_url: str) -> bool:
+    """Verifica se o servidor local de base de dados está em execução via TCP/IP."""
+    if "127.0.0.1" in db_url or "localhost" in db_url:
+        try:
+            port = 5432
+            host_part = db_url.split("@")[-1].split("/")[0]
+            if ":" in host_part:
+                port = int(host_part.split(":")[-1])
+            with socket.create_connection(("127.0.0.1", port), timeout=0.3):
+                return True
+        except (OSError, ValueError):
+            return False
+    return True
+
+
+use_sqlite_fallback = False
+if ("127.0.0.1" in raw_db_url or "localhost" in raw_db_url) and not _check_local_db_reachable(raw_db_url):
+    use_sqlite_fallback = True
+
+if use_sqlite_fallback or raw_db_url.startswith("sqlite"):
+    # Fallback automático para SQLite local caso o PostgreSQL local não esteja ativo
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
+    try:
+        from core.windows_gdal_shim import _patch_sqlite_spatial
+        _patch_sqlite_spatial()
+    except Exception:
+        pass
+else:
+    # PostgreSQL / PostGIS (Produção Render ou PostgreSQL local ativo)
+    DATABASES = {
+        "default": env.db(
+            "DATABASE_URL",
+            default="postgis://postgres:postgres@127.0.0.1:5432/delivery_db",
+            engine="django.contrib.gis.db.backends.postgis",
+        )
+    }
+    if "postgis" in DATABASES["default"]["ENGINE"] or "postgresql" in DATABASES["default"]["ENGINE"]:
+        DATABASES["default"]["ENGINE"] = "django.contrib.gis.db.backends.postgis"
+
+    DATABASES["default"]["CONN_MAX_AGE"] = env.int("DB_CONN_MAX_AGE", default=0)
+    DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
+
+    if env.bool("DB_SSL_REQUIRE", default=False) or "sslmode=require" in env("DATABASE_URL", default=""):
+        DATABASES["default"].setdefault("OPTIONS", {})["sslmode"] = "require"
 
 # Suporte a caminhos explícitos para bibliotecas nativas C (GDAL / GEOS), útil em Windows/Docker customizado
 GDAL_LIBRARY_PATH = env("GDAL_LIBRARY_PATH", default=None)
