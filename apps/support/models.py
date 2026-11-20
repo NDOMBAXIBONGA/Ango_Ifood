@@ -301,11 +301,15 @@ class Parametro(models.Model):
     )
     nome = models.CharField(
         max_length=150,
+        blank=True,
+        default="",
         verbose_name=_("Nome do Parâmetro"),
         help_text=_("Designação amigável descrita na tabela da Secção 8 (ex.: 'Janela de cancelamento gratuito')."),
     )
     valor = models.CharField(
         max_length=100,
+        blank=True,
+        default="",
         verbose_name=_("Valor Configurado"),
         help_text=_("Valor predefinido e formatado conforme a Secção 8 (ex.: '60s', '3 min', '30s', '3 km', '2000 Kz', '5%')."),
     )

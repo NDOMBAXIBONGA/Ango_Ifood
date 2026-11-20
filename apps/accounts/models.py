@@ -144,6 +144,8 @@ class CustomUser(AbstractUser):
     # RN-003: Nome completo do utilizador para identificação no perfil e entregas
     nome = models.CharField(
         max_length=150,
+        blank=True,
+        default="",
         verbose_name=_("Nome Completo"),
         help_text=_("RN-003: Nome completo do titular da conta."),
     )
@@ -165,6 +167,8 @@ class CustomUser(AbstractUser):
     # RN-003: Endereço de correio eletrónico único para faturação, recibos e recuperação de conta
     email = models.EmailField(
         unique=True,
+        null=True,
+        blank=True,
         db_index=True,
         verbose_name=_("Endereço de Email"),
         help_text=_("RN-003: Endereço de email único associado à conta."),

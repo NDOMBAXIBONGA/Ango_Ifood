@@ -252,19 +252,6 @@ def set_admin_theme(theme_name_or_hex: str) -> bool:
 
     try:
         from apps.support.models import Parametro
-        param, _ = Parametro.objects.get_or_update_or_create(
-            chave="ADMIN_THEME_COLOR",
-            defaults={
-                "nome": "Cor Visual Primária do Django Admin",
-                "valor": val,
-                "unidade": "HEX / Nome do Tema",
-                "ambito": "SISTEMA",
-            },
-        )
-        return True
-    except Exception:
-        # Se get_or_update_or_create não estiver definido, usa padrão Django
-        from apps.support.models import Parametro
         Parametro.objects.update_or_create(
             chave="ADMIN_THEME_COLOR",
             defaults={
@@ -275,6 +262,8 @@ def set_admin_theme(theme_name_or_hex: str) -> bool:
             },
         )
         return True
+    except Exception:
+        return False
 
 
 def list_available_themes() -> list[dict[str, str]]:

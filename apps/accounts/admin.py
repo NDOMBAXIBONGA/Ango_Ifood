@@ -6,6 +6,7 @@ from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin
 from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
+from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
 
 from core.admin_base import MasterModelAdmin, display
 from apps.accounts.models import (
@@ -22,13 +23,28 @@ admin.site.site_title = "Ango_Ifood Admin"
 admin.site.index_title = "Painel de Gestão e Operações"
 
 
+class CustomUserCreationForm(UserCreationForm):
+    class Meta(UserCreationForm.Meta):
+        model = CustomUser
+        fields = ("telemovel", "email", "nome", "tipo_utilizador", "estado")
+
+
+class CustomUserChangeForm(UserChangeForm):
+    class Meta(UserChangeForm.Meta):
+        model = CustomUser
+        fields = "__all__"
+
+
 @admin.register(CustomUser)
-class CustomUserAdmin(MasterModelAdmin):
+class CustomUserAdmin(MasterModelAdmin, UserAdmin):
     """
     Gestão avançada de utilizadores da plataforma (Cliente, Parceiro, Estafeta, Admin).
     """
 
     model = CustomUser
+    form = CustomUserChangeForm
+    add_form = CustomUserCreationForm
+    change_password_form = AdminPasswordChangeForm
 
     list_display = (
         "telemovel",
@@ -137,6 +153,18 @@ class CustomUserAdmin(MasterModelAdmin):
             },
         ),
     )
+
+    def get_fieldsets(self, request, obj=None):
+        if not obj:
+            return self.add_fieldsets
+        return super().get_fieldsets(request, obj)
+
+    def get_form(self, request, obj=None, **kwargs):
+        defaults = {}
+        if obj is None:
+            defaults["form"] = self.add_form
+        defaults.update(kwargs)
+        return super().get_form(request, obj, **defaults)
 
     actions = ["ativar_contas", "suspender_contas", "bloquear_contas"]
 

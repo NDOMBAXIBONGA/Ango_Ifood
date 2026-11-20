@@ -137,3 +137,45 @@ class LinhaPedidoAdmin(MasterModelAdmin):
 class LinhaPedidoOpcaoSelecionadaAdmin(MasterModelAdmin):
     list_display = ("linha_pedido", "opcao", "preco_adicional_historico", "preco_no_momento")
     search_fields = ("opcao__nome", "linha_pedido__pedido__id")
+
+
+from apps.orders.fraud_models import (
+    DispositivoUtilizador,
+    ImpressaoDigitalCartao,
+    ListaBloqueioImutavel,
+    RegistoAlertaFraude,
+)
+
+
+@admin.register(DispositivoUtilizador)
+class DispositivoUtilizadorAdmin(MasterModelAdmin):
+    list_display = ("device_id", "utilizador", "ip_origem", "data_primeiro_acesso", "data_ultimo_acesso")
+    search_fields = ("device_id", "utilizador__nome", "utilizador__telemovel", "ip_origem")
+    list_filter = ("data_primeiro_acesso",)
+    readonly_fields = ("data_primeiro_acesso", "data_ultimo_acesso")
+
+
+@admin.register(ImpressaoDigitalCartao)
+class ImpressaoDigitalCartaoAdmin(MasterModelAdmin):
+    list_display = ("card_fingerprint", "utilizador", "ultimos_quatro", "bandeira", "data_associacao")
+    search_fields = ("card_fingerprint", "utilizador__nome", "utilizador__telemovel", "ultimos_quatro")
+    list_filter = ("bandeira", "data_associacao")
+    readonly_fields = ("data_associacao",)
+
+
+@admin.register(ListaBloqueioImutavel)
+class ListaBloqueioImutavelAdmin(MasterModelAdmin):
+    protected_from_deletion = True
+    list_display = ("tipo_identificador", "valor_identificador", "motivo", "score_risco", "bloqueado_por", "is_ativo", "data_bloqueio")
+    search_fields = ("valor_identificador", "motivo", "bloqueado_por")
+    list_filter = ("tipo_identificador", "is_ativo", "data_bloqueio")
+    readonly_fields = ("data_bloqueio",)
+
+
+@admin.register(RegistoAlertaFraude)
+class RegistoAlertaFraudeAdmin(MasterModelAdmin):
+    protected_from_deletion = True
+    list_display = ("tipo_fraude", "severidade", "score_atribuido", "pedido", "utilizador", "estafeta", "data_criacao")
+    search_fields = ("tipo_fraude", "acao_tomada", "utilizador__nome", "estafeta__utilizador__nome")
+    list_filter = ("severidade", "tipo_fraude", "data_criacao")
+    readonly_fields = ("data_criacao",)

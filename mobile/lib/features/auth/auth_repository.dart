@@ -18,11 +18,13 @@ import 'models/auth_models.dart';
 export 'exceptions/auth_exceptions.dart';
 export 'models/auth_models.dart';
 
+import '../../core/network/app_environment_config.dart';
+
 class AuthRepository {
   final Dio _dio;
   final String _baseUrl;
 
-  static const String _defaultBaseUrl = 'http://10.0.2.2:8000/api/v1/auth';
+  static final String _defaultBaseUrl = '${AppEnvironmentConfig.baseHttpUrl}/api/v1/auth';
 
   AuthRepository({
     Dio? dio,

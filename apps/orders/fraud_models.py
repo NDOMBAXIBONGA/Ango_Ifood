@@ -170,6 +170,8 @@ class ListaBloqueioImutavel(models.Model):
         verbose_name=_("Valor do Identificador Bloqueado"),
     )
     motivo = models.TextField(
+        blank=True,
+        default="",
         verbose_name=_("Motivo Circunstanciado do Bloqueio"),
     )
     score_risco = models.PositiveSmallIntegerField(
@@ -290,6 +292,8 @@ class RegistoAlertaFraude(models.Model):
     )
     acao_tomada = models.CharField(
         max_length=100,
+        blank=True,
+        default="",
         verbose_name=_("Ação Automática Tomada"),
     )
     data_criacao = models.DateTimeField(
