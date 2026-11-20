@@ -219,9 +219,18 @@ def get_admin_colors(request: Optional[Any] = None) -> Dict[str, Dict[str, str]]
         preset = THEME_PRESETS["red"]
         primary_palette = {k: v for k, v in preset.items() if k not in ("name", "hex")}
 
-    return {
-        "primary": primary_palette,
-    }
+    try:
+        from unfold.settings import CONFIG_DEFAULTS
+        base_colors = CONFIG_DEFAULTS.get("COLORS", {})
+        return {
+            "base": base_colors.get("base", {}),
+            "font": base_colors.get("font", {}),
+            "primary": primary_palette,
+        }
+    except Exception:
+        return {
+            "primary": primary_palette,
+        }
 
 
 # ==============================================================================

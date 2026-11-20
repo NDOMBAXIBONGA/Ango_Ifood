@@ -77,6 +77,36 @@ print(f'--> [SUCESSO] Limpos {total_reset} artigos de cardápio e {total_pedidos
 print(f'--> [SUCESSO] Sincronizadas {total_parceiros} contas de parceiros e ativadas as respetivas lojas!')
 " || true
 
+# 2c. Garantia incondicional de superutilizador ativo para o Django Admin
+echo "--> [3c/4] A verificar superutilizadores administrativos..."
+python -c "
+import os, django
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+django.setup()
+
+from apps.accounts.models import CustomUser
+
+for email_target in ['jobdealmeida016@gmail.com', 'ndombaxibonga@gmail.com', 'admin@angofood.ao']:
+    u = CustomUser.objects.filter(email=email_target).first()
+    if u:
+        u.is_staff = True
+        u.is_superuser = True
+        u.is_active = True
+        u.tipo_utilizador = CustomUser.TipoUtilizador.ADMIN
+        u.save()
+
+if not CustomUser.objects.filter(is_superuser=True).exists():
+    CustomUser.objects.create_superuser(
+        telemovel='932400204',
+        email='jobdealmeida016@gmail.com',
+        nome='Ndombaxi Bonga',
+        password='Admin@Ango2026!'
+    )
+    print('--> [SUCESSO] Superutilizador administrativo 932400204 criado!')
+else:
+    print('--> [OK] Superutilizadores ativos confirmados na base de dados.')
+" || true
+
 # 3. Recolha de ficheiros estáticos como garantia de disponibilidade
 echo "--> [4/4] A validar ficheiros estáticos (collectstatic)..."
 python manage.py collectstatic --noinput || true
