@@ -30,6 +30,7 @@ from django.contrib.auth.models import AnonymousUser  # noqa: E402
 from rest_framework_simplejwt.tokens import AccessToken  # noqa: E402
 
 # Importação das rotas WebSockets das aplicações de negócio
+from django.contrib.staticfiles.handlers import ASGIStaticFilesHandler  # noqa: E402
 from apps.logistics.routing import websocket_urlpatterns as logistics_websocket_routes  # noqa: E402
 from apps.orders.routing import websocket_urlpatterns as orders_websocket_routes  # noqa: E402
 
@@ -115,11 +116,11 @@ websocket_urlpatterns = [
 # 5. APLICAÇÃO ASGI PRINCIPAL (ProtocolTypeRouter)
 # ==============================================================================
 # Configura o encaminhamento de protocolos:
-# - 'http': Processado pelo núcleo ASGI do Django (Views, REST Framework, Admin).
+# - 'http': Processado com manipulador estático ASGI + núcleo Django (Views, REST Framework, Admin Unfold).
 # - 'websocket': Filtrado pelo validador de origens e autenticado via JWT para o Daphne Server no Render.
 application = ProtocolTypeRouter(
     {
-        "http": django_asgi_app,
+        "http": ASGIStaticFilesHandler(django_asgi_app),
         "websocket": AllowedHostsOriginValidator(
             JwtAuthMiddlewareStack(
                 URLRouter(websocket_urlpatterns)

@@ -1102,10 +1102,12 @@ urlpatterns = [
     path("api/v1/auth/token/verify/", TokenVerifyView.as_view(), name="token_verify"),
 ]
 
-# Rota para servir ficheiros de mídia (uploads de imagens e vídeos dos parceiros e vitrine com suporte a streaming HTTP 206)
+# Rota para servir ficheiros de mídia e estáticos como fallback resiliente (WhiteNoise + Daphne)
 from django.urls import re_path
+from django.views.static import serve
 from apps.catalog.views import MediaStreamView
 
 urlpatterns += [
+    re_path(r"^static/(?P<path>.*)$", serve, {"document_root": settings.STATIC_ROOT}),
     re_path(r"^media/(?P<path>.*)$", MediaStreamView.as_view(), name="media-stream"),
 ]

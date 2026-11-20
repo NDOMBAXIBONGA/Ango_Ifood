@@ -169,9 +169,10 @@ MIDDLEWARE = [
     # CORS em primeiro lugar absoluto para interceptar preflight OPTIONS e cabeçalhos de clientes móveis/APK
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
-    # Compressão HTTP Gzip automática para respostas JSON e estáticas em redes lentas (2G/3G/4G)
-    "django.middleware.gzip.GZipMiddleware",
+    # WhiteNoise logo após SecurityMiddleware para servir estáticos imediatamente (inclusive Unfold)
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    # Compressão HTTP Gzip automática para respostas JSON da API REST
+    "django.middleware.gzip.GZipMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -214,16 +215,16 @@ raw_db_url = env("DATABASE_URL", default="postgis://postgres:postgres@127.0.0.1:
 
 def _check_local_db_reachable(db_url: str) -> bool:
     """Verifica se o servidor local de base de dados está em execução via TCP/IP."""
-    if "127.0.0.1" in db_url or "localhost" in db_url:
-        try:
-            port = 5432
-            host_part = db_url.split("@")[-1].split("/")[0]
-            if ":" in host_part:
-                port = int(host_part.split(":")[-1])
-            with socket.create_connection(("127.0.0.1", port), timeout=0.3):
+    from urllib.parse import urlparse
+    try:
+        parsed = urlparse(db_url)
+        host = parsed.hostname or "127.0.0.1"
+        port = parsed.port or 5432
+        if host in ("127.0.0.1", "localhost", "0.0.0.0"):
+            with socket.create_connection((host, port), timeout=0.2):
                 return True
-        except (OSError, ValueError):
-            return False
+    except Exception:
+        return False
     return True
 
 
@@ -531,6 +532,7 @@ STORAGES = {
     },
 }
 WHITENOISE_MANIFEST_STRICT = False
+WHITENOISE_USE_FINDERS = True
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
