@@ -6,6 +6,13 @@ import sys
 
 def main() -> None:
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+    # Compatibilidade GeoDjango/GDAL automática no Windows (permite createsuperuser, migrate, runserver)
+    try:
+        from core.windows_gdal_shim import ensure_gdal_compatibility
+        ensure_gdal_compatibility()
+    except Exception:
+        pass
+
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:
