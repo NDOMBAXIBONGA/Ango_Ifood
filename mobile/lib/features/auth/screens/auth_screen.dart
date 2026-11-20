@@ -245,13 +245,8 @@ class _AuthScreenState extends State<AuthScreen> {
             ),
           );
         } else if (state is AuthNetworkFailure) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(state.message),
-              backgroundColor: const Color(0xFFDC2626),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+          // A tela dedicada _buildNetworkErrorScreen já renderiza o aviso visual e o botão de ação.
+          // Omitimos a SnackBar aqui para não tapar o botão "Tentar Novamente".
         } else if (state is Authenticated) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -926,7 +921,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 36),
             ],
           ),
         ),

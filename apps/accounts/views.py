@@ -317,7 +317,7 @@ class RequestOTPView(APIView):
         expira_em = agora + timedelta(minutes=OTP_EXPIRACAO_MINUTOS)
 
         # Grava ou atualiza o registo no modelo 'RegistoOTP' reiniciando tentativas para 5
-        registo_otp, _ = RegistoOTP.objects.update_or_create(
+        registo_otp, _created = RegistoOTP.objects.update_or_create(
             telemovel=telemovel,
             defaults={
                 "codigo_otp": codigo_seguro,
@@ -826,55 +826,6 @@ class EmailRequestOTPView(APIView):
             return Response(resp_data, status=status.HTTP_200_OK)
         except Exception as e:
             logger.error("Erro interno no processamento de pedido de OTP por e-mail: %s", e, exc_info=True)
-            # Auto-recuperação resiliente caso a tabela da base de dados ainda não tenha sido migrada
-            err_msg = str(e).lower()
-            if "does not exist" in err_msg or "relation" in err_msg or "table" in err_msg:
-                try:
-                    logger.info("A aplicar migrações pendentes automaticamente...")
-                    from django.core.management import call_command
-                    for app_target in ["contenttypes", "auth", "accounts", "sessions", "token_blacklist", "catalog", "orders", "logistics", "finance", "promotions", "support"]:
-                        try:
-                            call_command("migrate", app_target, interactive=False)
-                        except Exception:
-                            pass
-                    try:
-                        call_command("migrate", interactive=False)
-                    except Exception:
-                        pass
-
-                    # Executa a criação do OTP após migração bem-sucedida
-                    codigo_seguro = f"{secrets.randbelow(1_000_000):06d}"
-                    expira_em = timezone.now() + timedelta(minutes=5)
-                    registo = RegistoOTPEmail(
-                        email=email,
-                        tentativas_restantes=5,
-                        expira_em=expira_em,
-                        is_verificado=False,
-                        ip_origem=ip_cliente or None,
-                        contagem_pedidos_hora=1,
-                    )
-                    registo.set_codigo(codigo_seguro)
-                    registo.save()
-
-                    threading.Thread(
-                        target=BrevoEmailService().enviar_email_otp,
-                        args=(email, codigo_seguro),
-                        daemon=True,
-                    ).start()
-
-                    return Response(
-                        {
-                            "sucesso": True,
-                            "mensagem": _("Código de confirmação enviado para o seu e-mail com sucesso."),
-                            "email": email,
-                            "expira_em": expira_em.isoformat(),
-                            "validade_minutos": 5,
-                        },
-                        status=status.HTTP_200_OK,
-                    )
-                except Exception as retry_err:
-                    logger.critical("Falha na auto-migração e reprocessamento: %s", retry_err, exc_info=True)
-
             return Response(
                 {
                     "erro": "erro_interno",
@@ -1382,7 +1333,7 @@ class CustomerProfileView(APIView):
 
     def get(self, request: Request) -> Response:
         user: CustomUser = request.user
-        consentimento, _ = PerfilConsentimento.objects.get_or_create(
+        consentimento, _created = PerfilConsentimento.objects.get_or_create(
             utilizador=user,
             defaults={
                 "termos_utilizacao": True,
@@ -1449,7 +1400,7 @@ class CustomerProfileView(APIView):
         if campos_update:
             user.save(update_fields=campos_update)
 
-        consentimento, _ = PerfilConsentimento.objects.get_or_create(utilizador=user)
+        consentimento, _created = PerfilConsentimento.objects.get_or_create(utilizador=user)
         consent_fields = []
         if "marketing" in dados:
             consentimento.marketing = bool(dados["marketing"])

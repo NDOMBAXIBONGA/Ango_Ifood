@@ -41,12 +41,19 @@ class NetworkRetryPolicyInterceptor extends Interceptor {
     // Recupera o contador de retentativas associado à requisição atual
     var currentRetry = (err.requestOptions.extra['retry_count'] as int?) ?? 0;
 
-    if (isNetworkOrTimeout && currentRetry < maxRetries) {
+    // Métodos mutantes (POST/PUT/PATCH/DELETE) ou endpoints de autenticação/OTP são limitados a 1 retentativa
+    // para evitar esperas excessivas (> 1 min) e prevenção de ataques/rate limits duplicados.
+    final isMutatingOrAuth = err.requestOptions.method != 'GET' ||
+        err.requestOptions.path.contains('auth') ||
+        err.requestOptions.path.contains('otp');
+    final effectiveMaxRetries = isMutatingOrAuth ? 1 : maxRetries;
+
+    if (isNetworkOrTimeout && currentRetry < effectiveMaxRetries) {
       currentRetry++;
 
       developer.log(
         '🔄 [RETRY POLICY] Falha de rede/timeout em: ${err.requestOptions.uri}. '
-        'A executar tentativa $currentRetry de $maxRetries em ${retryInterval.inSeconds}s...',
+        'A executar tentativa $currentRetry de $effectiveMaxRetries em ${retryInterval.inSeconds}s...',
         name: 'DioClient',
       );
 

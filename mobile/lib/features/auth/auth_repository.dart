@@ -33,9 +33,9 @@ class AuthRepository {
         _dio = dio ??
             Dio(
               BaseOptions(
-                connectTimeout: const Duration(seconds: 35),
-                receiveTimeout: const Duration(seconds: 35),
-                sendTimeout: const Duration(seconds: 35),
+                connectTimeout: const Duration(seconds: 18),
+                receiveTimeout: const Duration(seconds: 22),
+                sendTimeout: const Duration(seconds: 18),
                 headers: {
                   'Content-Type': 'application/json',
                   'Accept': 'application/json',
