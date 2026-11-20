@@ -618,7 +618,7 @@ EXPOSE_OTP_HINT = env.bool("EXPOSE_OTP_HINT", default=False)
 # 13. CONFIGURAÇÃO VISUAL & UX MODERNA (DJANGO UNFOLD / TAILWIND)
 # ==============================================================================
 from django.urls import reverse_lazy
-from core.admin_theme import get_admin_colors
+from core.admin_theme import get_admin_colors, get_theme_border_radius
 
 UNFOLD = {
     "SITE_TITLE": "Ango_Ifood Admin",
@@ -628,6 +628,11 @@ UNFOLD = {
     "THEME": "light",
     # Resolução dinâmica e manipulável de cores visuais (via URL, cookie, DB ou .env)
     "COLORS": lambda request: get_admin_colors(request),
+    "BORDER_RADIUS": lambda request: get_theme_border_radius(request),
+    # Injeção cirúrgica de CSS dinâmico com suporte total a letras, botões, fundos e ícones
+    "STYLES": [
+        lambda request: reverse_lazy("admin-theme-css"),
+    ],
     "SIDEBAR": {
         "show_search": True,
         "show_all_applications": False,
@@ -638,7 +643,7 @@ UNFOLD = {
                 "collapsible": True,
                 "items": [
                     {
-                        "title": "Seletor de Cores & Temas",
+                        "title": "Estúdio de Cores & Temas",
                         "icon": "palette",
                         "link": reverse_lazy("admin-theme-picker"),
                     },
@@ -648,7 +653,7 @@ UNFOLD = {
                         "link": reverse_lazy("admin-theme-set", kwargs={"theme_name": "red"}),
                     },
                     {
-                        "title": "🟢 Verde Esmeralda",
+                        "title": "🟢 Esmeralda Logística",
                         "icon": "circle",
                         "link": reverse_lazy("admin-theme-set", kwargs={"theme_name": "emerald"}),
                     },
@@ -668,9 +673,14 @@ UNFOLD = {
                         "link": reverse_lazy("admin-theme-set", kwargs={"theme_name": "amber"}),
                     },
                     {
-                        "title": "⚪ Slate Minimalista",
+                        "title": "🖤 Midnight AMOLED",
                         "icon": "circle",
-                        "link": reverse_lazy("admin-theme-set", kwargs={"theme_name": "slate"}),
+                        "link": reverse_lazy("admin-theme-set", kwargs={"theme_name": "midnight"}),
+                    },
+                    {
+                        "title": "☕ Café & Bronze Luxo",
+                        "icon": "circle",
+                        "link": reverse_lazy("admin-theme-set", kwargs={"theme_name": "bronze"}),
                     },
                 ],
             },
