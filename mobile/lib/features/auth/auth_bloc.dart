@@ -150,11 +150,19 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         );
       }
     } on AuthException catch (e) {
-      emit(
-        OtpVerificationFailure(
-          message: e.message,
-        ),
-      );
+      if (e is AuthNetworkException) {
+        emit(
+          AuthNetworkFailure(
+            message: e.message,
+          ),
+        );
+      } else {
+        emit(
+          OtpVerificationFailure(
+            message: e.message,
+          ),
+        );
+      }
     } catch (e) {
       emit(
         const AuthNetworkFailure(
@@ -231,11 +239,19 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         );
       }
     } on AuthException catch (e) {
-      emit(
-        OtpVerificationFailure(
-          message: e.message,
-        ),
-      );
+      if (e is AuthNetworkException) {
+        emit(
+          AuthNetworkFailure(
+            message: e.message,
+          ),
+        );
+      } else {
+        emit(
+          OtpVerificationFailure(
+            message: e.message,
+          ),
+        );
+      }
     } catch (e) {
       emit(
         const AuthNetworkFailure(
@@ -286,11 +302,19 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         );
       }
     } on AuthException catch (e) {
-      emit(
-        OtpVerificationFailure(
-          message: e.message,
-        ),
-      );
+      if (e is AuthNetworkException) {
+        emit(
+          AuthNetworkFailure(
+            message: e.message,
+          ),
+        );
+      } else {
+        emit(
+          OtpVerificationFailure(
+            message: e.message,
+          ),
+        );
+      }
     } catch (e) {
       emit(
         OtpVerificationFailure(
@@ -404,11 +428,19 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         ),
       );
     } on AuthException catch (e) {
-      emit(
-        OtpVerificationFailure(
-          message: e.message,
-        ),
-      );
+      if (e is AuthNetworkException) {
+        emit(
+          AuthNetworkFailure(
+            message: e.message,
+          ),
+        );
+      } else {
+        emit(
+          OtpVerificationFailure(
+            message: e.message,
+          ),
+        );
+      }
     } catch (e) {
       emit(
         OtpVerificationFailure(

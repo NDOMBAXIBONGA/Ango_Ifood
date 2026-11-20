@@ -729,20 +729,9 @@ class EmailRequestOTPView(APIView):
             serializer.is_valid(raise_exception=True)
             email: str = serializer.validated_data["email"].strip().lower()
 
-            # Verificação prévia de existência de conta (RN-001 / RN-003):
-            # Notifica imediatamente o utilizador se a conta já existe, direcionando para login com palavra-passe
+            # Identificação de perfil (RN-001 / RN-003): Suporta tanto novos registos quanto login passwordless
             user_existente = CustomUser.objects.filter(email__iexact=email).first()
-            if user_existente is not None:
-                logger.info("Tentativa de pedido de OTP para e-mail com conta já ativa: %s", email)
-                return Response(
-                    {
-                        "erro": "conta_ja_existe",
-                        "detalhe": _("Já existe uma conta registada com este e-mail. Por favor, introduza a sua palavra-passe para aceder."),
-                        "conta_ja_existe": True,
-                        "email": email,
-                    },
-                    status=status.HTTP_409_CONFLICT,
-                )
+            is_novo_utilizador = user_existente is None
 
             agora = timezone.now()
             uma_hora_atras = agora - timedelta(hours=1)
@@ -816,6 +805,7 @@ class EmailRequestOTPView(APIView):
                 "email": email,
                 "expira_em": expira_em.isoformat(),
                 "validade_minutos": 5,
+                "is_novo_utilizador": is_novo_utilizador,
             }
             if getattr(settings, "EXPOSE_OTP_HINT", False):
                 resp_data["otp_hint"] = codigo_seguro

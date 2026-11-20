@@ -317,9 +317,12 @@ class AuthRepository {
     if (e.type == DioExceptionType.connectionTimeout ||
         e.type == DioExceptionType.sendTimeout ||
         e.type == DioExceptionType.receiveTimeout ||
-        e.type == DioExceptionType.connectionError) {
+        e.type == DioExceptionType.connectionError ||
+        e.type == DioExceptionType.unknown ||
+        response == null ||
+        statusCode == null) {
       return const AuthNetworkException(
-        message: 'Falha de comunicação com o servidor. Verifique a sua ligação à Internet.',
+        message: 'Falha de comunicação com os servidores. Verifique a sua ligação à Internet ou tente novamente.',
       );
     }
 
@@ -468,7 +471,9 @@ class AuthRepository {
     }
 
     return AuthServerException(
-      message: 'Não foi possível concluir a autenticação. Código de status: $statusCode.',
+      message: statusCode != null
+          ? 'Não foi possível concluir a autenticação. Código de status: $statusCode.'
+          : 'Não foi possível concluir a autenticação. Verifique a sua conexão com a Internet.',
       statusCode: statusCode,
     );
   }

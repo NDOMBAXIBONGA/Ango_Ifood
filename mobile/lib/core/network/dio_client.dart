@@ -30,11 +30,13 @@ class NetworkRetryPolicyInterceptor extends Interceptor {
 
   @override
   Future<void> onError(DioException err, ErrorInterceptorHandler handler) async {
-    // Identifica falhas de conectividade física ou tempo limite excedido
+    // Identifica falhas de conectividade física, tempo limite excedido ou desconexão transitória
     final isNetworkOrTimeout = err.type == DioExceptionType.connectionTimeout ||
         err.type == DioExceptionType.receiveTimeout ||
         err.type == DioExceptionType.sendTimeout ||
-        err.type == DioExceptionType.connectionError;
+        err.type == DioExceptionType.connectionError ||
+        err.type == DioExceptionType.unknown ||
+        err.response == null;
 
     // Recupera o contador de retentativas associado à requisição atual
     var currentRetry = (err.requestOptions.extra['retry_count'] as int?) ?? 0;

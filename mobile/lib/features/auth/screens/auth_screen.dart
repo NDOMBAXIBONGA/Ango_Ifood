@@ -244,6 +244,14 @@ class _AuthScreenState extends State<AuthScreen> {
               behavior: SnackBarBehavior.floating,
             ),
           );
+        } else if (state is AuthNetworkFailure) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(state.message),
+              backgroundColor: const Color(0xFFDC2626),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
         } else if (state is Authenticated) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(

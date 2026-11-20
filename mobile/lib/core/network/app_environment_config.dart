@@ -48,10 +48,10 @@ class AppEnvironmentConfig {
     defaultValue: '',
   );
 
-  // Timeouts tolerantes de rede (Mercado de Angola Unitel/Movicel e Cold Start Render: 25s)
-  static const Duration connectTimeout = Duration(seconds: 25);
-  static const Duration receiveTimeout = Duration(seconds: 25);
-  static const Duration sendTimeout = Duration(seconds: 25);
+  // Timeouts tolerantes de rede (Mercado de Angola Unitel/Movicel e Cold Start Render: 45s)
+  static const Duration connectTimeout = Duration(seconds: 45);
+  static const Duration receiveTimeout = Duration(seconds: 45);
+  static const Duration sendTimeout = Duration(seconds: 45);
 
   // Endpoint canónico de renovação de tokens JWT (SimpleJWT)
   static const String tokenRefreshEndpoint = '/api/v1/auth/token/refresh/';
