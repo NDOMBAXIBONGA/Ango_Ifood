@@ -342,11 +342,11 @@ class AuthRepository {
       }
 
       // 2. Trata HTTP 429: Limite de envios ou bloqueio ativo (RN-002)
-      if (statusCode == 429 || erroCode == 'limite_envios_excedido' || erroCode == 'telemovel_bloqueado') {
+      if (statusCode == 429 || erroCode == 'limite_envios_excedido' || erroCode == 'rate_limit_excedido' || erroCode == 'telemovel_bloqueado') {
         final bloqueadoAteStr = responseData['bloqueado_ate'] as String?;
         final retrySeconds = responseData['retry_after_seconds'] as int?;
         return OtpRateLimitException(
-          message: detalhe ?? 'Limite de tentativas ou envios de OTP atingido. Tente mais tarde.',
+          message: detalhe ?? 'Limite de pedidos de código atingido. Por favor, aguarde alguns minutos ou verifique a sua pasta de Spam.',
           retryAfter: bloqueadoAteStr != null ? DateTime.tryParse(bloqueadoAteStr) : null,
           retryAfterSeconds: retrySeconds,
         );

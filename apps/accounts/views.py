@@ -736,7 +736,21 @@ class EmailRequestOTPView(APIView):
             agora = timezone.now()
             uma_hora_atras = agora - timedelta(hours=1)
             ip_cliente = obter_ip_cliente(request)
-            # Rate Limiting: Máximo de 3 pedidos de e-mail por hora para o mesmo e-mail ou mesmo IP
+
+            # Proteção contra cliques múltiplos simultâneos (cooldown de 15 segundos entre pedidos)
+            ultimo_pedido = RegistoOTPEmail.objects.filter(email=email).order_by("-criado_em").first()
+            if ultimo_pedido and (agora - ultimo_pedido.criado_em).total_seconds() < 15:
+                segundos_espera = max(1, 15 - int((agora - ultimo_pedido.criado_em).total_seconds()))
+                return Response(
+                    {
+                        "erro": "rate_limit_excedido",
+                        "detalhe": _(f"Por favor, aguarde {segundos_espera} segundos antes de solicitar um novo código."),
+                    },
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
+
+            # Rate Limiting (RN-002 ampliado para resiliência): Máximo de 10 pedidos por hora por e-mail.
+            # Para IP, tolerância ampliada (40/h) para acomodar CGNAT de operadoras móveis (Unitel/Africell).
             pedidos_email_hora = RegistoOTPEmail.objects.filter(
                 email=email,
                 criado_em__gte=uma_hora_atras,
@@ -749,11 +763,10 @@ class EmailRequestOTPView(APIView):
                     criado_em__gte=uma_hora_atras,
                 ).count()
 
-            # Rate Limiting (RN-002): Máximo de 3 pedidos por hora por e-mail.
-            # Para IP, tolerância ampliada (25/h) para acomodar CGNAT de operadoras móveis (Unitel/Africell).
-            limite_ip = 25
+            limite_email = 10
+            limite_ip = 40
             is_dev = getattr(settings, "DEBUG", False) or getattr(settings, "EXPOSE_OTP_HINT", False)
-            if pedidos_email_hora >= 3 or (pedidos_ip_hora >= limite_ip and not is_dev):
+            if pedidos_email_hora >= limite_email or (pedidos_ip_hora >= limite_ip and not is_dev):
                 logger.warning(
                     "Rate limit de OTP por e-mail excedido: e-mail=%s (pedidos=%d), IP=%s (pedidos=%d)",
                     email,
@@ -764,7 +777,7 @@ class EmailRequestOTPView(APIView):
                 return Response(
                     {
                         "erro": "rate_limit_excedido",
-                        "detalhe": _("Limite máximo de 3 pedidos de código por hora atingido para este e-mail. Por favor, tente mais tarde."),
+                        "detalhe": _("Limite de pedidos de código por hora atingido para este e-mail. Por favor, tente mais tarde ou verifique a sua pasta de Spam."),
                     },
                     status=status.HTTP_429_TOO_MANY_REQUESTS,
                 )

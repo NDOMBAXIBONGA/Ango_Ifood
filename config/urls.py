@@ -37,6 +37,7 @@ def health_check(request):
         or request.GET.get("check_events")
         or request.GET.get("list_senders") == "true"
         or request.GET.get("test_email")
+        or request.GET.get("reset_otp")
     )
 
     if not is_deep_check:
@@ -215,12 +216,23 @@ def health_check(request):
         except Exception as se:
             brevo_senders = {"error": str(se)}
 
+    reset_otp_result = None
+    reset_target = request.GET.get("reset_otp")
+    if reset_target:
+        try:
+            from apps.accounts.models import RegistoOTPEmail
+            deleted_count, _ = RegistoOTPEmail.objects.filter(email__iexact=reset_target.strip().lower()).delete()
+            reset_otp_result = {"email": reset_target, "registos_eliminados": deleted_count}
+        except Exception as reset_err:
+            reset_otp_result = {"error": str(reset_err)}
+
     return JsonResponse(
         {
             "status": "healthy" if db_ok else "degraded",
-            "version": "v1.0.6-release",
+            "version": "v1.0.8-otp-ready",
             "service": "delivery-backend-api",
             "sync_stores": sync_stores_result,
+            "reset_otp": reset_otp_result,
             "brevo_senders": brevo_senders,
             "brevo_events": brevo_events,
             "database": {
