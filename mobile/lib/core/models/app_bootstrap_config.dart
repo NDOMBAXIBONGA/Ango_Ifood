@@ -188,6 +188,24 @@ class AppDesignSystemConfig {
   Color get backgroundScreen => _parseHexColor(backgroundScreenHex, const Color(0xFFF8FAFC));
   Color get backgroundCard => _parseHexColor(backgroundCardHex, Colors.white);
 
+  // Aliases e propriedades exigidas pelo AppConfigService e geradores de tema
+  Color get backgroundColor => backgroundScreen;
+  Color get surfaceColor => backgroundCard;
+  Color get textPrimaryColor => const Color(0xFF0F172A);
+  Color get textSecondaryColor => const Color(0xFF64748B);
+
+  double get buttonBorderRadius => _parseBorderRadius(borderRadiusBase, 14.0);
+  double get cardBorderRadius => _parseBorderRadius(borderRadiusBase, 16.0);
+
+  static double _parseBorderRadius(String raw, double fallback) {
+    try {
+      final clean = raw.replaceAll('px', '').replaceAll('rem', '').trim();
+      return double.tryParse(clean) ?? fallback;
+    } catch (_) {
+      return fallback;
+    }
+  }
+
   static Color _parseHexColor(String hex, Color fallback) {
     try {
       final clean = hex.replaceAll('#', '').trim();
@@ -297,6 +315,10 @@ class AppMaintenanceConfig {
         'ativo': ativo,
         'mensagem': mensagem,
       };
+
+  // Aliases exigidos pelo AppConfigService
+  bool get active => ativo;
+  String get message => mensagem;
 }
 
 class AppBannerItem {
@@ -351,4 +373,7 @@ class AppBannerItem {
         'cor_texto': corTexto,
         'ordem': ordem,
       };
+
+  // Alias exigido pelo AppConfigService
+  String get targetAudience => publicoAlvo;
 }

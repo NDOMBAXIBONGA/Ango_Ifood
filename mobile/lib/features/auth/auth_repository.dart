@@ -455,7 +455,7 @@ class AuthRepository {
       }
     }
 
-    if (statusCode != null && statusCode >= 500) {
+    if (statusCode >= 500) {
       return AuthServerException(
         message: 'O servidor de autenticação encontrou uma instabilidade ($statusCode). Tente novamente.',
         statusCode: statusCode,
@@ -473,9 +473,7 @@ class AuthRepository {
     }
 
     return AuthServerException(
-      message: statusCode != null
-          ? 'Não foi possível concluir a autenticação. Código de status: $statusCode.'
-          : 'Não foi possível concluir a autenticação. Verifique a sua conexão com a Internet.',
+      message: 'Não foi possível concluir a autenticação. Código de status: $statusCode.',
       statusCode: statusCode,
     );
   }

@@ -203,7 +203,6 @@ class AppConfigService extends ChangeNotifier {
       primary: primary,
       secondary: secondary,
       surface: surface,
-      background: background,
       error: const Color(0xFFEF4444),
       brightness: Brightness.light,
     );
@@ -234,7 +233,7 @@ class AppConfigService extends ChangeNotifier {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         ),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: surface,
         elevation: 1,
         shape: RoundedRectangleBorder(
