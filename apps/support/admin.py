@@ -3,7 +3,8 @@ Configuração do Django Admin para a aplicação 'support'.
 Permite gerir Tickets de Suporte, Disputas de Pedidos e Parâmetros de Configuração Operacional.
 """
 from django.contrib import admin
-from core.admin_base import MasterModelAdmin
+from django.utils.translation import gettext_lazy as _
+from core.admin_base import MasterModelAdmin, display
 from apps.support.models import Parametro, TicketDisputa
 
 
@@ -14,8 +15,8 @@ class TicketDisputaAdmin(MasterModelAdmin):
         "pedido",
         "utilizador_reclamante",
         "tipo_incidente",
-        "prioridade",
-        "estado",
+        "prioridade_badge",
+        "estado_badge",
         "decisao",
         "data_criacao",
     )
@@ -29,6 +30,29 @@ class TicketDisputaAdmin(MasterModelAdmin):
     )
     readonly_fields = ("id", "data_criacao", "data_atualizacao")
     ordering = ("-data_criacao",)
+
+    @display(
+        description=_("Prioridade"),
+        label={
+            "ALTA": "danger",
+            "MEDIA": "warning",
+            "BAIXA": "info",
+        },
+    )
+    def prioridade_badge(self, obj: TicketDisputa) -> str:
+        return obj.prioridade
+
+    @display(
+        description=_("Estado"),
+        label={
+            "ABERTO": "warning",
+            "EM_ANALISE": "info",
+            "RESOLVIDO": "success",
+            "REJEITADO": "secondary",
+        },
+    )
+    def estado_badge(self, obj: TicketDisputa) -> str:
+        return obj.estado
 
     @admin.display(description="Ticket")
     def id_curto(self, obj: TicketDisputa) -> str:

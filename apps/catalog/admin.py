@@ -5,7 +5,7 @@ Permite gerir Lojas Parceiras, Cardápios, Categorias, Itens, Opções e Mídias
 from django.contrib import admin
 from django.utils.translation import gettext_lazy as _
 
-from core.admin_base import MasterModelAdmin
+from core.admin_base import MasterModelAdmin, TabularInline, display
 from apps.catalog.models import (
     CategoriaItem,
     GrupoOpcao,
@@ -17,13 +17,13 @@ from apps.catalog.models import (
 )
 
 
-class HorarioFuncionamentoInline(admin.TabularInline):
+class HorarioFuncionamentoInline(TabularInline):
     model = HorarioFuncionamento
     extra = 1
     fields = ("dia_semana", "hora_abertura", "hora_fecho", "is_pausa_temporaria")
 
 
-class MidiaLojaInline(admin.TabularInline):
+class MidiaLojaInline(TabularInline):
     model = MidiaLoja
     extra = 1
     fields = ("tipo", "nome_arquivo", "url", "legenda")
@@ -35,7 +35,7 @@ class ParceiroLojaAdmin(MasterModelAdmin):
         "nome",
         "nif",
         "contacto",
-        "estado",
+        "estado_badge",
         "raio_entrega_km",
         "comissao_percentagem",
         "score_reputacao",
@@ -46,6 +46,18 @@ class ParceiroLojaAdmin(MasterModelAdmin):
     search_fields = ("nome", "nif", "contacto", "morada_texto")
     inlines = [HorarioFuncionamentoInline, MidiaLojaInline]
     ordering = ("nome",)
+
+    @display(
+        description=_("Estado"),
+        label={
+            "PENDENTE": "warning",
+            "ATIVO": "success",
+            "SUSPENSO": "danger",
+            "INATIVO": "secondary",
+        },
+    )
+    def estado_badge(self, obj: ParceiroLoja) -> str:
+        return obj.estado
 
     fieldsets = (
         (
@@ -99,7 +111,7 @@ class CategoriaItemAdmin(MasterModelAdmin):
     ordering = ("loja", "ordem_exibicao", "nome")
 
 
-class OpcaoItemInline(admin.TabularInline):
+class OpcaoItemInline(TabularInline):
     model = OpcaoItem
     extra = 1
     fields = ("nome", "preco_adicional", "is_disponivel")

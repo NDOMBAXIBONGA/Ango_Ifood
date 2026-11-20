@@ -7,7 +7,7 @@ from django.contrib.auth.admin import UserAdmin
 from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
 
-from core.admin_base import MasterModelAdmin
+from core.admin_base import MasterModelAdmin, display
 from apps.accounts.models import (
     CustomUser,
     Morada,
@@ -17,13 +17,13 @@ from apps.accounts.models import (
 )
 
 # Customização da identidade visual do Django Admin
-admin.site.site_header = "Delivery Pro — Administração Central"
-admin.site.site_title = "Delivery Pro Admin"
-admin.site.index_title = "Painel de Gestão da Plataforma"
+admin.site.site_header = "Ango_Ifood — Administração Central"
+admin.site.site_title = "Ango_Ifood Admin"
+admin.site.index_title = "Painel de Gestão e Operações"
 
 
 @admin.register(CustomUser)
-class CustomUserAdmin(UserAdmin):
+class CustomUserAdmin(MasterModelAdmin):
     """
     Gestão avançada de utilizadores da plataforma (Cliente, Parceiro, Estafeta, Admin).
     """
@@ -34,8 +34,8 @@ class CustomUserAdmin(UserAdmin):
         "telemovel",
         "nome",
         "email",
-        "tipo_utilizador",
-        "estado",
+        "tipo_utilizador_badge",
+        "estado_badge",
         "is_staff",
         "is_active",
         "data_criacao",
@@ -50,6 +50,30 @@ class CustomUserAdmin(UserAdmin):
     )
     search_fields = ("telemovel", "nome", "email")
     ordering = ("-data_criacao",)
+
+    @display(
+        description=_("Tipo"),
+        label={
+            "CLIENTE": "info",
+            "PARCEIRO": "primary",
+            "ESTAFETA": "warning",
+            "ADMIN": "purple",
+        },
+    )
+    def tipo_utilizador_badge(self, obj: CustomUser) -> str:
+        return obj.tipo_utilizador
+
+    @display(
+        description=_("Estado"),
+        label={
+            "ATIVO": "success",
+            "SUSPENSO": "warning",
+            "BLOQUEADO": "danger",
+            "PENDENTE": "secondary",
+        },
+    )
+    def estado_badge(self, obj: CustomUser) -> str:
+        return obj.estado
 
     fieldsets = (
         (

@@ -5,17 +5,17 @@ Gere Pedidos (OMS), Linhas de Pedidos e Opções Selecionadas.
 from django.contrib import admin
 from django.utils.translation import gettext_lazy as _
 
-from core.admin_base import MasterModelAdmin
+from core.admin_base import MasterModelAdmin, TabularInline, display
 from apps.orders.models import LinhaPedido, LinhaPedidoOpcaoSelecionada, Pedido
 
 
-class LinhaPedidoOpcaoSelecionadaInline(admin.TabularInline):
+class LinhaPedidoOpcaoSelecionadaInline(TabularInline):
     model = LinhaPedidoOpcaoSelecionada
     extra = 0
     readonly_fields = ("opcao", "preco_adicional_historico")
 
 
-class LinhaPedidoInline(admin.TabularInline):
+class LinhaPedidoInline(TabularInline):
     model = LinhaPedido
     extra = 0
     fields = ("item", "quantidade", "preco_unitario_historico", "preco_unitario_no_momento", "notas")
@@ -29,9 +29,9 @@ class PedidoAdmin(MasterModelAdmin):
         "id_curto",
         "cliente",
         "loja",
-        "estado",
+        "estado_badge",
         "total_formatado",
-        "metodo_pagamento",
+        "metodo_pagamento_badge",
         "data_criacao",
     )
     list_filter = ("estado", "metodo_pagamento", "loja", "data_criacao")
@@ -45,6 +45,34 @@ class PedidoAdmin(MasterModelAdmin):
     ordering = ("-data_criacao",)
     inlines = [LinhaPedidoInline]
     actions = ["export_to_csv"]
+
+    @display(
+        description=_("Estado"),
+        label={
+            "CRIADO": "gray",
+            "CONFIRMADO": "info",
+            "EM_PREPARACAO": "warning",
+            "PRONTO_RECOLHA": "purple",
+            "EM_TRANSITO": "primary",
+            "ENTREGUE": "success",
+            "CANCELADO": "danger",
+        },
+    )
+    def estado_badge(self, obj: Pedido) -> str:
+        return obj.estado
+
+    @display(
+        description=_("Pagamento"),
+        label={
+            "MULTICAIXA_EXPRESS": "primary",
+            "BAI_DIRECTO": "info",
+            "TRANSFERENCIA_BANCARIA": "secondary",
+            "DINHEIRO_NA_ENTREGA": "warning",
+            "TPA_NA_ENTREGA": "success",
+        },
+    )
+    def metodo_pagamento_badge(self, obj: Pedido) -> str:
+        return obj.metodo_pagamento
 
     fieldsets = (
         (

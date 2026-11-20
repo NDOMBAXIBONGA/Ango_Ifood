@@ -20,6 +20,17 @@ from django.utils.encoding import force_str
 
 logger = logging.getLogger(__name__)
 
+try:
+    from unfold.admin import ModelAdmin as BaseAdmin, TabularInline, StackedInline
+    from unfold.decorators import display
+except ImportError:
+    from django.contrib.admin import ModelAdmin as BaseAdmin, TabularInline, StackedInline
+
+    def display(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
+
 
 def get_client_ip(request: HttpRequest) -> str:
     """Extrai o IP real do cliente mesmo por trás de proxies reversos (Nginx/Cloudflare)."""
@@ -29,19 +40,23 @@ def get_client_ip(request: HttpRequest) -> str:
     return request.META.get("REMOTE_ADDR", "0.0.0.0")
 
 
-class MasterModelAdmin(admin.ModelAdmin):
+class MasterModelAdmin(BaseAdmin):
     """
     Classe Administrativa Base Obrigatória para todas as entidades do sistema.
     
     Funcionalidades Nativas:
-    1. Auditoria Automática de Alterações com IP e Identidade.
-    2. Bloqueio de Exclusão Destrutiva em Modelos Críticos (Soft Delete).
-    3. Otimização de Consultas (list_select_related, show_full_result_count).
-    4. Exportação Padronizada para CSV com suporte nativo a caracteres especiais (UTF-8 com BOM).
+    1. Interface Moderna (Django Unfold / Tailwind CSS com layout responsivo).
+    2. Auditoria Automática de Alterações com IP e Identidade.
+    3. Bloqueio de Exclusão Destrutiva em Modelos Críticos (Soft Delete).
+    4. Otimização de Consultas (list_select_related, show_full_result_count).
+    5. Exportação Padronizada para CSV com suporte nativo a caracteres especiais (UTF-8 com BOM).
     """
     # Performance padrão para bases de dados em crescimento rápido
     list_per_page = 30
     show_full_result_count = False
+    compressed_fields = True
+    list_filter_submit = True
+    warn_unsaved_form = True
 
     # Flag de Proteção contra Perda Acidental de Dados
     protected_from_deletion: bool = False

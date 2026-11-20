@@ -114,9 +114,13 @@ if not DEBUG:
 # ==============================================================================
 # 3. APLICAÇÕES INSTALADAS (INSTALLED_APPS)
 # ==============================================================================
-# Daphne tem de estar no topo de INSTALLED_APPS para assumir o comando runserver em ASGI
+# Daphne tem de estar no topo de INSTALLED_APPS para assumir o comando runserver em ASGI.
+# Unfold vem imediatamente antes de django.contrib.admin para assumir os templates e estilos modernos.
 DJANGO_APPS = [
     "daphne",
+    "unfold",
+    "unfold.contrib.filters",
+    "unfold.contrib.forms",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -451,9 +455,6 @@ EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default=env("GMAIL_APP_PASSWORD
 # Desativado em produção por segurança para não expor o código OTP nas respostas JSON
 EXPOSE_OTP_HINT = env.bool("EXPOSE_OTP_HINT", default=False)
 
-
-
-
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=env.int("JWT_ACCESS_TOKEN_LIFETIME_MINUTES")),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=env.int("JWT_REFRESH_TOKEN_LIFETIME_DAYS")),
@@ -610,6 +611,156 @@ EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default=env("GMAIL_APP_PASSWORD
 
 # Desativado em produção por segurança para não expor o código OTP nas respostas JSON
 EXPOSE_OTP_HINT = env.bool("EXPOSE_OTP_HINT", default=False)
+
+# ==============================================================================
+# 13. CONFIGURAÇÃO VISUAL & UX MODERNA (DJANGO UNFOLD / TAILWIND)
+# ==============================================================================
+from django.urls import reverse_lazy
+
+UNFOLD = {
+    "SITE_TITLE": "Ango_Ifood Admin",
+    "SITE_HEADER": "Ango_Ifood Delivery",
+    "SITE_SUBHEADER": "Centro de Operações & Logística",
+    "SITE_URL": "/",
+    "THEME": "light",
+    "COLORS": {
+        "primary": {
+            "50": "254 242 242",
+            "100": "254 226 226",
+            "200": "254 202 202",
+            "300": "252 165 165",
+            "400": "248 113 113",
+            "500": "234 29 44",   # #EA1D2C (Vermelho Ango_Ifood)
+            "600": "220 38 38",
+            "700": "185 28 28",
+            "800": "153 27 27",
+            "900": "127 29 29",
+            "950": "69 10 10",
+        },
+    },
+    "SIDEBAR": {
+        "show_search": True,
+        "show_all_applications": False,
+        "navigation": [
+            {
+                "title": "Operações & Pedidos",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Pedidos em Tempo Real",
+                        "icon": "shopping_bag",
+                        "link": reverse_lazy("admin:orders_pedido_changelist"),
+                    },
+                    {
+                        "title": "Linhas de Pedidos",
+                        "icon": "receipt_long",
+                        "link": reverse_lazy("admin:orders_linhapedido_changelist"),
+                    },
+                    {
+                        "title": "Tickets & Disputas",
+                        "icon": "support_agent",
+                        "link": reverse_lazy("admin:support_ticketdisputa_changelist"),
+                    },
+                ],
+            },
+            {
+                "title": "Logística & Estafetas",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Estafetas",
+                        "icon": "two_wheeler",
+                        "link": reverse_lazy("admin:logistics_estafeta_changelist"),
+                    },
+                    {
+                        "title": "Entregas & Despacho",
+                        "icon": "local_shipping",
+                        "link": reverse_lazy("admin:logistics_entrega_changelist"),
+                    },
+                ],
+            },
+            {
+                "title": "Catálogo & Restaurantes",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Restaurantes Parceiros",
+                        "icon": "storefront",
+                        "link": reverse_lazy("admin:catalog_parceiroloja_changelist"),
+                    },
+                    {
+                        "title": "Categorias de Itens",
+                        "icon": "category",
+                        "link": reverse_lazy("admin:catalog_categoriaitem_changelist"),
+                    },
+                    {
+                        "title": "Cardápio & Artigos",
+                        "icon": "restaurant_menu",
+                        "link": reverse_lazy("admin:catalog_itemmenu_changelist"),
+                    },
+                    {
+                        "title": "Galeria / Vitrine",
+                        "icon": "photo_library",
+                        "link": reverse_lazy("admin:catalog_midialoja_changelist"),
+                    },
+                ],
+            },
+            {
+                "title": "Finanças & Marketing",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Livro-Razão (Ledger)",
+                        "icon": "account_balance",
+                        "link": reverse_lazy("admin:finance_livrorazaoledger_changelist"),
+                    },
+                    {
+                        "title": "Eventos de Liquidação",
+                        "icon": "payments",
+                        "link": reverse_lazy("admin:finance_eventopedido_changelist"),
+                    },
+                    {
+                        "title": "Cupões de Desconto",
+                        "icon": "confirmation_number",
+                        "link": reverse_lazy("admin:promotions_cupaodesconto_changelist"),
+                    },
+                ],
+            },
+            {
+                "title": "Utilizadores & Segurança",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Contas de Utilizadores",
+                        "icon": "group",
+                        "link": reverse_lazy("admin:accounts_customuser_changelist"),
+                    },
+                    {
+                        "title": "Moradas de Entrega",
+                        "icon": "location_on",
+                        "link": reverse_lazy("admin:accounts_morada_changelist"),
+                    },
+                    {
+                        "title": "Alertas Antifraude",
+                        "icon": "security",
+                        "link": reverse_lazy("admin:orders_registoalertafraude_changelist"),
+                    },
+                    {
+                        "title": "Lista de Bloqueio",
+                        "icon": "block",
+                        "link": reverse_lazy("admin:orders_listabloqueioimutavel_changelist"),
+                    },
+                ],
+            },
+        ],
+    },
+}
+
 
 
 

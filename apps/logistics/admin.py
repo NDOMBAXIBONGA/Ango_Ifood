@@ -6,7 +6,7 @@ from django.contrib import admin, messages
 from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
 
-from core.admin_base import MasterModelAdmin
+from core.admin_base import MasterModelAdmin, display
 from apps.logistics.models import Entrega, Estafeta
 
 
@@ -16,8 +16,8 @@ class EstafetaAdmin(MasterModelAdmin):
         "utilizador",
         "tipo_veiculo",
         "carta_conducao",
-        "status_onboarding",
-        "is_online",
+        "status_onboarding_badge",
+        "is_online_badge",
         "score_reputacao",
         "saldo_carteira",
     )
@@ -30,6 +30,25 @@ class EstafetaAdmin(MasterModelAdmin):
     )
     ordering = ("-score_reputacao", "utilizador__nome")
     actions = ["aprovar_onboarding", "bloquear_estafeta", "export_to_csv"]
+
+    @display(
+        description=_("Onboarding"),
+        label={
+            "PENDENTE": "warning",
+            "APROVADO": "success",
+            "REJEITADO": "danger",
+            "BLOQUEADO": "danger",
+        },
+    )
+    def status_onboarding_badge(self, obj: Estafeta) -> str:
+        return obj.status_onboarding
+
+    @display(
+        description=_("Disponibilidade"),
+        boolean=True,
+    )
+    def is_online_badge(self, obj: Estafeta) -> bool:
+        return obj.is_online
 
     fieldsets = (
         (
@@ -74,7 +93,7 @@ class EntregaAdmin(MasterModelAdmin):
         "id_curto",
         "pedido",
         "estafeta",
-        "estado_logistico",
+        "estado_logistico_badge",
         "pin_entrega",
         "distancia_km",
         "eta_estimada",
@@ -90,6 +109,21 @@ class EntregaAdmin(MasterModelAdmin):
     readonly_fields = ("id", "eta_estimada")
     ordering = ("-eta_estimada",)
     actions = ["marcar_entregue_manual", "export_to_csv"]
+
+    @display(
+        description=_("Estado Logístico"),
+        label={
+            "PENDENTE_ATRIBUICAO": "secondary",
+            "ATRIBUIDO": "info",
+            "A_CAMINHO_RECOLHA": "warning",
+            "RECOLHIDO": "purple",
+            "A_CAMINHO_ENTREGA": "primary",
+            "ENTREGUE": "success",
+            "FALHADA": "danger",
+        },
+    )
+    def estado_logistico_badge(self, obj: Entrega) -> str:
+        return obj.estado_logistico
 
     @admin.display(description="Distância (km)")
     def distancia_km(self, obj: Entrega) -> str:
