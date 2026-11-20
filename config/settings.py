@@ -635,8 +635,25 @@ UNFOLD = {
     ],
     "SIDEBAR": {
         "show_search": True,
-        "show_all_applications": False,
+        "show_all_applications": True,
         "navigation": [
+            {
+                "title": "📱 Aplicações Móveis & OTA",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Versões da App (OTA / Kill Switch)",
+                        "icon": "system_update",
+                        "link": reverse_lazy("admin:core_appversion_changelist"),
+                    },
+                    {
+                        "title": "Página de Download iOS (IPA)",
+                        "icon": "download",
+                        "link": reverse_lazy("ios-download-page"),
+                    },
+                ],
+            },
             {
                 "title": "🎨 Personalização Visual & Cores",
                 "separator": True,
@@ -744,6 +761,11 @@ UNFOLD = {
                         "link": reverse_lazy("admin:catalog_itemmenu_changelist"),
                     },
                     {
+                        "title": "Horários de Funcionamento",
+                        "icon": "schedule",
+                        "link": reverse_lazy("admin:catalog_horariofuncionamento_changelist"),
+                    },
+                    {
                         "title": "Galeria / Vitrine",
                         "icon": "photo_library",
                         "link": reverse_lazy("admin:catalog_midialoja_changelist"),
@@ -796,6 +818,43 @@ UNFOLD = {
                         "title": "Lista de Bloqueio",
                         "icon": "block",
                         "link": reverse_lazy("admin:orders_listabloqueioimutavel_changelist"),
+                    },
+                    {
+                        "title": "Dispositivos Registados",
+                        "icon": "devices",
+                        "link": reverse_lazy("admin:orders_dispositivoutilizador_changelist"),
+                    },
+                    {
+                        "title": "Impressões de Cartão",
+                        "icon": "credit_card",
+                        "link": reverse_lazy("admin:orders_impressaodigitalcartao_changelist"),
+                    },
+                    {
+                        "title": "Perfis de Consentimento",
+                        "icon": "verified_user",
+                        "link": reverse_lazy("admin:accounts_perfilconsentimento_changelist"),
+                    },
+                    {
+                        "title": "Auditoria de Códigos OTP",
+                        "icon": "pin",
+                        "link": reverse_lazy("admin:accounts_registootp_changelist"),
+                    },
+                ],
+            },
+            {
+                "title": "⚙️ Governança & Sistema",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Configuração da Plataforma",
+                        "icon": "tune",
+                        "link": reverse_lazy("admin:core_systemconfiguration_changelist"),
+                    },
+                    {
+                        "title": "Parâmetros do Sistema",
+                        "icon": "settings",
+                        "link": reverse_lazy("admin:support_parametro_changelist"),
                     },
                 ],
             },
