@@ -342,6 +342,7 @@ class Parametro(models.Model):
         help_text=_("Designação amigável descrita na tabela da Secção 8 (ex.: 'Janela de cancelamento gratuito')."),
     )
     valor = models.TextField(
+        null=True,
         blank=True,
         default="",
         verbose_name=_("Valor Textual"),
@@ -447,7 +448,14 @@ class Parametro(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"[{self.categoria}] {self.chave} = {self.get_valor_resolvido()} ({self.nome or self.regra_associada})"
+        cat = self.categoria or "OUTRO"
+        chk = self.chave or "SEM_CHAVE"
+        try:
+            res = self.get_valor_resolvido()
+        except Exception:
+            res = self.valor or ""
+        desc = self.nome or self.regra_associada or "Parâmetro"
+        return f"[{cat}] {chk} = {res} ({desc})"
 
     def get_valor_resolvido(self) -> Any:
         """Retorna o valor nativo tipado conforme a definição de 'tipo_dado'."""
@@ -508,16 +516,21 @@ class ParametroHistorico(models.Model):
         verbose_name=_("Versão Registada"),
     )
     snapshot_valor = models.JSONField(
+        null=True,
+        blank=True,
+        default=dict,
         verbose_name=_("Snapshot dos Valores"),
         help_text=_("Dicionário completo com estado do parâmetro antes da alteração."),
     )
     alterado_por = models.CharField(
         max_length=150,
+        blank=True,
         default="Sistema",
         verbose_name=_("Alterado por"),
     )
     ip_origem = models.CharField(
         max_length=50,
+        blank=True,
         default="127.0.0.1",
         verbose_name=_("Endereço IP"),
     )
@@ -540,23 +553,27 @@ class ParametroHistorico(models.Model):
 
     def __str__(self) -> str:
         try:
-            chave = self.parametro.chave if self.parametro_id else "Sem Parâmetro"
+            chave = self.parametro.chave if self.parametro_id and self.parametro else "Sem Parâmetro"
         except Exception:
             chave = "Sem Parâmetro"
         data_formatada = self.criado_em.strftime("%d/%m/%Y %H:%M") if getattr(self, "criado_em", None) else "Sem Data"
-        versao = getattr(self, "versao", 1)
-        autor = getattr(self, "alterado_por", "Admin")
+        versao = getattr(self, "versao", 1) or 1
+        autor = getattr(self, "alterado_por", "Admin") or "Admin"
         return f"{chave} v{versao} ({autor} em {data_formatada})"
 
     def reverter(self, utilizador_solicitante: str = "Admin") -> None:
         """Restaura o estado do parâmetro para os dados salvos neste snapshot."""
+        if not self.parametro_id:
+            return
         p = self.parametro
+        if not p:
+            return
         data = self.snapshot_valor or {}
         p.valor = data.get("valor", p.valor)
         p.valor_numerico = data.get("valor_numerico", p.valor_numerico)
         p.valor_booleano = data.get("valor_booleano", p.valor_booleano)
         p.valor_json = data.get("valor_json", p.valor_json)
-        p.versao += 1
+        p.versao = (p.versao or 1) + 1
         p.autor = f"Rollback para v{self.versao} por {utilizador_solicitante}"
         p.save()
 
@@ -586,6 +603,8 @@ class AppBannerDinamico(models.Model):
     )
     titulo = models.CharField(
         max_length=150,
+        blank=True,
+        default="",
         verbose_name=_("Título do Banner"),
     )
     subtitulo = models.CharField(
@@ -669,7 +688,11 @@ class AppBannerDinamico(models.Model):
         ordering = ["ordem", "-criado_em"]
 
     def __str__(self) -> str:
-        return f"[{self.tipo_banner}][{self.publico_alvo}] {self.titulo} ({'Ativo' if self.ativo else 'Inativo'})"
+        tipo = self.tipo_banner or "BANNER"
+        publico = self.publico_alvo or "TODOS"
+        tit = self.titulo or "Sem Título"
+        status = "Ativo" if self.ativo else "Inativo"
+        return f"[{tipo}][{publico}] {tit} ({status})"
 
     @property
     def url_imagem_final(self) -> str:

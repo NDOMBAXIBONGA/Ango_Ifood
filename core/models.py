@@ -73,6 +73,8 @@ class SystemConfiguration(models.Model):
     taxa_base_entrega_aoa = models.DecimalField(
         max_digits=10,
         decimal_places=2,
+        null=True,
+        blank=True,
         default=Decimal("500.00"),
         verbose_name="Taxa Base de Entrega (AOA)",
         help_text="Tarifa inicial de partida cobrada ao cliente.",
@@ -80,11 +82,15 @@ class SystemConfiguration(models.Model):
     valor_km_entrega_aoa = models.DecimalField(
         max_digits=10,
         decimal_places=2,
+        null=True,
+        blank=True,
         default=Decimal("150.00"),
         verbose_name="Valor por KM de Entrega (AOA/km)",
         help_text="Valor cobrado por cada quilómetro percorrido.",
     )
     fator_correcao_urbana = models.FloatField(
+        null=True,
+        blank=True,
         default=1.30,
         verbose_name="Fator de Correção Urbana (Fallback)",
         help_text="Multiplicador sobre distância em linha reta caso o OSRM esteja indisponível.",
@@ -92,11 +98,15 @@ class SystemConfiguration(models.Model):
     raio_maximo_entrega_km = models.DecimalField(
         max_digits=6,
         decimal_places=2,
+        null=True,
+        blank=True,
         default=Decimal("25.00"),
         verbose_name="Raio Máximo de Entrega (KM)",
         help_text="Distância viária máxima permitida para despacho de corridas.",
     )
     tempo_tolerancia_estafeta_minutos = models.PositiveIntegerField(
+        null=True,
+        blank=True,
         default=7,
         verbose_name="Tolerância de Espera do Estafeta (Minutos)",
         help_text="Tempo que o estafeta deve aguardar no local antes de reportar ausência (RN-096).",
@@ -108,6 +118,8 @@ class SystemConfiguration(models.Model):
     comissao_marketplace_percentagem = models.DecimalField(
         max_digits=5,
         decimal_places=2,
+        null=True,
+        blank=True,
         default=Decimal("12.00"),
         verbose_name="Comissão do Marketplace (%)",
         help_text="Percentual retido pela plataforma sobre as vendas das lojas parceiras.",
@@ -115,6 +127,8 @@ class SystemConfiguration(models.Model):
     taxa_servico_fixa_aoa = models.DecimalField(
         max_digits=10,
         decimal_places=2,
+        null=True,
+        blank=True,
         default=Decimal("100.00"),
         verbose_name="Taxa de Serviço Fixa por Pedido (AOA)",
         help_text="Tarifa operacional cobrada ao consumidor final por cada pedido submetido.",
@@ -122,6 +136,8 @@ class SystemConfiguration(models.Model):
     valor_minimo_saque_aoa = models.DecimalField(
         max_digits=10,
         decimal_places=2,
+        null=True,
+        blank=True,
         default=Decimal("2000.00"),
         verbose_name="Valor Mínimo para Saque (AOA)",
         help_text="Montante mínimo acumulado na carteira para solicitar repasse bancário.",
@@ -234,16 +250,23 @@ class AppVersion(models.Model):
     plataforma = models.CharField(
         max_length=10,
         choices=Plataforma.choices,
+        default=Plataforma.ANDROID,
+        blank=True,
         db_index=True,
         verbose_name="Plataforma",
         help_text="Sistema operacional móvel de destino (Android ou iOS).",
     )
     versao_nome = models.CharField(
         max_length=30,
+        blank=True,
+        default="1.0.0",
         verbose_name="Nome da Versão",
         help_text="Identificador semântico da versão visível ao utilizador (ex.: 1.0.2).",
     )
     versao_codigo = models.PositiveIntegerField(
+        default=1,
+        blank=True,
+        null=True,
         db_index=True,
         verbose_name="Código da Versão (Build)",
         help_text="Número inteiro incremental do build para comparação matemática direta.",
@@ -259,6 +282,7 @@ class AppVersion(models.Model):
         max_length=500,
         null=True,
         blank=True,
+        default="",
         verbose_name="URL da Página Web de Download / Redirecionamento",
         help_text="Link externo ou página web da app (para utilizadores iOS no Safari ou mirror alternativo).",
     )
@@ -296,39 +320,33 @@ class AppVersion(models.Model):
     def __str__(self) -> str:
         status = " [OBRIGATÓRIA]" if self.obrigatoria else ""
         ativo = " [INATIVA]" if not self.ativa else ""
+        plat = self.plataforma or "App"
         v_nome = self.versao_nome or "0.0.0"
-        v_cod = self.versao_codigo or 0
-        return f"{self.plataforma} v{v_nome} (build {v_cod}){status}{ativo}"
+        v_cod = self.versao_codigo if self.versao_codigo is not None else 0
+        return f"{plat} v{v_nome} (build {v_cod}){status}{ativo}"
 
     def clean(self) -> None:
         """
-        Validações de integridade funcional:
-        1. Garante que pelo menos um dos campos (ficheiro_instalacao ou url_pagina_web) está preenchido.
-        2. Garante que a extensão do ficheiro corresponde estritamente à plataforma.
+        Validações de integridade funcional com tolerância total a campos vazios:
+        1. Se ficheiro de instalação for fornecido, valida se o nome e extensão correspondem à plataforma.
+        2. Não bloqueia a criação de versões preliminares em rascunho com campos em branco.
         """
         super().clean()
 
-        # Validação 1: Pelo menos um meio de download/acesso deve ser fornecido
-        if not self.ficheiro_instalacao and not self.url_pagina_web:
-            raise ValidationError(
-                {
-                    "ficheiro_instalacao": "É obrigatório fornecer pelo menos o ficheiro de instalação (.apk/.ipa) ou a URL da página web.",
-                    "url_pagina_web": "Preencha a URL da página web ou anexe o ficheiro de instalação.",
-                }
-            )
-
-        # Validação 2: Extensão de ficheiro adequada à plataforma
+        # Validação segura da extensão do ficheiro apenas se existir e tiver nome
         if self.ficheiro_instalacao:
-            nome_ficheiro = self.ficheiro_instalacao.name.lower()
-            if self.plataforma == self.Plataforma.ANDROID and not nome_ficheiro.endswith(".apk"):
-                raise ValidationError(
-                    {
-                        "ficheiro_instalacao": f"Ficheiro inválido para Android. O ficheiro deve ter a extensão .apk (recebido: '{self.ficheiro_instalacao.name}')."
-                    }
-                )
-            elif self.plataforma == self.Plataforma.IOS and not nome_ficheiro.endswith(".ipa"):
-                raise ValidationError(
-                    {
-                        "ficheiro_instalacao": f"Ficheiro inválido para iOS. O ficheiro deve ter a extensão .ipa (recebido: '{self.ficheiro_instalacao.name}')."
-                    }
-                )
+            nome_raw = getattr(self.ficheiro_instalacao, "name", None)
+            if nome_raw:
+                nome_ficheiro = str(nome_raw).lower().strip()
+                if self.plataforma == self.Plataforma.ANDROID and not nome_ficheiro.endswith(".apk"):
+                    raise ValidationError(
+                        {
+                            "ficheiro_instalacao": f"Ficheiro inválido para Android. O ficheiro deve ter a extensão .apk (recebido: '{nome_raw}')."
+                        }
+                    )
+                elif self.plataforma == self.Plataforma.IOS and not nome_ficheiro.endswith(".ipa"):
+                    raise ValidationError(
+                        {
+                            "ficheiro_instalacao": f"Ficheiro inválido para iOS. O ficheiro deve ter a extensão .ipa (recebido: '{nome_raw}')."
+                        }
+                    )

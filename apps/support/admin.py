@@ -164,10 +164,11 @@ class ParametroAdmin(MasterModelAdmin):
                 obj.versao = (antigo.versao or 1) + 1
                 obj.autor = str(request.user) if request.user.is_authenticated else "Admin"
 
-                ip_cliente = request.META.get("HTTP_X_FORWARDED_FOR", request.META.get("REMOTE_ADDR", "127.0.0.1")).split(",")[0].strip()
+                forwarded = request.META.get("HTTP_X_FORWARDED_FOR") or request.META.get("REMOTE_ADDR") or "127.0.0.1"
+                ip_cliente = str(forwarded).split(",")[0].strip()
                 ParametroHistorico.objects.create(
                     parametro=obj,
-                    versao=antigo.versao,
+                    versao=antigo.versao or 1,
                     snapshot_valor=snapshot,
                     alterado_por=str(request.user),
                     ip_origem=ip_cliente,
@@ -191,17 +192,18 @@ class ParametroAdmin(MasterModelAdmin):
             "OUTRO": "#6b7280",
         }
         cor = cores.get(obj.categoria, "#6b7280")
+        label = obj.get_categoria_display() if hasattr(obj, "get_categoria_display") and obj.categoria else (obj.categoria or "Geral")
         return format_html(
             '<span style="background-color: {}; color: white; padding: 3px 8px; border-radius: 6px; font-weight: bold; font-size: 11px;">{}</span>',
             cor,
-            obj.get_categoria_display(),
+            label,
         )
 
     @admin.display(description="Tipo")
     def tipo_badge(self, obj: Parametro):
         return format_html(
             '<span style="background-color: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-family: monospace;">{}</span>',
-            obj.tipo_dado,
+            obj.tipo_dado or "-",
         )
 
     @admin.display(description="Valor Ativo")
@@ -242,7 +244,7 @@ class ParametroAdmin(MasterModelAdmin):
 
     @admin.display(description="Versão")
     def versao_badge(self, obj: Parametro):
-        return format_html('<strong>v{}</strong>', obj.versao)
+        return format_html('<strong>v{}</strong>', obj.versao if obj.versao is not None else 1)
 
 
 @admin.register(ParametroHistorico)
@@ -261,8 +263,13 @@ class ParametroHistoricoAdmin(MasterModelAdmin):
     def reverter_para_snapshot(self, request, queryset):
         total = 0
         for historico in queryset:
-            historico.reverter(utilizador_solicitante=str(request.user))
-            total += 1
+            try:
+                if historico.parametro_id:
+                    historico.reverter(utilizador_solicitante=str(request.user))
+                    total += 1
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning("Erro ao reverter snapshot: %s", e)
         self.message_user(
             request,
             f"Sucesso: {total} parâmetro(s) revertido(s) com sucesso para os valores do snapshot histórico.",
@@ -275,7 +282,7 @@ class AppBannerDinamicoAdmin(MasterModelAdmin):
     """Painel de Gestão e Publicação de Banners e Pop-ups Dinâmicos."""
     list_display = (
         "preview_banner",
-        "titulo",
+        "titulo_display",
         "tipo_banner_badge",
         "publico_alvo_badge",
         "ativo",
@@ -325,17 +332,24 @@ class AppBannerDinamicoAdmin(MasterModelAdmin):
 
     @admin.display(description="Miniatura")
     def preview_banner(self, obj: AppBannerDinamico):
-        url = obj.url_imagem_final
-        if url:
-            return format_html(
-                '<img src="{}" style="width: 70px; height: 35px; object-fit: cover; border-radius: 6px; border: 1px solid #e2e8f0;" />',
-                url,
-            )
+        try:
+            url = getattr(obj, "url_imagem_final", None)
+            if url:
+                return format_html(
+                    '<img src="{}" style="width: 70px; height: 35px; object-fit: cover; border-radius: 6px; border: 1px solid #e2e8f0;" />',
+                    url,
+                )
+        except Exception:
+            pass
         return format_html(
             '<div style="width: 70px; height: 35px; border-radius: 6px; background-color: {}; color: {}; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold;">BANNER</div>',
             obj.cor_fundo_hex or "#EA1D2C",
             obj.cor_texto_hex or "#FFFFFF",
         )
+
+    @admin.display(description="Título")
+    def titulo_display(self, obj: AppBannerDinamico):
+        return obj.titulo or "(Sem Título)"
 
     @admin.display(description="Tipo de Exibição")
     def tipo_banner_badge(self, obj: AppBannerDinamico):
@@ -344,15 +358,17 @@ class AppBannerDinamicoAdmin(MasterModelAdmin):
             "TOP_BAR_AVISO": "#f59e0b",
             "POPUP_MODAL": "#dc2626",
         }
+        label = obj.get_tipo_banner_display() if hasattr(obj, "get_tipo_banner_display") and obj.tipo_banner else (obj.tipo_banner or "-")
         return format_html(
             '<span style="background-color: {}; color: white; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: bold;">{}</span>',
             cores.get(obj.tipo_banner, "#64748b"),
-            obj.get_tipo_banner_display(),
+            label,
         )
 
     @admin.display(description="Público-Alvo")
     def publico_alvo_badge(self, obj: AppBannerDinamico):
+        label = obj.get_publico_alvo_display() if hasattr(obj, "get_publico_alvo_display") and obj.publico_alvo else (obj.publico_alvo or "-")
         return format_html(
             '<span style="background-color: #f1f5f9; color: #0f172a; border: 1px solid #cbd5e1; padding: 2px 6px; border-radius: 4px; font-size: 11px;">{}</span>',
-            obj.get_publico_alvo_display(),
+            label,
         )

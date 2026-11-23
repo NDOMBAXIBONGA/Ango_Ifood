@@ -154,12 +154,13 @@ class AppVersionAdmin(MasterModelAdmin):
     """
     Painel de Gestão e Publicação de Versões Móveis (Android APK & iOS IPA).
     Suporta Kill Switch remoto (atualizações forçadas) e gestão de links OTA.
+    Resiliente a campos nulos ou vazios.
     """
 
     list_display = (
-        "plataforma",
-        "versao_nome",
-        "versao_codigo",
+        "plataforma_badge",
+        "versao_nome_display",
+        "versao_codigo_display",
         "obrigatoria",
         "ativa",
         "criado_em",
@@ -168,6 +169,24 @@ class AppVersionAdmin(MasterModelAdmin):
     list_editable = ("obrigatoria", "ativa")
     search_fields = ("versao_nome", "versao_codigo", "notas_atualizacao")
     ordering = ("-versao_codigo", "-criado_em")
+
+    @admin.display(description="Plataforma")
+    def plataforma_badge(self, obj: AppVersion):
+        plat = obj.plataforma or "App"
+        cor = "#16a34a" if plat == "ANDROID" else ("#0284c7" if plat == "IOS" else "#64748b")
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 3px 8px; border-radius: 6px; font-weight: bold; font-size: 11px;">{}</span>',
+            cor,
+            plat,
+        )
+
+    @admin.display(description="Versão")
+    def versao_nome_display(self, obj: AppVersion):
+        return obj.versao_nome or "1.0.0"
+
+    @admin.display(description="Build")
+    def versao_codigo_display(self, obj: AppVersion):
+        return obj.versao_codigo if obj.versao_codigo is not None else 1
 
     fieldsets = (
         (

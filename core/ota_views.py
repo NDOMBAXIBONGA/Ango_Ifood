@@ -36,10 +36,20 @@ def ios_download_page_view(request: HttpRequest) -> HttpResponse:
 
     download_url: str = ""
     if latest_ios:
-        if latest_ios.ficheiro_instalacao:
-            download_url = request.build_absolute_uri(latest_ios.ficheiro_instalacao.url)
-        elif latest_ios.url_pagina_web:
-            download_url = latest_ios.url_pagina_web
+        try:
+            if latest_ios.ficheiro_instalacao and getattr(latest_ios.ficheiro_instalacao, "name", None):
+                try:
+                    download_url = request.build_absolute_uri(latest_ios.ficheiro_instalacao.url)
+                except (ValueError, Exception) as err:
+                    logger.warning("Falha ao obter URL de ficheiro_instalacao de AppVersion: %s", err)
+                    if latest_ios.url_pagina_web:
+                        download_url = latest_ios.url_pagina_web
+            elif latest_ios.url_pagina_web:
+                download_url = latest_ios.url_pagina_web
+        except Exception as e:
+            logger.error("Erro ao resolver download_url na ios_download_page_view: %s", e)
+            if getattr(latest_ios, "url_pagina_web", None):
+                download_url = latest_ios.url_pagina_web
 
     context = {
         "versao": latest_ios,
@@ -139,12 +149,16 @@ def check_app_update_api_view(request: HttpRequest) -> JsonResponse:
     action_url = ""
     if plat_raw == AppVersion.Plataforma.ANDROID:
         # Se Android: retorna o link direto do ficheiro .apk para download in-app
-        if versao_mais_recente.ficheiro_instalacao:
-            action_url = request.build_absolute_uri(versao_mais_recente.ficheiro_instalacao.url)
-        elif versao_mais_recente.url_pagina_web:
-            action_url = versao_mais_recente.url_pagina_web
-        else:
-            action_url = request.build_absolute_uri("/apk/download/")
+        try:
+            if versao_mais_recente.ficheiro_instalacao and getattr(versao_mais_recente.ficheiro_instalacao, "name", None):
+                action_url = request.build_absolute_uri(versao_mais_recente.ficheiro_instalacao.url)
+            elif versao_mais_recente.url_pagina_web:
+                action_url = versao_mais_recente.url_pagina_web
+            else:
+                action_url = request.build_absolute_uri("/apk/download/")
+        except (ValueError, Exception) as err:
+            logger.warning("Falha ao gerar action_url Android: %s", err)
+            action_url = versao_mais_recente.url_pagina_web or request.build_absolute_uri("/apk/download/")
     elif plat_raw == AppVersion.Plataforma.IOS:
         # Se iOS: retorna a URL absoluta da página web de download para abrir no Safari
         if versao_mais_recente.url_pagina_web:
@@ -155,10 +169,10 @@ def check_app_update_api_view(request: HttpRequest) -> JsonResponse:
     resposta = {
         "atualizacao_disponivel": atualizacao_disponivel,
         "forcar_atualizacao": forcar_atualizacao,
-        "versao_nome": versao_mais_recente.versao_nome,
-        "versao_codigo": versao_mais_recente.versao_codigo,
+        "versao_nome": versao_mais_recente.versao_nome or "1.0.0",
+        "versao_codigo": versao_mais_recente.versao_codigo or 1,
         "action_url": action_url,
-        "notas_atualizacao": versao_mais_recente.notas_atualizacao,
+        "notas_atualizacao": versao_mais_recente.notas_atualizacao or "",
     }
 
     logger.info(

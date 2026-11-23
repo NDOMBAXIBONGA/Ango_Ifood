@@ -45,7 +45,7 @@ def health_check(request):
         return JsonResponse(
             {
                 "status": "healthy",
-                "version": "v1.0.11-otp-verify-fix",
+                "version": "v1.0.12-admin-empty-fields-safe",
                 "service": "delivery-backend-api",
                 "timestamp": timezone.now().isoformat(),
             },
