@@ -122,7 +122,7 @@ class AuthRepository {
 
   /// Endpoint 1c: `POST /api/v1/auth/email/verify/`
   /// Valida o código OTP de 6 dígitos enviado por e-mail.
-  Future<bool> verifyEmailOtp(String email, String code) async {
+  Future<AuthResult> verifyEmailOtp(String email, String code) async {
     final sanitizedEmail = email.trim().toLowerCase();
     final sanitizedCode = code.trim();
     try {
@@ -136,11 +136,8 @@ class AuthRepository {
         },
       );
 
-      final data = response.data;
-      if (data is Map<String, dynamic>) {
-        return data['is_verificado'] == true || data['sucesso'] == true;
-      }
-      return response.statusCode == 200;
+      final data = response.data as Map<String, dynamic>;
+      return AuthResult.fromVerifyOtpJson(data, sanitizedEmail);
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) {
         try {
@@ -151,7 +148,8 @@ class AuthRepository {
               'codigo_otp': sanitizedCode,
             },
           );
-          return fallback.statusCode == 200;
+          final data = fallback.data as Map<String, dynamic>;
+          return AuthResult.fromVerifyOtpJson(data, sanitizedEmail);
         } catch (_) {}
       }
       developer.log('Erro ao verificar OTP por e-mail: ${e.response?.statusCode} - ${e.message}',
@@ -372,20 +370,26 @@ class AuthRepository {
       }
 
       // 3. Trata HTTP 400: OTP Expirado (RN-002)
-      if (erroCode == 'otp_expirado') {
+      if (erroCode == 'otp_expirado' || erroCode == 'codigo_expirado') {
         return OtpExpiredException(
           message: detalhe ?? 'O código OTP expirou após 5 minutos. Solicite um novo código.',
         );
       }
 
       // 4. Trata HTTP 400: Código Incorreto ou Tentativas Esgotadas (RN-002)
-      if (erroCode == 'codigo_incorreto' || erroCode == 'tentativas_esgotadas') {
+      if (erroCode == 'codigo_incorreto' || erroCode == 'codigo_invalido' || erroCode == 'tentativas_esgotadas') {
         final tentativasRestantes = responseData['tentativas_restantes'] as int?;
         final bloqueadoAteStr = responseData['bloqueado_ate'] as String?;
         return InvalidOtpException(
           message: detalhe ?? 'Código OTP incorreto.',
           tentativasRestantes: tentativasRestantes,
           bloqueadoAte: bloqueadoAteStr != null ? DateTime.tryParse(bloqueadoAteStr) : null,
+        );
+      }
+
+      if (erroCode == 'registo_nao_encontrado') {
+        return InvalidOtpException(
+          message: detalhe ?? 'Nenhum código de confirmação foi solicitado para este e-mail. Solicite um novo código.',
         );
       }
 

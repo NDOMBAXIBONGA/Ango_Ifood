@@ -245,8 +245,13 @@ class JwtAuthInterceptor extends Interceptor {
   bool _isPublicEndpoint(String path) {
     final lower = path.toLowerCase();
     return lower.contains('/auth/token/refresh/') ||
-        lower.contains('/auth/otp/send/') ||
-        lower.contains('/auth/otp/verify/') ||
+        lower.contains('/auth/otp/') ||
+        lower.contains('/auth/email/') ||
+        lower.contains('/auth/request-otp/') ||
+        lower.contains('/auth/verify-otp/') ||
+        lower.contains('/auth/complete-registration/') ||
+        lower.contains('/auth/login/') ||
+        lower.contains('/auth/google/') ||
         lower.contains('/catalog/public/');
   }
 
@@ -261,8 +266,8 @@ class JwtAuthInterceptor extends Interceptor {
           final client = HttpClient(
             context: SecurityContext(withTrustedRoots: true),
           );
-          client.idleTimeout = const Duration(seconds: 35);
-          client.connectionTimeout = const Duration(seconds: 15);
+          client.idleTimeout = const Duration(seconds: 90);
+          client.connectionTimeout = const Duration(seconds: 30);
           client.maxConnectionsPerHost = 10;
           // Aceita cadeias de certificados intermediários da Cloud do Render
           client.badCertificateCallback = (cert, host, port) => true;
@@ -305,8 +310,8 @@ Dio createSecureDioClient({
           context: SecurityContext(withTrustedRoots: true),
         );
         // Otimização de latência: conexões persistentes (Keep-Alive) e pool de sockets
-        client.idleTimeout = const Duration(seconds: 35);
-        client.connectionTimeout = const Duration(seconds: 15);
+        client.idleTimeout = const Duration(seconds: 90);
+        client.connectionTimeout = const Duration(seconds: 30);
         client.maxConnectionsPerHost = 10;
         // Aceita certificados intermediários para não bloquear rota no Android
         client.badCertificateCallback = (cert, host, port) => true;

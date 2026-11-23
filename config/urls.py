@@ -45,7 +45,7 @@ def health_check(request):
         return JsonResponse(
             {
                 "status": "healthy",
-                "version": "v1.0.10-otp-speed-fix",
+                "version": "v1.0.11-otp-verify-fix",
                 "service": "delivery-backend-api",
                 "timestamp": timezone.now().isoformat(),
             },
@@ -230,7 +230,7 @@ def health_check(request):
     return JsonResponse(
         {
             "status": "healthy" if db_ok else "degraded",
-            "version": "v1.0.10-otp-speed-fix",
+            "version": "v1.0.11-otp-verify-fix",
             "service": "delivery-backend-api",
             "sync_stores": sync_stores_result,
             "reset_otp": reset_otp_result,

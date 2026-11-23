@@ -44,6 +44,7 @@ class _AuthScreenState extends State<AuthScreen> {
   late PlatformRole _currentRole;
   bool _isEmailValid = false;
   bool _isGoogleSigningIn = false;
+  bool _isSubmittingEmail = false;
   bool _usePasswordMode = false;
   bool _obscurePassword = true;
 
@@ -113,12 +114,16 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   void _submitEmail() {
-    if (_isEmailValid) {
+    if (_isEmailValid && !_isSubmittingEmail) {
+      setState(() => _isSubmittingEmail = true);
       FocusScope.of(context).unfocus();
       final email = _emailController.text.trim().toLowerCase();
       context.read<AuthBloc>().add(
             SendEmailOtpEvent(email: email),
           );
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) setState(() => _isSubmittingEmail = false);
+      });
     }
   }
 

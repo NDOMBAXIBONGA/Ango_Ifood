@@ -268,11 +268,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ) async {
     emit(const AuthLoading(loadingMessage: 'A validar código de confirmação...'));
     try {
-      final isSuccess = await _authRepository.verifyEmailOtp(event.email, event.otp);
-      if (isSuccess) {
+      final result = await _authRepository.verifyEmailOtp(event.email, event.otp);
+      if (result.isRegistrationRequired) {
         emit(OtpVerifiedSuccess(email: event.email));
+      } else if (result.tokens != null && result.userProfile != null) {
+        await _tokenStorage.saveTokens(
+          accessToken: result.tokens!.accessToken,
+          refreshToken: result.tokens!.refreshToken,
+          userRole: result.userProfile!.tipoUtilizador,
+        );
+        emit(Authenticated(tokens: result.tokens!, user: result.userProfile!));
       } else {
-        emit(const OtpVerificationFailure(message: 'Código de confirmação incorreto ou expirado.'));
+        emit(OtpVerifiedSuccess(email: event.email));
       }
     } on DioException catch (e) {
       final isNetwork = e.type == DioExceptionType.connectionTimeout ||

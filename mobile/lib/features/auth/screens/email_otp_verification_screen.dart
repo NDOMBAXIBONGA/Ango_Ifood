@@ -120,6 +120,7 @@ class _EmailOtpVerificationScreenState extends State<EmailOtpVerificationScreen>
   void _checkAndSubmitOtp() {
     final otp = _fullOtpCode;
     if (otp.length == _pinLength && !_isVerifying) {
+      setState(() => _isVerifying = true);
       FocusScope.of(context).unfocus();
       context.read<AuthBloc>().add(
             VerifyEmailOtpSubmitted(

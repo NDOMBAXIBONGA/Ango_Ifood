@@ -798,6 +798,9 @@ class EmailRequestOTPView(APIView):
             registo.set_codigo(codigo_seguro)
             registo.save()
 
+            # Remove registos anteriores não verificados para evitar conflitos de códigos concorrentes
+            RegistoOTPEmail.objects.filter(email__iexact=email, is_verificado=False).exclude(id=registo.id).delete()
+
             # Invoca assincronamente o serviço BrevoEmailService para envio imediato em background
             threading.Thread(
                 target=BrevoEmailService().enviar_email_otp,
@@ -856,22 +859,25 @@ class EmailVerifyOTPView(APIView):
         email: str = serializer.validated_data["email"]
         codigo_otp: str = serializer.validated_data["codigo_otp"]
 
-        registo = (
-            RegistoOTPEmail.objects.filter(email=email)
-            .order_by("-criado_em")
-            .first()
+        agora = timezone.now()
+        # Busca todos os registos recentes e não expirados para o e-mail informado (TTL 5 min)
+        registos_recentes = list(
+            RegistoOTPEmail.objects.filter(
+                email__iexact=email,
+                expira_em__gt=agora,
+            ).order_by("-criado_em")
         )
 
-        if not registo:
-            return Response(
-                {
-                    "erro": "registo_nao_encontrado",
-                    "detalhe": _("Nenhum código de confirmação foi solicitado para este e-mail. Solicite um novo código."),
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if registo.esta_expirado:
+        if not registos_recentes:
+            ultimo_qualquer = RegistoOTPEmail.objects.filter(email__iexact=email).order_by("-criado_em").first()
+            if not ultimo_qualquer:
+                return Response(
+                    {
+                        "erro": "registo_nao_encontrado",
+                        "detalhe": _("Nenhum código de confirmação foi solicitado para este e-mail. Solicite um novo código."),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             return Response(
                 {
                     "erro": "codigo_expirado",
@@ -880,17 +886,25 @@ class EmailVerifyOTPView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if registo.tentativas_restantes <= 0:
-            return Response(
-                {
-                    "erro": "tentativas_esgotadas",
-                    "detalhe": _("Número máximo de 5 tentativas excedido. Solicite um novo código de confirmação."),
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        # Procura se algum dos registos ativos recentes coincide com o código submetido
+        registo_valido = None
+        for reg in registos_recentes:
+            if reg.tentativas_restantes > 0 and reg.check_codigo(codigo_otp):
+                registo_valido = reg
+                break
 
-        if not registo.check_codigo(codigo_otp):
-            tentativas = registo.decrementar_tentativa()
+        if not registo_valido:
+            mais_recente = registos_recentes[0]
+            tentativas = mais_recente.decrementar_tentativa()
+            if tentativas <= 0:
+                return Response(
+                    {
+                        "erro": "tentativas_esgotadas",
+                        "detalhe": _("Número máximo de 5 tentativas excedido. Solicite um novo código de confirmação."),
+                        "tentativas_restantes": 0,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             return Response(
                 {
                     "erro": "codigo_invalido",
@@ -900,9 +914,13 @@ class EmailVerifyOTPView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Sucesso na validação do código
+        # Sucesso na validação do código: marca o registo como verificado
+        registo = registo_valido
         registo.is_verificado = True
         registo.save(update_fields=["is_verificado", "atualizado_em"])
+
+        # Invalida outros registos pendentes do mesmo e-mail para evitar reutilizações
+        RegistoOTPEmail.objects.filter(email__iexact=email, is_verificado=False).exclude(id=registo.id).delete()
 
         logger.info("E-mail verificado com sucesso via OTP: %s", email)
 
