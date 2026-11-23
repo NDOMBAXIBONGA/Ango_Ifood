@@ -32,13 +32,15 @@ class EmailOtpVerificationScreen extends StatefulWidget {
 
 class _EmailOtpVerificationScreenState extends State<EmailOtpVerificationScreen> {
   static const int _pinLength = 6;
-  static const int _initialCountdownSeconds = 300; // 5 minutos (300 segundos)
+  static const int _initialCountdownSeconds = 900; // 15 minutos de validade do código OTP
+  static const int _resendCooldownSeconds = 45; // 45 segundos de intervalo para reenvio
 
   final List<TextEditingController> _controllers = [];
   final List<FocusNode> _focusNodes = [];
 
   Timer? _timer;
   int _secondsRemaining = _initialCountdownSeconds;
+  int _resendCooldown = _resendCooldownSeconds;
   bool _isVerifying = false;
 
   @override
@@ -65,17 +67,22 @@ class _EmailOtpVerificationScreenState extends State<EmailOtpVerificationScreen>
     _timer?.cancel();
     setState(() {
       _secondsRemaining = _initialCountdownSeconds;
+      _resendCooldown = _resendCooldownSeconds;
     });
 
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) return;
-      if (_secondsRemaining > 0) {
-        setState(() {
+      setState(() {
+        if (_secondsRemaining > 0) {
           _secondsRemaining--;
-        });
-      } else {
-        timer.cancel();
-      }
+        }
+        if (_resendCooldown > 0) {
+          _resendCooldown--;
+        }
+        if (_secondsRemaining == 0 && _resendCooldown == 0) {
+          timer.cancel();
+        }
+      });
     });
   }
 
@@ -132,7 +139,7 @@ class _EmailOtpVerificationScreenState extends State<EmailOtpVerificationScreen>
   }
 
   void _resendOtp() {
-    if (_secondsRemaining == 0) {
+    if (_resendCooldown == 0) {
       for (final controller in _controllers) {
         controller.clear();
       }
@@ -225,6 +232,7 @@ class _EmailOtpVerificationScreenState extends State<EmailOtpVerificationScreen>
               ),
             );
           } else if (state is OtpVerificationFailure) {
+            setState(() => _isVerifying = false);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(state.message),
@@ -240,6 +248,7 @@ class _EmailOtpVerificationScreenState extends State<EmailOtpVerificationScreen>
               _focusNodes[0].requestFocus();
             }
           } else if (state is AuthNetworkFailure) {
+            setState(() => _isVerifying = false);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(state.message),
@@ -374,18 +383,20 @@ class _EmailOtpVerificationScreenState extends State<EmailOtpVerificationScreen>
                           // Botão de Reenvio Interativo
                           Center(
                             child: TextButton(
-                              onPressed: _secondsRemaining == 0 ? _resendOtp : null,
+                              onPressed: _resendCooldown == 0 ? _resendOtp : null,
                               style: TextButton.styleFrom(
                                 foregroundColor: activeColor,
                                 disabledForegroundColor: const Color(0xFF94A3B8),
                                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                               ),
                               child: Text(
-                                'Reenviar e-mail com o código',
+                                _resendCooldown == 0
+                                    ? 'Reenviar e-mail com o código'
+                                    : 'Reenviar e-mail (${_resendCooldown}s)',
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
-                                  color: _secondsRemaining == 0 ? activeColor : const Color(0xFF94A3B8),
+                                  color: _resendCooldown == 0 ? activeColor : const Color(0xFF94A3B8),
                                 ),
                               ),
                             ),

@@ -212,7 +212,7 @@ class BrevoEmailService:
             </div>
 
             <div class="alert-box">
-                <p><strong>Aviso Importante:</strong> Este código expira em <strong>5 minutos</strong>. Se não solicitou esta validação, por favor ignore esta mensagem. Nunca partilhe este código com terceiros.</p>
+                <p><strong>Aviso Importante:</strong> Este código expira em <strong>15 minutos</strong>. Se não solicitou esta validação, por favor ignore esta mensagem. Nunca partilhe este código com terceiros.</p>
             </div>
         </div>
         <div class="footer">
@@ -248,7 +248,7 @@ class BrevoEmailService:
 
         text_content = (
             f"O seu código de confirmação Delivery Pro é: {codigo_otp}\n\n"
-            f"Validade: 5 minutos.\n"
+            f"Validade: 15 minutos.\n"
             f"Se não solicitou este código, por favor ignore esta mensagem.\n"
             f"Nunca partilhe este código com terceiros."
         )

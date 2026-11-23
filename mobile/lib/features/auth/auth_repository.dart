@@ -9,6 +9,7 @@
 /// - RN-006: Receção e mapeamento dos tokens JWT de Acesso e Refresh (SimpleJWT).
 /// - RN-008: Tratamento de contas suspensas (HTTP 403 Forbidden).
 
+import 'dart:convert';
 import 'dart:developer' as developer;
 import 'package:dio/dio.dart';
 
@@ -33,9 +34,9 @@ class AuthRepository {
         _dio = dio ??
             Dio(
               BaseOptions(
-                connectTimeout: const Duration(seconds: 18),
-                receiveTimeout: const Duration(seconds: 22),
-                sendTimeout: const Duration(seconds: 18),
+                connectTimeout: AppEnvironmentConfig.connectTimeout,
+                receiveTimeout: AppEnvironmentConfig.receiveTimeout,
+                sendTimeout: AppEnvironmentConfig.sendTimeout,
                 headers: {
                   'Content-Type': 'application/json',
                   'Accept': 'application/json',
@@ -312,23 +313,36 @@ class AuthRepository {
   AuthException _handleDioException(DioException e) {
     final response = e.response;
     final statusCode = response?.statusCode;
-    final responseData = response?.data;
+    var rawData = response?.data;
 
-    if (e.type == DioExceptionType.connectionTimeout ||
-        e.type == DioExceptionType.sendTimeout ||
-        e.type == DioExceptionType.receiveTimeout ||
-        e.type == DioExceptionType.connectionError ||
-        e.type == DioExceptionType.unknown ||
-        response == null ||
-        statusCode == null) {
+    // Se a resposta for nula ou não houver status code, é falha de rede/timeout
+    if (response == null || statusCode == null) {
+      if (e.type == DioExceptionType.receiveTimeout || e.type == DioExceptionType.sendTimeout) {
+        return const AuthNetworkException(
+          message: 'O servidor demorou a responder devido à latência de rede. Por favor, tente novamente.',
+        );
+      }
       return const AuthNetworkException(
         message: 'Falha de comunicação com os servidores. Verifique a sua ligação à Internet ou tente novamente.',
       );
     }
 
-    if (responseData is Map<String, dynamic>) {
+    // Normaliza os dados da resposta se vierem como String JSON
+    Map<String, dynamic>? responseData;
+    if (rawData is Map<String, dynamic>) {
+      responseData = rawData;
+    } else if (rawData is String && rawData.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawData);
+        if (decoded is Map<String, dynamic>) {
+          responseData = decoded;
+        }
+      } catch (_) {}
+    }
+
+    if (responseData != null) {
       final String? erroCode = responseData['erro'] as String?;
-      final String? detalhe = responseData['detalhe'] as String?;
+      final String? detalhe = (responseData['detalhe'] ?? responseData['detail'] ?? responseData['message'])?.toString();
 
       // 1. Trata HTTP 409 ou conta_ja_existe: Utilizador já registado no sistema
       if (statusCode == 409 || erroCode == 'conta_ja_existe' || responseData['conta_ja_existe'] == true) {

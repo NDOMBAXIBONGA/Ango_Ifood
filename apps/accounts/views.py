@@ -784,9 +784,10 @@ class EmailRequestOTPView(APIView):
 
             # Gera código numérico seguro de 6 dígitos (000000 a 999999)
             codigo_seguro = f"{secrets.randbelow(1_000_000):06d}"
-            expira_em = agora + timedelta(minutes=5)
+            # Validade ampliada para 15 minutos para tolerar latência de trânsito de e-mails em Angola
+            expira_em = agora + timedelta(minutes=15)
 
-            # Cria ou substitui registo pendente no modelo RegistoOTPEmail
+            # Cria registo no modelo RegistoOTPEmail
             registo = RegistoOTPEmail(
                 email=email,
                 tentativas_restantes=5,
@@ -798,8 +799,15 @@ class EmailRequestOTPView(APIView):
             registo.set_codigo(codigo_seguro)
             registo.save()
 
-            # Remove registos anteriores não verificados para evitar conflitos de códigos concorrentes
-            RegistoOTPEmail.objects.filter(email__iexact=email, is_verificado=False).exclude(id=registo.id).delete()
+            # Limpa apenas registos antigos já expirados ou com tentativas esgotadas,
+            # preservando códigos recentes válidos para que o utilizador não seja penalizado
+            # caso receba um código ligeiramente anterior por atraso de entrega de SMTP.
+            RegistoOTPEmail.objects.filter(
+                email__iexact=email,
+                is_verificado=False,
+            ).filter(
+                models.Q(expira_em__lt=agora) | models.Q(tentativas_restantes__lte=0)
+            ).delete()
 
             # Invoca assincronamente o serviço BrevoEmailService para envio imediato em background
             threading.Thread(
@@ -820,7 +828,7 @@ class EmailRequestOTPView(APIView):
                 "mensagem": _("Código de confirmação enviado para o seu e-mail com sucesso."),
                 "email": email,
                 "expira_em": expira_em.isoformat(),
-                "validade_minutos": 5,
+                "validade_minutos": 15,
                 "is_novo_utilizador": is_novo_utilizador,
             }
             if getattr(settings, "EXPOSE_OTP_HINT", False):
@@ -860,7 +868,15 @@ class EmailVerifyOTPView(APIView):
         codigo_otp: str = serializer.validated_data["codigo_otp"]
 
         agora = timezone.now()
-        # Busca todos os registos recentes e não expirados para o e-mail informado (TTL 5 min)
+
+        # 0. Idempotência: Se o e-mail já foi validado nos últimos 10 minutos por requisição concorrente
+        registo_recem_verificado = RegistoOTPEmail.objects.filter(
+            email__iexact=email,
+            is_verificado=True,
+            atualizado_em__gte=agora - timedelta(minutes=10),
+        ).first()
+
+        # Busca todos os registos recentes e não expirados para o e-mail informado (TTL 15 min)
         registos_recentes = list(
             RegistoOTPEmail.objects.filter(
                 email__iexact=email,
@@ -868,7 +884,7 @@ class EmailVerifyOTPView(APIView):
             ).order_by("-criado_em")
         )
 
-        if not registos_recentes:
+        if not registos_recentes and not registo_recem_verificado:
             ultimo_qualquer = RegistoOTPEmail.objects.filter(email__iexact=email).order_by("-criado_em").first()
             if not ultimo_qualquer:
                 return Response(
@@ -881,7 +897,7 @@ class EmailVerifyOTPView(APIView):
             return Response(
                 {
                     "erro": "codigo_expirado",
-                    "detalhe": _("O código de confirmação expirou (validade de 5 minutos). Solicite um novo código."),
+                    "detalhe": _("O código de confirmação expirou (validade de 15 minutos). Solicite um novo código."),
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -893,23 +909,36 @@ class EmailVerifyOTPView(APIView):
                 registo_valido = reg
                 break
 
+        # Se não encontrou nos pendentes, mas já havia sido verificado por clique duplo
+        if not registo_valido and registo_recem_verificado:
+            if registo_recem_verificado.check_codigo(codigo_otp):
+                registo_valido = registo_recem_verificado
+
         if not registo_valido:
-            mais_recente = registos_recentes[0]
-            tentativas = mais_recente.decrementar_tentativa()
-            if tentativas <= 0:
+            if registos_recentes:
+                mais_recente = registos_recentes[0]
+                tentativas = mais_recente.decrementar_tentativa()
+                if tentativas <= 0:
+                    return Response(
+                        {
+                            "erro": "tentativas_esgotadas",
+                            "detalhe": _("Número máximo de 5 tentativas excedido. Solicite um novo código de confirmação."),
+                            "tentativas_restantes": 0,
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
                 return Response(
                     {
-                        "erro": "tentativas_esgotadas",
-                        "detalhe": _("Número máximo de 5 tentativas excedido. Solicite um novo código de confirmação."),
-                        "tentativas_restantes": 0,
+                        "erro": "codigo_invalido",
+                        "detalhe": _(f"Código incorreto. Restam {tentativas} tentativa(s)."),
+                        "tentativas_restantes": tentativas,
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             return Response(
                 {
-                    "erro": "codigo_invalido",
-                    "detalhe": _(f"Código incorreto. Restam {tentativas} tentativa(s)."),
-                    "tentativas_restantes": tentativas,
+                    "erro": "codigo_expirado",
+                    "detalhe": _("O código de confirmação expirou. Solicite um novo código."),
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
