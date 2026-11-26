@@ -374,6 +374,7 @@ class StoreDiscoveryViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = StoreDiscoverySerializer
     pagination_class = StoreDiscoveryPagination
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
     queryset = ParceiroLoja.objects.none()
 
     def _construir_subquery_horario_aberto(self, agora: Any) -> Exists:

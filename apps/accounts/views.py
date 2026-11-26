@@ -738,22 +738,31 @@ class EmailRequestOTPView(APIView):
             uma_hora_atras = agora - timedelta(hours=1)
             ip_cliente = obter_ip_cliente(request)
 
-            # Proteção contra cliques múltiplos simultâneos (cooldown de 15 segundos entre pedidos)
-            ultimo_pedido = RegistoOTPEmail.objects.filter(email=email).order_by("-criado_em").first()
-            if ultimo_pedido and (agora - ultimo_pedido.criado_em).total_seconds() < 15:
-                segundos_espera = max(1, 15 - int((agora - ultimo_pedido.criado_em).total_seconds()))
+            # Idempotência para cliques múltiplos simultâneos ou retentativas automáticas do Dio (dentro de 12 segundos):
+            # Devolve HTTP 200 OK confirmando o código que já está em trânsito, sem bloquear o utilizador com erro 429.
+            ultimo_pedido = RegistoOTPEmail.objects.filter(email__iexact=email).order_by("-criado_em").first()
+            if (
+                ultimo_pedido
+                and not ultimo_pedido.is_verificado
+                and ultimo_pedido.expira_em > agora
+                and (agora - ultimo_pedido.criado_em).total_seconds() < 12
+            ):
                 return Response(
                     {
-                        "erro": "rate_limit_excedido",
-                        "detalhe": _(f"Por favor, aguarde {segundos_espera} segundos antes de solicitar um novo código."),
+                        "sucesso": True,
+                        "mensagem": _("Código de confirmação enviado para o seu e-mail com sucesso."),
+                        "email": email,
+                        "expira_em": ultimo_pedido.expira_em.isoformat(),
+                        "validade_minutos": 15,
+                        "is_novo_utilizador": is_novo_utilizador,
                     },
-                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                    status=status.HTTP_200_OK,
                 )
 
-            # Rate Limiting (RN-002 ampliado para resiliência): Máximo de 10 pedidos por hora por e-mail.
-            # Para IP, tolerância ampliada (40/h) para acomodar CGNAT de operadoras móveis (Unitel/Africell).
+            # Rate Limiting (RN-002 ampliado para resiliência): Máximo de 30 pedidos por hora por e-mail.
+            # Para IP, tolerância ampliada (100/h) para acomodar CGNAT de operadoras móveis (Unitel/Africell).
             pedidos_email_hora = RegistoOTPEmail.objects.filter(
-                email=email,
+                email__iexact=email,
                 criado_em__gte=uma_hora_atras,
             ).count()
 
@@ -764,8 +773,8 @@ class EmailRequestOTPView(APIView):
                     criado_em__gte=uma_hora_atras,
                 ).count()
 
-            limite_email = 10
-            limite_ip = 40
+            limite_email = 30
+            limite_ip = 100
             is_dev = getattr(settings, "DEBUG", False) or getattr(settings, "EXPOSE_OTP_HINT", False)
             if pedidos_email_hora >= limite_email or (pedidos_ip_hora >= limite_ip and not is_dev):
                 logger.warning(

@@ -171,8 +171,8 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     # WhiteNoise logo após SecurityMiddleware para servir estáticos imediatamente (inclusive Unfold)
     "whitenoise.middleware.WhiteNoiseMiddleware",
-    # Compressão HTTP Gzip automática para respostas JSON da API REST
-    "django.middleware.gzip.GZipMiddleware",
+    # Compressão HTTP Gzip forçada (inclusive payloads < 200 bytes) para impedir Content-Encoding: br da Cloudflare no Dart/Dio
+    "core.middleware.MobileSafeGZipMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",

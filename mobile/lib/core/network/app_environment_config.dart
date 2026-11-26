@@ -294,7 +294,7 @@ Dio createSecureDioClient({
     headers: {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'Accept-Encoding': 'gzip, deflate, br',
+      'Accept-Encoding': 'gzip',
     },
     followRedirects: true,
     maxRedirects: 5,
