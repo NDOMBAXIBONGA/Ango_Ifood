@@ -574,18 +574,10 @@ class CatalogRepository {
 
   CatalogRepository({
     Dio? dio,
-    String baseUrl = 'https://api.seudominio.com',
+    String baseUrl = AppEnvironmentConfig.baseHttpUrl,
   }) : _dio = dio ??
-            Dio(
-              BaseOptions(
-                baseUrl: baseUrl,
-                connectTimeout: const Duration(seconds: 15),
-                receiveTimeout: const Duration(seconds: 15),
-                headers: const {
-                  'Content-Type': 'application/json',
-                  'Accept': 'application/json',
-                },
-              ),
+            createSecureDioClient(
+              tokenStorage: SecureTokenStorage(),
             );
 
   /// RN-025 / RN-026 / RN-027 / RN-028: Carrega a lista de lojas para as coordenadas do cliente
@@ -609,7 +601,7 @@ class CatalogRepository {
       queryParams['score_min'] = scoreMin;
     }
 
-    final response = await _dio.get<Map<String, dynamic>>(
+    final response = await _dio.get<dynamic>(
       '/api/v1/catalog/stores/',
       queryParameters: queryParams,
     );
@@ -617,7 +609,13 @@ class CatalogRepository {
     final data = response.data;
     if (data == null) return const [];
 
-    final results = (data['results'] as List<dynamic>?) ?? const [];
+    List<dynamic> results = const [];
+    if (data is Map<String, dynamic>) {
+      results = (data['results'] as List<dynamic>?) ?? const [];
+    } else if (data is List<dynamic>) {
+      results = data;
+    }
+
     return results
         .whereType<Map<String, dynamic>>()
         .map(StoreSummaryModel.fromJson)
@@ -1053,10 +1051,9 @@ class _HomeScreenState extends State<HomeScreen> {
       final token = await SecureTokenStorage().getAccessToken();
       if (token == null || token.isEmpty) return;
 
-      final dio = Dio(BaseOptions(baseUrl: AppEnvironmentConfig.baseHttpUrl));
+      final dio = createSecureDioClient(tokenStorage: SecureTokenStorage());
       final resp = await dio.get<dynamic>(
         '/api/v1/auth/moradas/',
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
       final rawData = resp.data;
       List<dynamic> list = const [];
@@ -4673,18 +4670,7 @@ class _CustomerAddressSelectionSheetState
   Future<Dio?> _buildAuthDio() async {
     final token = await SecureTokenStorage().getAccessToken();
     if (token == null || token.isEmpty) return null;
-    return Dio(
-      BaseOptions(
-        baseUrl: AppEnvironmentConfig.baseHttpUrl,
-        connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(seconds: 15),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-      ),
-    );
+    return createSecureDioClient(tokenStorage: SecureTokenStorage());
   }
 
   Future<void> _loadAddresses() async {

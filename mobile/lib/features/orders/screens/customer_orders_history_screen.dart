@@ -77,20 +77,7 @@ class _CustomerOrdersHistoryScreenState
   }
 
   Future<Dio> _buildAuthDio() async {
-    final token = await _tokenStorage.getAccessToken();
-    return Dio(
-      BaseOptions(
-        baseUrl: AppEnvironmentConfig.baseHttpUrl,
-        connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(seconds: 15),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          if (token != null && token.isNotEmpty)
-            'Authorization': 'Bearer $token',
-        },
-      ),
-    );
+    return createSecureDioClient(tokenStorage: _tokenStorage);
   }
 
   Future<void> _loadOrders({bool showLoading = true}) async {

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/app_bootstrap_config.dart';
+import '../network/app_environment_config.dart';
+import '../../features/auth/storage/secure_token_storage.dart';
 
 /// Serviço Central de Configuração Remota, Server-Driven UI e Parâmetros Dinâmicos.
 ///
@@ -89,18 +91,15 @@ class AppConfigService extends ChangeNotifier {
   /// Se o servidor responder HTTP 304, poupa dados e mantém a versão local intacta.
   /// Se responder HTTP 200, atualiza o cache e dispara notificação para a UI.
   Future<bool> syncWithRemote({String? customBaseUrl}) async {
-    final dio = Dio(
-      BaseOptions(
-        baseUrl: customBaseUrl ?? _defaultApiBaseUrl,
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 10),
-        headers: {
-          'Accept': 'application/json',
-          if (_currentEtag != null && _currentEtag!.isNotEmpty)
-            'If-None-Match': _currentEtag,
-        },
-      ),
+    final dio = createSecureDioClient(
+      tokenStorage: SecureTokenStorage(),
     );
+    if (customBaseUrl != null && customBaseUrl.isNotEmpty) {
+      dio.options.baseUrl = customBaseUrl;
+    }
+    if (_currentEtag != null && _currentEtag!.isNotEmpty) {
+      dio.options.headers['If-None-Match'] = _currentEtag;
+    }
 
     try {
       final response = await dio.get<Map<String, dynamic>>(

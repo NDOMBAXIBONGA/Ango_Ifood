@@ -13,6 +13,9 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../core/network/app_environment_config.dart';
+import 'storage/secure_token_storage.dart';
+
 // ============================================================================
 // 1. MODELOS DE DOMÍNIO E EXCEÇÕES DE AUTENTICAÇÃO
 // ============================================================================
@@ -197,19 +200,10 @@ class AuthRepository {
 
   AuthRepository({
     Dio? dio,
-    String baseUrl = 'https://api.seudominio.com',
+    String baseUrl = AppEnvironmentConfig.baseHttpUrl,
   }) : _dio = dio ??
-            Dio(
-              BaseOptions(
-                baseUrl: baseUrl,
-                connectTimeout: const Duration(seconds: 15),
-                receiveTimeout: const Duration(seconds: 15),
-                sendTimeout: const Duration(seconds: 15),
-                headers: const {
-                  'Content-Type': 'application/json',
-                  'Accept': 'application/json',
-                },
-              ),
+            createSecureDioClient(
+              tokenStorage: SecureTokenStorage(),
             );
 
   /// RN-001 / RN-002: Solicita o envio de um código OTP de 6 dígitos para o [phone].

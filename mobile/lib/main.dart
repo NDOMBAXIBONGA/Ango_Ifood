@@ -194,7 +194,10 @@ class _DeliveryAppState extends State<DeliveryApp> {
             ),
           ],
           child: RepositoryProvider<CatalogRepository>.value(
-            value: CatalogRepository(baseUrl: AppEnvironmentConfig.baseHttpUrl),
+            value: CatalogRepository(
+              dio: widget.dio,
+              baseUrl: AppEnvironmentConfig.baseHttpUrl,
+            ),
             child: MaterialApp(
               navigatorKey: rootNavigatorKey,
               title: configService.branding.appName.isNotEmpty

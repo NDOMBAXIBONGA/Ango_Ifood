@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/network/app_environment_config.dart';
+import '../auth/storage/secure_token_storage.dart';
 import '../cart/cart.dart';
 import '../orders/screens/customer_orders_history_screen.dart';
 import '../profile/screens/customer_profile_screen.dart';
@@ -37,6 +38,7 @@ class _CustomerMainNavigationShellState
     super.initState();
     _currentIndex = widget.initialIndex;
     _catalogRepository = CatalogRepository(
+      dio: createSecureDioClient(tokenStorage: SecureTokenStorage()),
       baseUrl: AppEnvironmentConfig.baseHttpUrl,
     );
   }

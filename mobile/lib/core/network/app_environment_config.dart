@@ -48,10 +48,10 @@ class AppEnvironmentConfig {
     defaultValue: '',
   );
 
-  // Timeouts tolerantes de rede (Mercado de Angola Unitel/Movicel e Cold Start Render: 45s)
-  static const Duration connectTimeout = Duration(seconds: 45);
-  static const Duration receiveTimeout = Duration(seconds: 45);
-  static const Duration sendTimeout = Duration(seconds: 45);
+  // Timeouts tolerantes de rede (Mercado de Angola Unitel/Movicel e Cold Start Render: 60s)
+  static const Duration connectTimeout = Duration(seconds: 60);
+  static const Duration receiveTimeout = Duration(seconds: 60);
+  static const Duration sendTimeout = Duration(seconds: 60);
 
   // Endpoint canónico de renovação de tokens JWT (SimpleJWT)
   static const String tokenRefreshEndpoint = '/api/v1/auth/token/refresh/';
@@ -252,7 +252,10 @@ class JwtAuthInterceptor extends Interceptor {
         lower.contains('/auth/complete-registration/') ||
         lower.contains('/auth/login/') ||
         lower.contains('/auth/google/') ||
-        lower.contains('/catalog/public/');
+        lower.contains('/catalog/stores/') ||
+        lower.contains('/catalog/public/') ||
+        lower.contains('/system/bootstrap/') ||
+        lower.contains('/health/');
   }
 
   bool _isRefreshEndpoint(String path) {
@@ -263,11 +266,9 @@ class JwtAuthInterceptor extends Interceptor {
     if (!kIsWeb) {
       dio.httpClientAdapter = IOHttpClientAdapter(
         createHttpClient: () {
-          final client = HttpClient(
-            context: SecurityContext(withTrustedRoots: true),
-          );
+          final client = HttpClient();
           client.idleTimeout = const Duration(seconds: 90);
-          client.connectionTimeout = const Duration(seconds: 30);
+          client.connectionTimeout = const Duration(seconds: 45);
           client.maxConnectionsPerHost = 10;
           // Aceita cadeias de certificados intermediários da Cloud do Render
           client.badCertificateCallback = (cert, host, port) => true;
@@ -306,12 +307,10 @@ Dio createSecureDioClient({
   if (!kIsWeb) {
     dio.httpClientAdapter = IOHttpClientAdapter(
       createHttpClient: () {
-        final client = HttpClient(
-          context: SecurityContext(withTrustedRoots: true),
-        );
+        final client = HttpClient();
         // Otimização de latência: conexões persistentes (Keep-Alive) e pool de sockets
         client.idleTimeout = const Duration(seconds: 90);
-        client.connectionTimeout = const Duration(seconds: 30);
+        client.connectionTimeout = const Duration(seconds: 45);
         client.maxConnectionsPerHost = 10;
         // Aceita certificados intermediários para não bloquear rota no Android
         client.badCertificateCallback = (cert, host, port) => true;

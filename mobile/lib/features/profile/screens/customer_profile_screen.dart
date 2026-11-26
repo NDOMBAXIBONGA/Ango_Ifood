@@ -41,18 +41,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
   Future<Dio?> _buildAuthDio() async {
     final token = await SecureTokenStorage().getAccessToken();
     if (token == null || token.isEmpty) return null;
-    return Dio(
-      BaseOptions(
-        baseUrl: AppEnvironmentConfig.baseHttpUrl,
-        connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(seconds: 15),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-      ),
-    );
+    return createSecureDioClient(tokenStorage: SecureTokenStorage());
   }
 
   Future<void> _loadProfileFromBackend() async {
@@ -1038,18 +1027,7 @@ class _CustomerSupportAndDisputesSheetState
   Future<Dio?> _buildAuthDio() async {
     final token = await SecureTokenStorage().getAccessToken();
     if (token == null || token.isEmpty) return null;
-    return Dio(
-      BaseOptions(
-        baseUrl: AppEnvironmentConfig.baseHttpUrl,
-        connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(seconds: 15),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-      ),
-    );
+    return createSecureDioClient(tokenStorage: SecureTokenStorage());
   }
 
   Future<void> _loadSupportData() async {

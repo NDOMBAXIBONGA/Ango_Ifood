@@ -20,6 +20,7 @@ export 'exceptions/auth_exceptions.dart';
 export 'models/auth_models.dart';
 
 import '../../core/network/app_environment_config.dart';
+import 'storage/secure_token_storage.dart';
 
 class AuthRepository {
   final Dio _dio;
@@ -32,16 +33,8 @@ class AuthRepository {
     String? baseUrl,
   })  : _baseUrl = baseUrl ?? _defaultBaseUrl,
         _dio = dio ??
-            Dio(
-              BaseOptions(
-                connectTimeout: AppEnvironmentConfig.connectTimeout,
-                receiveTimeout: AppEnvironmentConfig.receiveTimeout,
-                sendTimeout: AppEnvironmentConfig.sendTimeout,
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Accept': 'application/json',
-                },
-              ),
+            createSecureDioClient(
+              tokenStorage: SecureTokenStorage(),
             );
 
   /// Constrói URLs de endpoints de forma segura, eliminando barras duplas ('//')
