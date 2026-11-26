@@ -6,10 +6,6 @@ name: Build iOS IPA (Release)
 # ==============================================================================
 
 on:
-  push:
-    branches:
-      - main
-      - master
   workflow_dispatch:
     inputs:
       macos_runner:
