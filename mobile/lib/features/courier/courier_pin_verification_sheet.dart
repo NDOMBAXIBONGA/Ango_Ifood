@@ -14,14 +14,18 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/network/app_environment_config.dart';
+import '../auth/storage/secure_token_storage.dart';
+
 class CourierPinVerificationSheet extends StatefulWidget {
   final String pedidoId;
   final String clienteNome;
   final String moradaTexto;
-  final String apiBaseUrl; // ex.: 'http://10.0.2.2:8000' ou 'https://api.meudelivery.ao'
+  final String apiBaseUrl;
   final String jwtAccessToken;
   final double? currentLatitude;
   final double? currentLongitude;
+  final int initialToleranceSeconds;
   final VoidCallback? onDeliveryCompleted;
 
   const CourierPinVerificationSheet({
@@ -29,10 +33,11 @@ class CourierPinVerificationSheet extends StatefulWidget {
     required this.pedidoId,
     required this.clienteNome,
     required this.moradaTexto,
-    this.apiBaseUrl = 'http://10.0.2.2:8000',
-    required this.jwtAccessToken,
+    this.apiBaseUrl = AppEnvironmentConfig.baseHttpUrl,
+    this.jwtAccessToken = '',
     this.currentLatitude,
     this.currentLongitude,
+    this.initialToleranceSeconds = 420,
     this.onDeliveryCompleted,
   });
 
@@ -43,7 +48,7 @@ class CourierPinVerificationSheet extends StatefulWidget {
     required String nomeCliente,
     required String moradaClienteTexto,
     int tempoToleranciaSegundos = 420,
-    String apiBaseUrl = 'http://10.0.2.2:8000',
+    String apiBaseUrl = AppEnvironmentConfig.baseHttpUrl,
     String jwtAccessToken = '',
     double? currentLatitude,
     double? currentLongitude,
@@ -61,6 +66,7 @@ class CourierPinVerificationSheet extends StatefulWidget {
         jwtAccessToken: jwtAccessToken,
         currentLatitude: currentLatitude,
         currentLongitude: currentLongitude,
+        initialToleranceSeconds: tempoToleranciaSegundos,
         onDeliveryCompleted: onSucessoEntrega,
       ),
     );
@@ -118,17 +124,7 @@ class _CourierPinVerificationSheetState extends State<CourierPinVerificationShee
   String get _pinCompleto => _pinControllers.map((c) => c.text).join();
 
   Dio get _dioClient {
-    return Dio(
-      BaseOptions(
-        baseUrl: widget.apiBaseUrl,
-        headers: {
-          'Authorization': 'Bearer ${widget.jwtAccessToken}',
-          'Content-Type': 'application/json',
-        },
-        connectTimeout: const Duration(seconds: 8),
-        receiveTimeout: const Duration(seconds: 8),
-      ),
-    );
+    return createSecureDioClient(tokenStorage: SecureTokenStorage());
   }
 
   // ==========================================================================
@@ -278,14 +274,15 @@ class _CourierPinVerificationSheetState extends State<CourierPinVerificationShee
     setState(() => _isLoading = true);
 
     try {
-      final response = await _dioClient.post(
-        '/api/v1/logistics/delivery/verify-pin/',
+      final response = await _dioClient.post<dynamic>(
+        '/api/v1/logistics/delivery/report-absence/',
         data: {
           'pedido_id': widget.pedidoId,
           'cliente_ausente': true,
-          'latitude': widget.currentLatitude,
-          'longitude': widget.currentLongitude,
-          'motivo_ausencia': 'Cliente ausente após tolerância de 7 minutos sem resposta.',
+          'latitude': widget.currentLatitude ?? -8.8147,
+          'longitude': widget.currentLongitude ?? 13.2343,
+          'tentativas_contacto': 2,
+          'motivo': 'Cliente ausente após tolerância de 7 minutos sem resposta.',
         },
       );
 

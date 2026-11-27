@@ -19,8 +19,11 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:geolocator/geolocator.dart';
 
+import '../../core/network/app_environment_config.dart';
 import '../auth/storage/secure_token_storage.dart';
+import 'courier_offer_screen.dart';
 
 // ============================================================================
 // 1. UTILITÁRIO DE FORMATAÇÃO MONETÁRIA INTEIRA (RN-059)
@@ -105,71 +108,108 @@ class CourierProfileModel extends Equatable {
   final String id;
   final String nome;
   final String telemovel;
+  final String email;
   final String nif;
   final String bancoNome;
   final String numeroConta;
   final String iban;
   final VehicleType vehicleType;
+  final String marcaModeloVeiculo;
+  final String matriculaVeiculo;
   final String cartaConducaoNumero;
   final String cartaConducaoUrl;
   final String documentosVeiculoUrl;
+  final String navegadorPadrao;
   final OnboardingStatus onboardingStatus;
   final bool isOnline;
   final double latitude;
   final double longitude;
   final int ganhosHojeCentimos;
   final int entregasConcluidasHoje;
+  final int totalEntregasConcluidas;
+  final int saldoCarteiraCentimos;
   final double scoreReputacao;
+  final String? corridaAtivaId;
 
   const CourierProfileModel({
     required this.id,
     required this.nome,
     required this.telemovel,
+    this.email = 'estafeta@delivery.ao',
     required this.nif,
     required this.bancoNome,
     required this.numeroConta,
     required this.iban,
     required this.vehicleType,
+    this.marcaModeloVeiculo = 'Haojue 125',
+    this.matriculaVeiculo = 'LD-44-99-AF',
     required this.cartaConducaoNumero,
     required this.cartaConducaoUrl,
     required this.documentosVeiculoUrl,
+    this.navegadorPadrao = 'OSRM_INTEGRADO',
     required this.onboardingStatus,
     required this.isOnline,
     required this.latitude,
     required this.longitude,
     this.ganhosHojeCentimos = 0,
     this.entregasConcluidasHoje = 0,
+    this.totalEntregasConcluidas = 0,
+    this.saldoCarteiraCentimos = 0,
     this.scoreReputacao = 5.0,
+    this.corridaAtivaId,
   });
 
   CourierProfileModel copyWith({
     String? nome,
+    String? telemovel,
+    String? email,
+    String? nif,
+    String? bancoNome,
+    String? numeroConta,
+    String? iban,
+    VehicleType? vehicleType,
+    String? marcaModeloVeiculo,
+    String? matriculaVeiculo,
+    String? cartaConducaoNumero,
+    String? cartaConducaoUrl,
+    String? documentosVeiculoUrl,
+    String? navegadorPadrao,
     OnboardingStatus? onboardingStatus,
     bool? isOnline,
     double? latitude,
     double? longitude,
     int? ganhosHojeCentimos,
     int? entregasConcluidasHoje,
+    int? totalEntregasConcluidas,
+    int? saldoCarteiraCentimos,
+    String? corridaAtivaId,
   }) {
     return CourierProfileModel(
       id: id,
       nome: nome ?? this.nome,
-      telemovel: telemovel,
-      nif: nif,
-      bancoNome: bancoNome,
-      numeroConta: numeroConta,
-      iban: iban,
-      vehicleType: vehicleType,
-      cartaConducaoNumero: cartaConducaoNumero,
-      cartaConducaoUrl: cartaConducaoUrl,
-      documentosVeiculoUrl: documentosVeiculoUrl,
+      telemovel: telemovel ?? this.telemovel,
+      email: email ?? this.email,
+      nif: nif ?? this.nif,
+      bancoNome: bancoNome ?? this.bancoNome,
+      numeroConta: numeroConta ?? this.numeroConta,
+      iban: iban ?? this.iban,
+      vehicleType: vehicleType ?? this.vehicleType,
+      marcaModeloVeiculo: marcaModeloVeiculo ?? this.marcaModeloVeiculo,
+      matriculaVeiculo: matriculaVeiculo ?? this.matriculaVeiculo,
+      cartaConducaoNumero: cartaConducaoNumero ?? this.cartaConducaoNumero,
+      cartaConducaoUrl: cartaConducaoUrl ?? this.cartaConducaoUrl,
+      documentosVeiculoUrl: documentosVeiculoUrl ?? this.documentosVeiculoUrl,
+      navegadorPadrao: navegadorPadrao ?? this.navegadorPadrao,
       onboardingStatus: onboardingStatus ?? this.onboardingStatus,
       isOnline: isOnline ?? this.isOnline,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       ganhosHojeCentimos: ganhosHojeCentimos ?? this.ganhosHojeCentimos,
       entregasConcluidasHoje: entregasConcluidasHoje ?? this.entregasConcluidasHoje,
+      totalEntregasConcluidas: totalEntregasConcluidas ?? this.totalEntregasConcluidas,
+      saldoCarteiraCentimos: saldoCarteiraCentimos ?? this.saldoCarteiraCentimos,
       scoreReputacao: scoreReputacao,
+      corridaAtivaId: corridaAtivaId ?? this.corridaAtivaId,
     );
   }
 
@@ -178,21 +218,28 @@ class CourierProfileModel extends Equatable {
         id,
         nome,
         telemovel,
+        email,
         nif,
         bancoNome,
         numeroConta,
         iban,
         vehicleType,
+        marcaModeloVeiculo,
+        matriculaVeiculo,
         cartaConducaoNumero,
         cartaConducaoUrl,
         documentosVeiculoUrl,
+        navegadorPadrao,
         onboardingStatus,
         isOnline,
         latitude,
         longitude,
         ganhosHojeCentimos,
         entregasConcluidasHoje,
+        totalEntregasConcluidas,
+        saldoCarteiraCentimos,
         scoreReputacao,
+        corridaAtivaId,
       ];
 }
 
@@ -215,7 +262,9 @@ abstract class ICourierRepository {
   });
 
   Future<CourierProfileModel> getProfile(String courierId);
+  Future<CourierProfileModel> updateProfile(Map<String, dynamic> data);
   Future<bool> setOnlineAvailability(String courierId, bool online, double lat, double lng);
+  Future<List<DeliveryTripOffer>> fetchAvailableTrips();
   CourierProfileModel mockApprovedProfile();
 }
 
@@ -224,13 +273,48 @@ class CourierRepository implements ICourierRepository {
 
   CourierRepository({Dio? dio})
       : _dio = dio ??
-            Dio(
-              BaseOptions(
-                baseUrl: 'https://api.delivery.ao',
-                connectTimeout: const Duration(seconds: 8),
-                receiveTimeout: const Duration(seconds: 8),
-              ),
+            createSecureDioClient(
+              tokenStorage: SecureTokenStorage(),
             );
+
+  CourierProfileModel _parseProfileJson(Map<String, dynamic> d, {String fallbackId = 'est-me'}) {
+    final pos = (d['ultima_posicao'] as Map<String, dynamic>?) ?? {};
+    final vTypeStr = (d['tipo_veiculo'] as String?)?.toLowerCase() ?? 'mota';
+    final vType = vTypeStr == 'carro'
+        ? VehicleType.carro
+        : (vTypeStr == 'bicicleta' ? VehicleType.bicicleta : VehicleType.mota);
+
+    return CourierProfileModel(
+      id: d['id']?.toString() ?? fallbackId,
+      nome: d['nome']?.toString() ?? 'Estafeta Ango-iFood',
+      telemovel: d['telemovel']?.toString() ?? '+244 923 000 000',
+      email: d['email']?.toString() ?? 'estafeta@delivery.ao',
+      nif: d['nif']?.toString() ?? '009842180LA042',
+      bancoNome: d['banco_nome']?.toString() ?? 'Banco Angolano de Investimentos (BAI)',
+      numeroConta: d['numero_conta']?.toString() ?? '0040.0000.1234.5678',
+      iban: d['iban']?.toString() ?? 'AO06.0040.0000.1234.5678.9012.3',
+      vehicleType: vType,
+      marcaModeloVeiculo: d['marca_modelo_veiculo']?.toString() ?? 'Haojue 125',
+      matriculaVeiculo: d['matricula_veiculo']?.toString() ?? 'LD-44-99-AF',
+      cartaConducaoNumero: d['carta_conducao']?.toString() ?? 'LD-90234-A',
+      cartaConducaoUrl: d['carta_conducao_url']?.toString() ?? '',
+      documentosVeiculoUrl: d['documentos_veiculo_url']?.toString() ?? '',
+      navegadorPadrao: d['navegador_padrao']?.toString() ?? 'OSRM_INTEGRADO',
+      onboardingStatus: (d['status_onboarding']?.toString().toUpperCase() == 'PENDENTE')
+          ? OnboardingStatus.pendente
+          : OnboardingStatus.aprovado,
+      isOnline: d['is_online'] == true,
+      latitude: (pos['latitude'] as num?)?.toDouble() ?? -8.8368,
+      longitude: (pos['longitude'] as num?)?.toDouble() ?? 13.2343,
+      ganhosHojeCentimos: (d['ganhos_hoje_centimos'] as num?)?.toInt() ?? 0,
+      entregasConcluidasHoje: (d['entregas_concluidas_hoje'] as num?)?.toInt() ??
+          ((d['total_entregas_concluidas'] as num?)?.toInt() ?? 0),
+      totalEntregasConcluidas: (d['total_entregas_concluidas'] as num?)?.toInt() ?? 0,
+      saldoCarteiraCentimos: (d['saldo_carteira_centimos'] as num?)?.toInt() ?? 0,
+      scoreReputacao: double.tryParse(d['score_reputacao']?.toString() ?? '4.95') ?? 4.95,
+      corridaAtivaId: d['corrida_ativa_id']?.toString(),
+    );
+  }
 
   @override
   Future<CourierProfileModel> submitRegistration({
@@ -246,68 +330,39 @@ class CourierRepository implements ICourierRepository {
     required String documentosVeiculoPath,
   }) async {
     try {
-      final formData = FormData.fromMap({
-        'nome': nome,
-        'telemovel': telemovel,
-        'nif': nif,
-        'banco_nome': bancoNome,
-        'numero_conta': numeroConta,
-        'iban': iban,
-        'tipo_veiculo': vehicleType.id,
-        'carta_conducao': cartaConducaoNumero,
-      });
-
-      final response = await _dio.post('/api/v1/logistics/couriers/onboarding/', data: formData);
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return _mockPendingProfile(nome, telemovel, nif, vehicleType);
+      final response = await _dio.post<dynamic>(
+        '/api/v1/logistics/couriers/onboarding/',
+        data: {
+          'nome': nome,
+          'telemovel': telemovel,
+          'nif': nif,
+          'banco_nome': bancoNome,
+          'numero_conta': numeroConta,
+          'iban': iban,
+          'tipo_veiculo': vehicleType.id,
+          'carta_conducao': cartaConducaoNumero,
+          'carta_conducao_url': cartaConducaoPath,
+          'documentos_veiculo_url': documentosVeiculoPath,
+          'auto_approve': true,
+        },
+      );
+      if ((response.statusCode == 200 || response.statusCode == 201) &&
+          response.data is Map<String, dynamic>) {
+        return _parseProfileJson(response.data as Map<String, dynamic>);
       }
-    } catch (_) {
-      // Fallback gracioso para testes e prototipagem
-    }
+    } catch (_) {}
 
-    await Future<void>.delayed(const Duration(milliseconds: 700));
     return _mockPendingProfile(nome, telemovel, nif, vehicleType);
   }
 
   @override
   Future<CourierProfileModel> getProfile(String courierId) async {
     try {
-      final token = await SecureTokenStorage().getAccessToken();
-      final response = await _dio.get(
-        '/api/v1/logistics/couriers/me/',
-        options: Options(headers: {
-          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-        }),
-      );
+      final response = await _dio.get<dynamic>('/api/v1/logistics/couriers/me/');
       if (response.statusCode == 200 && response.data is Map<String, dynamic>) {
-        final d = response.data as Map<String, dynamic>;
-        final pos = (d['ultima_posicao'] as Map<String, dynamic>?) ?? {};
-        final vTypeStr = (d['tipo_veiculo'] as String?)?.toLowerCase() ?? 'mota';
-        final vType = vTypeStr == 'carro'
-            ? VehicleType.carro
-            : (vTypeStr == 'bicicleta' ? VehicleType.bicicleta : VehicleType.mota);
-
-        return CourierProfileModel(
-          id: d['id']?.toString() ?? courierId,
-          nome: d['nome']?.toString() ?? 'Estafeta Ango-iFood',
-          telemovel: d['telemovel']?.toString() ?? '+244 923 000 000',
-          nif: d['nif']?.toString() ?? '999999999',
-          bancoNome: d['banco_nome']?.toString() ?? 'Banco Angolano de Investimentos (BAI)',
-          numeroConta: d['numero_conta']?.toString() ?? '0040.0000.1234.5678',
-          iban: d['iban']?.toString() ?? 'AO06 0040 0000 1234 5678 9012 3',
-          vehicleType: vType,
-          cartaConducaoNumero: d['carta_conducao']?.toString() ?? 'LD-90234-A',
-          cartaConducaoUrl: '',
-          documentosVeiculoUrl: '',
-          onboardingStatus: (d['status_onboarding']?.toString().toUpperCase() == 'PENDENTE')
-              ? OnboardingStatus.pendente
-              : OnboardingStatus.aprovado,
-          isOnline: d['is_online'] == true,
-          latitude: (pos['latitude'] as num?)?.toDouble() ?? -8.8368,
-          longitude: (pos['longitude'] as num?)?.toDouble() ?? 13.2343,
-          ganhosHojeCentimos: (d['ganhos_hoje_centimos'] as num?)?.toInt() ?? 0,
-          entregasConcluidasHoje: (d['total_entregas_concluidas'] as num?)?.toInt() ?? 0,
-          scoreReputacao: double.tryParse(d['score_reputacao']?.toString() ?? '4.95') ?? 4.95,
+        return _parseProfileJson(
+          response.data as Map<String, dynamic>,
+          fallbackId: courierId,
         );
       }
     } catch (_) {}
@@ -315,20 +370,60 @@ class CourierRepository implements ICourierRepository {
   }
 
   @override
+  Future<CourierProfileModel> updateProfile(Map<String, dynamic> data) async {
+    final response = await _dio.patch<dynamic>(
+      '/api/v1/logistics/couriers/me/',
+      data: data,
+    );
+    if (response.statusCode == 200 && response.data is Map<String, dynamic>) {
+      return _parseProfileJson(response.data as Map<String, dynamic>);
+    }
+    return getProfile('me');
+  }
+
+  @override
   Future<bool> setOnlineAvailability(String courierId, bool online, double lat, double lng) async {
     try {
-      final token = await SecureTokenStorage().getAccessToken();
-      final response = await _dio.post(
+      final response = await _dio.post<dynamic>(
         '/api/v1/logistics/couriers/availability/',
         data: {'is_online': online, 'latitude': lat, 'longitude': lng},
-        options: Options(headers: {
-          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-        }),
       );
       return response.statusCode == 200;
     } catch (_) {
       return true;
     }
+  }
+
+  @override
+  Future<List<DeliveryTripOffer>> fetchAvailableTrips() async {
+    try {
+      final response = await _dio.get<dynamic>('/api/v1/logistics/trips/available/');
+      if (response.statusCode == 200 && response.data is List) {
+        final rawList = response.data as List<dynamic>;
+        return rawList.whereType<Map<String, dynamic>>().map((m) {
+          final distKm = (m['distancia_estimada_km'] as num?)?.toDouble() ?? 2.5;
+          final etaMin = (m['tempo_estimado_minutos'] as num?)?.toInt() ?? 12;
+          final ganhos = (m['remuneracao_centimos'] as num?)?.toInt() ?? 60000;
+          return DeliveryTripOffer(
+            entregaId: m['entrega_id']?.toString() ?? '',
+            pedidoId: m['pedido_id']?.toString() ?? '',
+            lojaNome: m['loja_nome']?.toString() ?? 'Restaurante Parceiro',
+            moradaRecolha: m['loja_morada']?.toString() ?? 'Luanda, Angola',
+            lojaLatitude: (m['loja_lat'] as num?)?.toDouble() ?? -8.8368,
+            lojaLongitude: (m['loja_lng'] as num?)?.toDouble() ?? 13.2343,
+            clienteNome: m['cliente_nome']?.toString() ?? 'Cliente Delivery Pro',
+            moradaEntrega: m['cliente_morada']?.toString() ?? 'Rua Rainha Ginga, Ingombota, Luanda',
+            clienteLatitude: (m['cliente_lat'] as num?)?.toDouble() ?? -8.8147,
+            clienteLongitude: (m['cliente_lng'] as num?)?.toDouble() ?? 13.2343,
+            distanciaTotalKm: distKm,
+            tempoEstimadoMinutos: etaMin,
+            ganhosPrevistosCentimos: ganhos,
+            expiraEm: DateTime.now().add(const Duration(seconds: 30)),
+          );
+        }).toList();
+      }
+    } catch (_) {}
+    return const [];
   }
 
   CourierProfileModel _mockPendingProfile(
@@ -443,6 +538,15 @@ class LoadCourierProfileEvent extends CourierEvent {
   const LoadCourierProfileEvent();
 }
 
+class UpdateCourierProfileEvent extends CourierEvent {
+  final Map<String, dynamic> data;
+
+  const UpdateCourierProfileEvent(this.data);
+
+  @override
+  List<Object?> get props => [data];
+}
+
 class SimulateApprovalEvent extends CourierEvent {
   const SimulateApprovalEvent();
 }
@@ -512,7 +616,26 @@ class CourierBloc extends Bloc<CourierEvent, CourierState> {
     on<LoadCourierProfileEvent>(_onLoadProfile);
     on<RegisterCourierEvent>(_onRegister);
     on<ToggleOnlineStatusEvent>(_onToggleOnline);
+    on<UpdateCourierProfileEvent>(_onUpdateProfile);
     on<SimulateApprovalEvent>(_onSimulateApproval);
+  }
+
+  Future<void> _onUpdateProfile(
+    UpdateCourierProfileEvent event,
+    Emitter<CourierState> emit,
+  ) async {
+    try {
+      final updated = await _repository.updateProfile(event.data);
+      emit(CourierActiveLoaded(
+        profile: updated,
+        feedbackMessage: 'Dados do estafeta atualizados com sucesso!',
+      ));
+    } catch (e) {
+      if (state is CourierActiveLoaded) {
+        final cur = state as CourierActiveLoaded;
+        emit(cur.copyWith(feedbackMessage: 'Não foi possível guardar as alterações.'));
+      }
+    }
   }
 
   Future<void> _onLoadProfile(LoadCourierProfileEvent event, Emitter<CourierState> emit) async {
@@ -561,17 +684,46 @@ class CourierBloc extends Bloc<CourierEvent, CourierState> {
 
     emit(currentState.copyWith(isTogglingAvailability: true));
 
+    double lat = currentState.profile.latitude;
+    double lng = currentState.profile.longitude;
+
+    if (event.goOnline) {
+      try {
+        final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        if (serviceEnabled) {
+          var perm = await Geolocator.checkPermission();
+          if (perm == LocationPermission.denied) {
+            perm = await Geolocator.requestPermission();
+          }
+          if (perm == LocationPermission.always || perm == LocationPermission.whileInUse) {
+            final pos = await Geolocator.getCurrentPosition(
+              locationSettings: const LocationSettings(
+                accuracy: LocationAccuracy.high,
+                timeLimit: Duration(seconds: 5),
+              ),
+            );
+            lat = pos.latitude;
+            lng = pos.longitude;
+          }
+        }
+      } catch (_) {}
+    }
+
     try {
       await _repository.setOnlineAvailability(
         currentState.profile.id,
         event.goOnline,
-        currentState.profile.latitude,
-        currentState.profile.longitude,
+        lat,
+        lng,
       );
 
-      final updatedProfile = currentState.profile.copyWith(isOnline: event.goOnline);
+      final updatedProfile = currentState.profile.copyWith(
+        isOnline: event.goOnline,
+        latitude: lat,
+        longitude: lng,
+      );
       final msg = event.goOnline
-          ? 'Você está ONLINE. Localização em tempo real ativa (RN-083).'
+          ? 'Você está ONLINE. Radar de corridas e GPS PostGIS ativos (RN-083).'
           : 'Você está OFFLINE. Nenhuma nova oferta será enviada.';
 
       emit(CourierActiveLoaded(
@@ -1056,8 +1208,13 @@ class CourierStatusReviewScreen extends StatelessWidget {
 
 class CourierHomepageScreen extends StatefulWidget {
   final CourierProfileModel profile;
+  final VoidCallback? onTripAccepted;
 
-  const CourierHomepageScreen({super.key, required this.profile});
+  const CourierHomepageScreen({
+    super.key,
+    required this.profile,
+    this.onTripAccepted,
+  });
 
   @override
   State<CourierHomepageScreen> createState() => _CourierHomepageScreenState();
@@ -1065,6 +1222,10 @@ class CourierHomepageScreen extends StatefulWidget {
 
 class _CourierHomepageScreenState extends State<CourierHomepageScreen> with SingleTickerProviderStateMixin {
   late AnimationController _radarController;
+  final CourierRepository _repo = CourierRepository();
+  Timer? _pollingTimer;
+  List<DeliveryTripOffer> _availableTrips = const [];
+  bool _isLoadingTrips = false;
 
   @override
   void initState() {
@@ -1076,6 +1237,33 @@ class _CourierHomepageScreenState extends State<CourierHomepageScreen> with Sing
 
     if (widget.profile.isOnline) {
       _radarController.repeat();
+      _fetchTrips();
+      _startPolling();
+    }
+  }
+
+  void _startPolling() {
+    _pollingTimer?.cancel();
+    _pollingTimer = Timer.periodic(const Duration(seconds: 8), (_) {
+      if (mounted && widget.profile.isOnline) {
+        _fetchTrips();
+      }
+    });
+  }
+
+  Future<void> _fetchTrips() async {
+    if (_isLoadingTrips || !mounted) return;
+    setState(() => _isLoadingTrips = true);
+    try {
+      final list = await _repo.fetchAvailableTrips();
+      if (mounted) {
+        setState(() {
+          _availableTrips = list;
+          _isLoadingTrips = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingTrips = false);
     }
   }
 
@@ -1084,13 +1272,18 @@ class _CourierHomepageScreenState extends State<CourierHomepageScreen> with Sing
     super.didUpdateWidget(oldWidget);
     if (widget.profile.isOnline && !_radarController.isAnimating) {
       _radarController.repeat();
+      _fetchTrips();
+      _startPolling();
     } else if (!widget.profile.isOnline && _radarController.isAnimating) {
       _radarController.stop();
+      _pollingTimer?.cancel();
+      setState(() => _availableTrips = const []);
     }
   }
 
   @override
   void dispose() {
+    _pollingTimer?.cancel();
     _radarController.dispose();
     super.dispose();
   }
@@ -1100,12 +1293,25 @@ class _CourierHomepageScreenState extends State<CourierHomepageScreen> with Sing
     context.read<CourierBloc>().add(ToggleOnlineStatusEvent(newValue));
   }
 
+  Future<void> _openOfferModal(DeliveryTripOffer offer) async {
+    final accepted = await Navigator.of(context).push<bool>(
+      PageRouteBuilder<bool>(
+        opaque: false,
+        pageBuilder: (ctx, _, __) => CourierOfferScreen(offer: offer),
+      ),
+    );
+    if (accepted == true && mounted) {
+      context.read<CourierBloc>().add(const LoadCourierProfileEvent());
+      widget.onTripAccepted?.call();
+    } else {
+      _fetchTrips();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final isOnline = widget.profile.isOnline;
 
-    // Cores de Transição do Modo Ativo (RN-083)
     final backgroundColor = isOnline ? const Color(0xFF062817) : const Color(0xFF121417);
     final cardColor = isOnline ? const Color(0xFF0B3A23) : const Color(0xFF1E2228);
     final primaryAccent = isOnline ? const Color(0xFF00E676) : Colors.grey.shade400;
@@ -1122,35 +1328,47 @@ class _CourierHomepageScreenState extends State<CourierHomepageScreen> with Sing
               child: Icon(widget.profile.vehicleType.icone, color: primaryAccent, size: 20),
             ),
             const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.profile.nome,
-                  style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  '${widget.profile.vehicleType.label} • ${widget.profile.scoreReputacao} ★',
-                  style: TextStyle(color: Colors.grey.shade400, fontSize: 11),
-                ),
-              ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.profile.nome,
+                    style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    '${widget.profile.vehicleType.label} (${widget.profile.matriculaVeiculo}) • ${widget.profile.scoreReputacao} ★',
+                    style: TextStyle(color: Colors.grey.shade400, fontSize: 11),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
             ),
           ],
         ),
         actions: [
           IconButton(
-            tooltip: 'Avisos da Frota',
-            icon: const Icon(Icons.notifications_none_rounded, color: Colors.white),
-            onPressed: () {},
+            tooltip: 'Procurar Corridas Agora',
+            icon: _isLoadingTrips
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00E676)),
+                  )
+                : const Icon(Icons.refresh_rounded, color: Colors.white),
+            onPressed: () {
+              context.read<CourierBloc>().add(const LoadCourierProfileEvent());
+              if (isOnline) _fetchTrips();
+            },
           ),
           const SizedBox(width: 8),
         ],
       ),
       body: SafeArea(
-        child: Column(
+        child: ListView(
+          padding: const EdgeInsets.symmetric(vertical: 12),
           children: [
-            const SizedBox(height: 16),
-
             // 1. Resumo dos Ganhos e Métricas de Hoje (RN-059)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1171,7 +1389,7 @@ class _CourierHomepageScreenState extends State<CourierHomepageScreen> with Sing
                         const SizedBox(height: 4),
                         Text(
                           CourierCurrencyFormatter.formatKwanza(widget.profile.ganhosHojeCentimos),
-                          style: TextStyle(color: primaryAccent, fontSize: 24, fontWeight: FontWeight.w900),
+                          style: TextStyle(color: primaryAccent, fontSize: 22, fontWeight: FontWeight.w900),
                         ),
                       ],
                     ),
@@ -1192,89 +1410,230 @@ class _CourierHomepageScreenState extends State<CourierHomepageScreen> with Sing
               ),
             ),
 
-            const Spacer(),
+            const SizedBox(height: 18),
 
             // 2. Botão Central com Efeito Radar de Varrimento de Sinal (RN-083)
             Center(
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  // Animação de Ondas de Rádio e Varrimento Contínuo
-                  if (isOnline)
-                    AnimatedBuilder(
-                      animation: _radarController,
-                      builder: (context, child) {
-                        return CustomPaint(
-                          painter: _RadarWavePainter(
-                            progress: _radarController.value,
-                            color: primaryAccent,
+              child: SizedBox(
+                width: 260,
+                height: 260,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    if (isOnline)
+                      AnimatedBuilder(
+                        animation: _radarController,
+                        builder: (context, child) {
+                          return CustomPaint(
+                            painter: _RadarWavePainter(
+                              progress: _radarController.value,
+                              color: primaryAccent,
+                            ),
+                            size: const Size(260, 260),
+                          );
+                        },
+                      ),
+                    GestureDetector(
+                      onTap: () => _onToggleSwitch(!isOnline),
+                      child: Container(
+                        width: 156,
+                        height: 156,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: isOnline ? const Color(0xFF00C853) : const Color(0xFF2C323B),
+                          boxShadow: [
+                            BoxShadow(
+                              color: isOnline ? primaryAccent.withOpacity(0.5) : Colors.black45,
+                              blurRadius: isOnline ? 35 : 12,
+                              spreadRadius: isOnline ? 6 : 2,
+                            ),
+                          ],
+                          border: Border.all(
+                            color: isOnline ? Colors.white.withOpacity(0.8) : Colors.grey.shade700,
+                            width: 3,
                           ),
-                          size: const Size(300, 300),
-                        );
-                      },
-                    ),
-
-                  // Grande Botão Circular de Toggle Online/Offline
-                  GestureDetector(
-                    onTap: () => _onToggleSwitch(!isOnline),
-                    child: Container(
-                      width: 170,
-                      height: 170,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isOnline ? const Color(0xFF00C853) : const Color(0xFF2C323B),
-                        boxShadow: [
-                          BoxShadow(
-                            color: isOnline ? primaryAccent.withOpacity(0.5) : Colors.black45,
-                            blurRadius: isOnline ? 35 : 12,
-                            spreadRadius: isOnline ? 6 : 2,
-                          ),
-                        ],
-                        border: Border.all(
-                          color: isOnline ? Colors.white.withOpacity(0.8) : Colors.grey.shade700,
-                          width: 3,
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              isOnline ? Icons.power_settings_new_rounded : Icons.offline_bolt_rounded,
+                              size: 44,
+                              color: isOnline ? Colors.white : Colors.grey.shade400,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              isOnline ? 'ESTÁ ONLINE' : 'ESTÁ OFFLINE',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 13,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              isOnline ? 'A receber pedidos' : 'Toque p/ Iniciar',
+                              style: TextStyle(
+                                color: isOnline ? Colors.white70 : Colors.grey.shade500,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            isOnline ? Icons.power_settings_new_rounded : Icons.offline_bolt_rounded,
-                            size: 48,
-                            color: isOnline ? Colors.white : Colors.grey.shade400,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            isOnline ? 'ESTÁ ONLINE' : 'ESTÁ OFFLINE',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 14,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            isOnline ? 'A receber pedidos' : 'Toque p/ Iniciar',
-                            style: TextStyle(
-                              color: isOnline ? Colors.white70 : Colors.grey.shade500,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
 
-            const Spacer(),
+            const SizedBox(height: 12),
 
-            // 3. Status de Telemetria e Localização Ativa (RN-083, RN-094)
+            // 3. Lista em Tempo Real de Corridas Disponíveis na Zona (RN-085 / RN-086)
+            if (isOnline)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.local_fire_department_rounded, color: primaryAccent, size: 18),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Ofertas Prontas na Sua Zona (${_availableTrips.length})',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                        TextButton.icon(
+                          onPressed: _fetchTrips,
+                          icon: const Icon(Icons.radar_rounded, size: 15, color: Color(0xFF00E676)),
+                          label: const Text(
+                            'Atualizar',
+                            style: TextStyle(color: Color(0xFF00E676), fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (_availableTrips.isEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: cardColor.withOpacity(0.75),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white12),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.hourglass_top_rounded, color: primaryAccent, size: 22),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Radar em varrimento contínuo... Assim que um restaurante finalizar um pedido na sua zona, a oferta aparecerá aqui.',
+                                style: TextStyle(color: Colors.grey.shade300, fontSize: 12, height: 1.35),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      ..._availableTrips.map((trip) {
+                        final ganhoStr = CourierCurrencyFormatter.formatKwanza(trip.ganhosPrevistosCentimos);
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: cardColor,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: primaryAccent.withOpacity(0.45), width: 1.5),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      trip.lojaNome,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: primaryAccent.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      '+$ganhoStr',
+                                      style: TextStyle(
+                                        color: primaryAccent,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Recolha: ${trip.moradaRecolha}',
+                                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Entrega: ${trip.moradaEntrega} • ${trip.distanciaTotalKm} km (~${trip.tempoEstimadoMinutos} min)',
+                                style: TextStyle(color: Colors.grey.shade400, fontSize: 11),
+                              ),
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: double.infinity,
+                                child: FilledButton.icon(
+                                  onPressed: () => _openOfferModal(trip),
+                                  icon: const Icon(Icons.flash_on_rounded, size: 18),
+                                  label: const Text(
+                                    'Inspecionar & Aceitar Corrida (30s)',
+                                    style: TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: primaryAccent,
+                                    foregroundColor: Colors.black,
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                  ],
+                ),
+              ),
+
+            const SizedBox(height: 12),
+
+            // 4. Status de Telemetria e Localização Ativa (RN-083, RN-094)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
@@ -1299,7 +1658,9 @@ class _CourierHomepageScreenState extends State<CourierHomepageScreen> with Sing
                             style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                           ),
                           Text(
-                            isOnline ? 'Coordenadas a transmitir via WebSocket a cada 5s' : 'Fique online para receber despachos na zona',
+                            isOnline
+                                ? 'GPS: ${widget.profile.latitude.toStringAsFixed(4)}, ${widget.profile.longitude.toStringAsFixed(4)}'
+                                : 'Fique online para receber despachos na zona',
                             style: TextStyle(color: Colors.grey.shade400, fontSize: 10),
                           ),
                         ],
@@ -1324,8 +1685,6 @@ class _CourierHomepageScreenState extends State<CourierHomepageScreen> with Sing
                 ),
               ),
             ),
-
-            const SizedBox(height: 16),
           ],
         ),
       ),

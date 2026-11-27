@@ -22,6 +22,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/network/app_environment_config.dart';
+import '../auth/network/jwt_interceptor.dart';
 import '../auth/storage/secure_token_storage.dart';
 
 // ============================================================================
@@ -233,48 +234,63 @@ class CourierWalletRepository implements ICourierWalletRepository {
 
   CourierWalletRepository({Dio? dio})
       : _dio = dio ??
-            Dio(
-              BaseOptions(
-                baseUrl: AppEnvironmentConfig.baseHttpUrl,
-                connectTimeout: const Duration(seconds: 10),
-                receiveTimeout: const Duration(seconds: 10),
-              ),
+            createSecureDioClient(
+              tokenStorage: SecureTokenStorage(),
+              baseUrl: AppEnvironmentConfig.baseHttpUrl,
             );
 
   @override
   Future<CourierWalletModel> fetchWalletData(String courierId) async {
     try {
-      final token = await SecureTokenStorage().getAccessToken();
       final response = await _dio.get(
         '/api/v1/logistics/couriers/wallet/',
-        options: Options(headers: {
-          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-        }),
       );
       if (response.statusCode == 200 && response.data is Map<String, dynamic>) {
         final d = response.data as Map<String, dynamic>;
         final saldoDisponivel = (d['saldo_disponivel_centimos'] as num?)?.toInt() ?? 0;
-        final ganhosHoje = (d['ganhos_hoje_centimos'] as num?)?.toInt() ?? 0;
-        final corridasHoje = (d['corridas_concluidas_hoje'] as num?)?.toInt() ?? 0;
+        final saldoPendente = (d['saldo_pendente_centimos'] as num?)?.toInt() ?? 0;
+        final repassesMes = (d['repasses_acumulados_mes_centimos'] as num?)?.toInt() ?? 0;
+        final taxaPct = (d['taxa_antecipacao_percentagem'] as num?)?.toDouble() ?? 2.5;
+        final taxaFixa = (d['taxa_fixa_antecipacao_centimos'] as num?)?.toInt() ?? 20000;
+        final bancoNome = d['banco_nome']?.toString() ?? 'Banco Angolano de Investimentos (BAI)';
+        final ibanRaw = d['iban']?.toString() ?? 'AO06 0040 0000 1234 5678 9012 3';
         final rawHistorico = (d['historico'] as List<dynamic>?) ?? [];
+        final rawProdutividade = (d['produtividade_semanal'] as List<dynamic>?) ?? [];
+
+        final List<DailyProductivityItem> produtividade = [];
+        for (final p in rawProdutividade) {
+          if (p is! Map<String, dynamic>) continue;
+          produtividade.add(DailyProductivityItem(
+            diaSemana: p['dia_semana']?.toString() ?? 'Dia',
+            ganhosCentimos: (p['ganhos_centimos'] as num?)?.toInt() ?? 0,
+            horasOnline: (p['horas_online'] as num?)?.toDouble() ?? 0.0,
+            entregasConcluidas: (p['entregas_concluidas'] as num?)?.toInt() ?? 0,
+            isHoje: p['is_hoje'] == true,
+            isMelhorDia: p['is_melhor_dia'] == true,
+          ));
+        }
 
         final List<CourierDeliveryEarningItem> corridas = [];
         for (final item in rawHistorico) {
           if (item is! Map<String, dynamic>) continue;
-          final valor = (item['valor_centimos'] as num?)?.toInt() ?? 50000;
+          final valorTotal = (item['valor_centimos'] as num?)?.toInt() ?? 50000;
+          final valorBase = (item['valor_fixo_base_centimos'] as num?)?.toInt() ?? valorTotal;
+          final adicDistancia = (item['adicional_distancia_centimos'] as num?)?.toInt() ?? 0;
+          final bonusEspera = (item['bonus_espera_loja_centimos'] as num?)?.toInt() ?? 0;
+          final incentivoDinamico = (item['incentivo_dinamico_centimos'] as num?)?.toInt() ?? 0;
           final gorjeta = (item['gorjeta_centimos'] as num?)?.toInt() ?? 0;
           corridas.add(CourierDeliveryEarningItem(
             id: item['corrida_id']?.toString() ?? 'corr-01',
             pedidoCodigo: '#${item['numero_pedido'] ?? "LUA"}',
             lojaNome: item['loja_nome']?.toString() ?? 'Restaurante Parceiro',
-            clienteNomeMascarado: 'Cliente Ango-iFood',
+            clienteNomeMascarado: item['cliente_nome']?.toString() ?? 'Cliente Ango-iFood',
             dataHora: DateTime.tryParse(item['data']?.toString() ?? '') ?? DateTime.now(),
-            distanciaKm: 2.5,
-            minutosEsperaLoja: 5,
-            valorFixoBaseCentimos: valor,
-            adicionalDistanciaCentimos: 0,
-            bonusEsperaLojaCentimos: 0,
-            incentivoPrecoDinamicoCentimos: 0,
+            distanciaKm: (item['distancia_km'] as num?)?.toDouble() ?? 2.5,
+            minutosEsperaLoja: (item['minutos_espera_loja'] as num?)?.toInt() ?? 5,
+            valorFixoBaseCentimos: valorBase,
+            adicionalDistanciaCentimos: adicDistancia,
+            bonusEsperaLojaCentimos: bonusEspera,
+            incentivoPrecoDinamicoCentimos: incentivoDinamico,
             gorjetaClienteCentimos: gorjeta,
           ));
         }
@@ -282,14 +298,14 @@ class CourierWalletRepository implements ICourierWalletRepository {
         return CourierWalletModel(
           courierId: courierId,
           saldoDisponivelCentimos: saldoDisponivel,
-          saldoPendenteCentimos: 0,
-          repassesAcumuladosMesCentimos: 0,
-          taxaAntecipacaoPercentagem: 2.5,
-          taxaFixaAntecipacaoCentimos: 20000,
+          saldoPendenteCentimos: saldoPendente,
+          repassesAcumuladosMesCentimos: repassesMes,
+          taxaAntecipacaoPercentagem: taxaPct,
+          taxaFixaAntecipacaoCentimos: taxaFixa,
           proximoRepasseRegularData: 'Terça-feira (Sem Taxa)',
-          ibanDestinoMascarado: 'AO06 0040 **** **** **** 9012 3',
-          bancoNome: 'Banco Angolano de Investimentos (BAI)',
-          produtividadeSemanal: const [],
+          ibanDestinoMascarado: ibanRaw,
+          bancoNome: bancoNome,
+          produtividadeSemanal: produtividade,
           historicoCorridas: corridas,
         );
       }
@@ -301,13 +317,9 @@ class CourierWalletRepository implements ICourierWalletRepository {
   @override
   Future<bool> requestEarlyPayout({required String courierId, required int valorCentimos}) async {
     try {
-      final token = await SecureTokenStorage().getAccessToken();
       final response = await _dio.post(
         '/api/v1/logistics/couriers/wallet/',
         data: {'valor_centimos': valorCentimos},
-        options: Options(headers: {
-          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-        }),
       );
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (_) {

@@ -87,6 +87,15 @@ class Estafeta(gis_models.Model):
         help_text=_("RN-082: Número da carta de condução (obrigatório para Mota e Carro)."),
     )
 
+    # RN-082: URL da foto/PDF da carta de condução
+    carta_conducao_url = models.URLField(
+        max_length=500,
+        blank=True,
+        default="",
+        verbose_name=_("URL da Carta de Condução"),
+        help_text=_("RN-082: Endereço URL do comprovativo digital da carta de condução."),
+    )
+
     # RN-082: URL do documento/seguro/registo do veículo armazenado de forma segura
     documentos_veiculo_url = models.URLField(
         max_length=500,
@@ -94,6 +103,63 @@ class Estafeta(gis_models.Model):
         default="",
         verbose_name=_("URL dos Documentos do Veículo"),
         help_text=_("RN-082: Endereço URL dos documentos comprovativos do veículo e seguro."),
+    )
+
+    # Identificação da Viatura (Marca/Modelo e Matrícula)
+    marca_modelo_veiculo = models.CharField(
+        max_length=100,
+        blank=True,
+        default="Haojue 125",
+        verbose_name=_("Marca e Modelo da Viatura"),
+        help_text=_("Marca, cilindrada e modelo da viatura do estafeta."),
+    )
+
+    matricula_veiculo = models.CharField(
+        max_length=30,
+        blank=True,
+        default="LD-00-00-AA",
+        verbose_name=_("Matrícula da Viatura"),
+        help_text=_("Chapa de matrícula oficial da viatura (ex.: LD-44-99-AF)."),
+    )
+
+    # Dados Fiscais e Bancários para Repasses (RN-082 / RN-146)
+    nif = models.CharField(
+        max_length=30,
+        blank=True,
+        default="",
+        verbose_name=_("NIF do Estafeta"),
+        help_text=_("Número de Identificação Fiscal do estafeta."),
+    )
+
+    banco_nome = models.CharField(
+        max_length=100,
+        blank=True,
+        default="Banco Angolano de Investimentos (BAI)",
+        verbose_name=_("Banco para Repasses"),
+        help_text=_("Instituição bancária angolana para liquidação de repasses."),
+    )
+
+    numero_conta = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+        verbose_name=_("Número de Conta Bancária"),
+    )
+
+    iban = models.CharField(
+        max_length=50,
+        blank=True,
+        default="AO06.0040.0000.0000.0000.0000.0",
+        verbose_name=_("IBAN"),
+        help_text=_("IBAN angolano (AO06...) para transferências e saques da carteira."),
+    )
+
+    navegador_padrao = models.CharField(
+        max_length=30,
+        blank=True,
+        default="OSRM_INTEGRADO",
+        verbose_name=_("Navegador GPS Padrão"),
+        help_text=_("Preferência de navegação do estafeta (OSRM_INTEGRADO, GOOGLE_MAPS, WAZE)."),
     )
 
     # RN-082: Estado de aprovação do onboarding (só estafetas Aprovados podem ficar online)
@@ -320,6 +386,47 @@ class Entrega(gis_models.Model):
         null=True,
         blank=True,
         verbose_name=_("Prova GPS (Legado)"),
+    )
+
+    # Timestamps operacionais das 5 etapas da corrida (RN-089, RN-093, RN-095, RN-096)
+    chegada_loja_em = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Chegada à Loja Em"),
+        help_text=_("RN-089: Timestamp em que o estafeta chegou ao restaurante para recolha."),
+    )
+    recolhido_em = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Recolhido na Loja Em"),
+        help_text=_("RN-093: Timestamp em que o estafeta confirmou a recolha dos pacotes."),
+    )
+    chegada_cliente_em = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Chegada ao Cliente Em"),
+        help_text=_("RN-096: Timestamp em que o estafeta chegou ao destino e iniciou a tolerância de 7 min."),
+    )
+    entregue_em = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Entregue Em"),
+        help_text=_("RN-095: Timestamp de conclusão da entrega."),
+    )
+
+    # RN-089: Compensação adicional por tempo de espera > 10 min na loja (em cêntimos)
+    bonus_espera_centimos = models.PositiveIntegerField(
+        default=0,
+        verbose_name=_("Bónus de Espera na Loja (Cêntimos)"),
+        help_text=_("RN-089: Bónus creditado ao estafeta quando a espera no restaurante excede 10 minutos."),
+    )
+
+    # RN-098 / RN-101: Registo de incidente ou SOS em rota
+    motivo_incidente = models.TextField(
+        blank=True,
+        default="",
+        verbose_name=_("Motivo de Incidente / SOS"),
+        help_text=_("RN-098 / RN-101: Descrição de eventual incidente técnico, avaria ou SOS reportado em rota."),
     )
 
     class Meta:

@@ -57,8 +57,23 @@ class EstafetaAdmin(MasterModelAdmin):
                 "fields": (
                     "utilizador",
                     "tipo_veiculo",
+                    "marca_modelo_veiculo",
+                    "matricula_veiculo",
                     "carta_conducao",
+                    "carta_conducao_url",
                     "documentos_veiculo_url",
+                    "navegador_padrao",
+                )
+            },
+        ),
+        (
+            _("Dados Bancários e Fiscais (Repasses)"),
+            {
+                "fields": (
+                    "nif",
+                    "banco_nome",
+                    "numero_conta",
+                    "iban",
                 )
             },
         ),

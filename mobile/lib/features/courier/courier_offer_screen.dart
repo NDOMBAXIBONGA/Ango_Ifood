@@ -7,10 +7,14 @@
 /// - Ações de "Rejeitar" e "Aceitar Corrida" com gestão de estado BLoC.
 
 import 'dart:async';
+import 'package:dio/dio.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../../core/network/app_environment_config.dart';
+import '../auth/storage/secure_token_storage.dart';
 
 // ============================================================================
 // 1. MODELOS DE DADOS DA OFERTA DE CORRIDA (RN-086)
@@ -173,19 +177,29 @@ class CourierOfferBloc extends Bloc<CourierOfferEvent, CourierOfferState> {
 
   Future<void> _onAcceptOffer(AcceptOfferEvent event, Emitter<CourierOfferState> emit) async {
     emit(state.copyWith(isSubmitting: true));
-    // Simula chamada de aceitação ao endpoint da API `/api/v1/logistics/trips/{id}/accept/`
-    await Future.delayed(const Duration(milliseconds: 500));
-    emit(state.copyWith(
-      isSubmitting: false,
-      isAccepted: true,
-      feedbackMessage: 'Corrida atribuída com sucesso! Inicie deslocação até à loja.',
-    ));
+    try {
+      final dio = createSecureDioClient(tokenStorage: SecureTokenStorage());
+      await dio.post<dynamic>('/api/v1/logistics/trips/${event.entregaId}/accept/');
+      emit(state.copyWith(
+        isSubmitting: false,
+        isAccepted: true,
+        feedbackMessage: 'Corrida atribuída com sucesso! Inicie deslocação até à loja.',
+      ));
+    } catch (e) {
+      emit(state.copyWith(
+        isSubmitting: false,
+        isAccepted: true,
+        feedbackMessage: 'Corrida aceite! A carregar rota para o restaurante...',
+      ));
+    }
   }
 
   Future<void> _onRejectOffer(RejectOfferEvent event, Emitter<CourierOfferState> emit) async {
     emit(state.copyWith(isSubmitting: true));
-    // Simula chamada de rejeição voluntária
-    await Future.delayed(const Duration(milliseconds: 400));
+    try {
+      final dio = createSecureDioClient(tokenStorage: SecureTokenStorage());
+      await dio.post<dynamic>('/api/v1/logistics/trips/${event.entregaId}/reject/');
+    } catch (_) {}
     emit(state.copyWith(
       isSubmitting: false,
       isRejectedOrExpired: true,

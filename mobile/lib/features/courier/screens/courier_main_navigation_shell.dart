@@ -56,9 +56,14 @@ class _CourierMainNavigationShellState
     _currentIndex = widget.initialIndex;
   }
 
+  int _activeTripRefreshCount = 0;
+
   void _onTabSelected(int index) {
     setState(() {
       _currentIndex = index;
+      if (index == 1) {
+        _activeTripRefreshCount++;
+      }
     });
   }
 
@@ -79,11 +84,15 @@ class _CourierMainNavigationShellState
             body: IndexedStack(
               index: _currentIndex,
               children: [
-                // Aba 0: Radar de Despacho
-                CourierHomepageScreen(profile: activeProfile),
+                // Aba 0: Radar de Despacho & Ofertas
+                CourierHomepageScreen(
+                  profile: activeProfile,
+                  onTripAccepted: () => _onTabSelected(1),
+                ),
 
                 // Aba 1: Corrida Ativa & Validação de PIN
                 ActiveDeliveryFlowScreen(
+                  refreshTrigger: _activeTripRefreshCount,
                   onGoToRadar: () => _onTabSelected(0),
                 ),
 

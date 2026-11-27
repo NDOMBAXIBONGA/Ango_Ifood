@@ -18,6 +18,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../core/network/app_environment_config.dart';
+import '../auth/storage/secure_token_storage.dart';
+
 // ============================================================================
 // 1. CAMADA DE DADOS E REPOSITÓRIO API DO ESTAFETA
 // ============================================================================
@@ -27,12 +30,8 @@ class DeliveryRepository {
 
   DeliveryRepository({Dio? dio})
       : _dio = dio ??
-            Dio(
-              BaseOptions(
-                baseUrl: 'http://10.0.2.2:8000',
-                connectTimeout: const Duration(seconds: 10),
-                receiveTimeout: const Duration(seconds: 10),
-              ),
+            createSecureDioClient(
+              tokenStorage: SecureTokenStorage(),
             );
 
   /// POST /api/v1/logistics/delivery/verify-pin/ (RN-095)
