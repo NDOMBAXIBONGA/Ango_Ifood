@@ -18,13 +18,20 @@ import '../../catalog/customer_catalog_screens.dart';
 /// configuração de meios de pagamento (RN-065), preferências de notificações (RN-004),
 /// alteração de palavra-passe e Central de Ajuda & Disputas (RN-138 a RN-142).
 class CustomerProfileScreen extends StatefulWidget {
-  const CustomerProfileScreen({super.key});
+  final int refreshTrigger;
+
+  const CustomerProfileScreen({
+    super.key,
+    this.refreshTrigger = 0,
+  });
 
   @override
   State<CustomerProfileScreen> createState() => _CustomerProfileScreenState();
 }
 
 class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
+  final SecureTokenStorage _tokenStorage = SecureTokenStorage();
+  bool _hasToken = false;
   String _nome = 'Cliente';
   String _email = '';
   String _telemovel = '';
@@ -38,14 +45,59 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
     _loadProfileFromBackend();
   }
 
+  @override
+  void didUpdateWidget(covariant CustomerProfileScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.refreshTrigger != oldWidget.refreshTrigger) {
+      _loadProfileFromBackend();
+    }
+  }
+
   Future<Dio?> _buildAuthDio() async {
-    final token = await SecureTokenStorage().getAccessToken();
+    var token = await _tokenStorage.getAccessToken();
+    if ((token == null || token.isEmpty) && mounted) {
+      try {
+        final authState = context.read<AuthBloc>().state;
+        if (authState is Authenticated && authState.tokens.accessToken.isNotEmpty) {
+          token = authState.tokens.accessToken;
+          await _tokenStorage.saveTokens(
+            accessToken: authState.tokens.accessToken,
+            refreshToken: authState.tokens.refreshToken,
+            userRole: authState.user.tipoUtilizador,
+          );
+        }
+      } catch (_) {}
+    }
     if (token == null || token.isEmpty) return null;
-    return createSecureDioClient(tokenStorage: SecureTokenStorage());
+    return createSecureDioClient(tokenStorage: _tokenStorage);
   }
 
   Future<void> _loadProfileFromBackend() async {
     try {
+      var token = await _tokenStorage.getAccessToken();
+      if ((token == null || token.isEmpty) && mounted) {
+        try {
+          final authState = context.read<AuthBloc>().state;
+          if (authState is Authenticated && authState.tokens.accessToken.isNotEmpty) {
+            token = authState.tokens.accessToken;
+            await _tokenStorage.saveTokens(
+              accessToken: authState.tokens.accessToken,
+              refreshToken: authState.tokens.refreshToken,
+              userRole: authState.user.tipoUtilizador,
+            );
+          }
+        } catch (_) {}
+      }
+
+      final hasTokenNow = token != null && token.isNotEmpty;
+      if (mounted && _hasToken != hasTokenNow) {
+        setState(() {
+          _hasToken = hasTokenNow;
+        });
+      }
+
+      if (!hasTokenNow) return;
+
       final dio = await _buildAuthDio();
       if (dio == null) return;
       final resp = await dio.get<Map<String, dynamic>>('/api/v1/auth/profile/');
@@ -55,21 +107,47 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
       final perfil = data['perfil'] as Map<String, dynamic>? ?? {};
       final consent = data['consentimentos'] as Map<String, dynamic>? ?? {};
 
+      final fetchedName = (perfil['nome'] ?? '').toString().trim();
+      final fetchedEmail = (perfil['email'] ?? '').toString().trim();
+      final fetchedPhone = (perfil['telemovel'] ?? '').toString().trim();
+
       setState(() {
-        if ((perfil['nome'] ?? '').toString().trim().isNotEmpty) {
-          _nome = perfil['nome'].toString().trim();
+        _hasToken = true;
+        if (fetchedName.isNotEmpty) {
+          _nome = fetchedName;
         }
-        if ((perfil['email'] ?? '').toString().trim().isNotEmpty) {
-          _email = perfil['email'].toString().trim();
+        if (fetchedEmail.isNotEmpty) {
+          _email = fetchedEmail;
         }
-        if ((perfil['telemovel'] ?? '').toString().trim().isNotEmpty) {
-          _telemovel = perfil['telemovel'].toString().trim();
+        if (fetchedPhone.isNotEmpty) {
+          _telemovel = fetchedPhone;
         }
         _marketing = (consent['marketing'] as bool?) ?? _marketing;
         _gpsBackground =
             (consent['localizacao_segundo_plano'] as bool?) ?? _gpsBackground;
       });
+
+      if (mounted && perfil.isNotEmpty) {
+        context.read<AuthBloc>().add(
+              UpdateUserProfileEvent(
+                user: UserProfile.fromJson(perfil),
+              ),
+            );
+      }
     } catch (_) {}
+  }
+
+  Future<void> _promptLoginIfNeeded(BuildContext context) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const AuthScreen(
+          selectedRole: PlatformRole.cliente,
+        ),
+      ),
+    );
+    if (mounted) {
+      await _loadProfileFromBackend();
+    }
   }
 
   @override
@@ -77,278 +155,397 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return AnimatedBuilder(
-      animation: CartService.instance,
-      builder: (context, _) {
-        final cart = CartService.instance;
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (state is Authenticated) {
+          setState(() {
+            _hasToken = true;
+            if (state.user.nome.trim().isNotEmpty &&
+                state.user.nome.trim() != 'Utilizador') {
+              _nome = state.user.nome.trim();
+            }
+            if (state.user.email.trim().isNotEmpty) {
+              _email = state.user.email.trim();
+            }
+            if (state.user.telemovel.trim().isNotEmpty) {
+              _telemovel = state.user.telemovel.trim();
+            }
+          });
+          _loadProfileFromBackend();
+        } else if (state is Unauthenticated) {
+          setState(() {
+            _hasToken = false;
+            _nome = 'Cliente';
+            _email = '';
+            _telemovel = '';
+          });
+        }
+      },
+      child: AnimatedBuilder(
+        animation: CartService.instance,
+        builder: (context, _) {
+          final cart = CartService.instance;
 
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('O Meu Perfil'),
-            actions: [
-              IconButton(
-                tooltip: 'Editar Dados Pessoais',
-                onPressed: () => _openEditProfileSheet(context),
-                icon: const Icon(Icons.edit_outlined),
-              ),
-            ],
-          ),
-          body: BlocBuilder<AuthBloc, AuthState>(
+          return BlocBuilder<AuthBloc, AuthState>(
             builder: (context, authState) {
+              final bool isAuthenticated = (authState is Authenticated) ||
+                  _hasToken ||
+                  (SecureTokenStorage.cachedAccessToken?.isNotEmpty ?? false);
+
               String userName = _nome;
               String userEmail = _email;
               String userPhone = _telemovel;
 
               if (authState is Authenticated) {
-                if (_nome == 'Cliente' && authState.user.nome.isNotEmpty) {
-                  userName = authState.user.nome;
+                if ((userName == 'Cliente' || userName == 'Utilizador' || userName.isEmpty) &&
+                    authState.user.nome.trim().isNotEmpty &&
+                    authState.user.nome.trim() != 'Utilizador') {
+                  userName = authState.user.nome.trim();
                 }
-                if (userEmail.isEmpty) userEmail = authState.user.email;
-                if (userPhone.isEmpty) userPhone = authState.user.telemovel;
+                if (userEmail.isEmpty && authState.user.email.trim().isNotEmpty) {
+                  userEmail = authState.user.email.trim();
+                }
+                if (userPhone.isEmpty && authState.user.telemovel.trim().isNotEmpty) {
+                  userPhone = authState.user.telemovel.trim();
+                }
               }
 
-              return ListView(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-                children: [
-                  // Cabeçalho de Perfil com Avatar + Botão Editar
-                  Center(
-                    child: Column(
-                      children: [
-                        CircleAvatar(
-                          radius: 46,
-                          backgroundColor: colorScheme.primaryContainer,
-                          child: Text(
-                            userName.isNotEmpty
-                                ? userName.trim().substring(0, 1).toUpperCase()
-                                : 'C',
-                            style: theme.textTheme.headlineMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: colorScheme.onPrimaryContainer,
-                            ),
-                          ),
+              return Scaffold(
+                appBar: AppBar(
+                  title: const Text('O Meu Perfil'),
+                  actions: [
+                    if (isAuthenticated)
+                      IconButton(
+                        tooltip: 'Editar Dados Pessoais',
+                        onPressed: () => _openEditProfileSheet(
+                          context,
+                          initialName: userName,
+                          initialEmail: userEmail,
+                          initialPhone: userPhone,
                         ),
-                        const SizedBox(height: 14),
-                        Text(
-                          userName,
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        if (userEmail.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            userEmail,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
+                        icon: const Icon(Icons.edit_outlined),
+                      )
+                    else
+                      TextButton.icon(
+                        onPressed: () => _promptLoginIfNeeded(context),
+                        icon: const Icon(Icons.login_rounded, size: 18),
+                        label: const Text('Entrar'),
+                      ),
+                  ],
+                ),
+                body: ListView(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                  children: [
+                    // Cabeçalho de Perfil com Avatar + Estado da Conta
+                    Center(
+                      child: Column(
+                        children: [
+                          CircleAvatar(
+                            radius: 46,
+                            backgroundColor: colorScheme.primaryContainer,
+                            child: Text(
+                              userName.isNotEmpty
+                                  ? userName.trim().substring(0, 1).toUpperCase()
+                                  : 'C',
+                              style: theme.textTheme.headlineMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: colorScheme.onPrimaryContainer,
+                              ),
                             ),
                           ),
-                        ],
-                        if (userPhone.isNotEmpty) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            userPhone,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 10),
-                        if (userPhone.isEmpty && userEmail.isEmpty) ...[
-                          Container(
-                            margin: const EdgeInsets.only(top: 8),
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFEF2F2),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: const Color(0xFFFECACA)),
-                            ),
-                            child: Column(
-                              children: [
-                                const Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.person_outline, size: 20, color: Color(0xFFDC2626)),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'A navegar como Visitante',
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF991B1B),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-                                const Text(
-                                  'Crie uma conta para salvar endereços favoritos, repetir pedidos e gerir dados de pagamento.',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(fontSize: 12, color: Color(0xFF7F1D1D)),
-                                ),
-                                const SizedBox(height: 12),
-                                FilledButton.icon(
-                                  onPressed: () {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute<void>(
-                                        builder: (_) => const AuthScreen(
-                                          selectedRole: PlatformRole.cliente,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                  icon: const Icon(Icons.login_rounded, size: 16),
-                                  label: const Text('Criar Conta / Iniciar Sessão'),
-                                  style: FilledButton.styleFrom(
-                                    backgroundColor: const Color(0xFFDC2626),
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
+                          const SizedBox(height: 12),
+                          if (isAuthenticated) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFDCFCE7),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.verified_user_rounded,
+                                    size: 14,
+                                    color: Color(0xFF15803D),
+                                  ),
+                                  SizedBox(width: 5),
+                                  Text(
+                                    'Conta de Cliente Ativa',
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF15803D),
                                     ),
                                   ),
-                                ),
-                                const SizedBox(height: 8),
-                                Wrap(
-                                  alignment: WrapAlignment.center,
-                                  spacing: 6,
-                                  children: [
-                                    TextButton.icon(
-                                      onPressed: () {
-                                        Navigator.of(context).push(
-                                          MaterialPageRoute<void>(
-                                            builder: (_) => const AuthScreen(
-                                              selectedRole: PlatformRole.parceiro,
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                      icon: const Icon(Icons.storefront_outlined, size: 14),
-                                      label: const Text('Portal do Parceiro', style: TextStyle(fontSize: 12)),
-                                    ),
-                                    TextButton.icon(
-                                      onPressed: () {
-                                        Navigator.of(context).push(
-                                          MaterialPageRoute<void>(
-                                            builder: (_) => const AuthScreen(
-                                              selectedRole: PlatformRole.estafeta,
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                      icon: const Icon(Icons.two_wheeler_outlined, size: 14),
-                                      label: const Text('Central do Estafeta', style: TextStyle(fontSize: 12)),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
+                            const SizedBox(height: 8),
+                          ],
+                          Text(
+                            userName,
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
                           ),
-                        ] else ...[
-                          OutlinedButton.icon(
-                            onPressed: () => _openEditProfileSheet(
-                              context,
-                              initialName: userName,
-                              initialEmail: userEmail,
-                              initialPhone: userPhone,
+                          if (userEmail.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              userEmail,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
                             ),
-                            icon: const Icon(Icons.person_outline, size: 18),
-                            label: const Text('Editar Dados Pessoais'),
-                            style: OutlinedButton.styleFrom(
-                              visualDensity: VisualDensity.compact,
+                          ],
+                          if (userPhone.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              userPhone,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
                             ),
-                          ),
+                          ] else if (isAuthenticated) ...[
+                            const SizedBox(height: 4),
+                            InkWell(
+                              onTap: () => _openEditProfileSheet(
+                                context,
+                                initialName: userName,
+                                initialEmail: userEmail,
+                                initialPhone: userPhone,
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                child: Text(
+                                  'Toque para adicionar o seu nº de telemóvel (+244)',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.primary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 10),
+                          if (!isAuthenticated) ...[
+                            Container(
+                              margin: const EdgeInsets.only(top: 8),
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFEF2F2),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: const Color(0xFFFECACA)),
+                              ),
+                              child: Column(
+                                children: [
+                                  const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.person_outline, size: 20, color: Color(0xFFDC2626)),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'A navegar como Visitante',
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF991B1B),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  const Text(
+                                    'Crie uma conta para salvar endereços favoritos, repetir pedidos e gerir dados de pagamento.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(fontSize: 12, color: Color(0xFF7F1D1D)),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  FilledButton.icon(
+                                    onPressed: () => _promptLoginIfNeeded(context),
+                                    icon: const Icon(Icons.login_rounded, size: 16),
+                                    label: const Text('Criar Conta / Iniciar Sessão'),
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: const Color(0xFFDC2626),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    alignment: WrapAlignment.center,
+                                    spacing: 6,
+                                    children: [
+                                      TextButton.icon(
+                                        onPressed: () {
+                                          Navigator.of(context).push(
+                                            MaterialPageRoute<void>(
+                                              builder: (_) => const AuthScreen(
+                                                selectedRole: PlatformRole.parceiro,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                        icon: const Icon(Icons.storefront_outlined, size: 14),
+                                        label: const Text('Portal do Parceiro', style: TextStyle(fontSize: 12)),
+                                      ),
+                                      TextButton.icon(
+                                        onPressed: () {
+                                          Navigator.of(context).push(
+                                            MaterialPageRoute<void>(
+                                              builder: (_) => const AuthScreen(
+                                                selectedRole: PlatformRole.estafeta,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                        icon: const Icon(Icons.two_wheeler_outlined, size: 14),
+                                        label: const Text('Central do Estafeta', style: TextStyle(fontSize: 12)),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ] else ...[
+                            OutlinedButton.icon(
+                              onPressed: () => _openEditProfileSheet(
+                                context,
+                                initialName: userName,
+                                initialEmail: userEmail,
+                                initialPhone: userPhone,
+                              ),
+                              icon: const Icon(Icons.person_outline, size: 18),
+                              label: const Text('Editar Dados Pessoais'),
+                              style: OutlinedButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 28),
-
-                  // Bloco: A Minha Conta
-                  _buildSectionHeader(context, 'A Minha Conta'),
-                  _buildSettingsTile(
-                    context,
-                    icon: Icons.location_on_outlined,
-                    title: 'Moradas de Entrega',
-                    subtitle: '${cart.moradaLabel} • ${cart.moradaTexto}',
-                    onTap: () => showCustomerAddressSelectionSheet(context),
-                  ),
-                  _buildSettingsTile(
-                    context,
-                    icon: Icons.payment_outlined,
-                    title: 'Meios de Pagamento',
-                    subtitle: _paymentDisplayLabel(cart.preferredPaymentCode),
-                    onTap: () => _openPaymentMethodsSheet(context),
-                  ),
-                  _buildSettingsTile(
-                    context,
-                    icon: Icons.notifications_none_rounded,
-                    title: 'Notificações & Privacidade',
-                    subtitle: _marketing
-                        ? 'Alertas de pedidos e promoções ativos'
-                        : 'Apenas alertas essenciais de estado do pedido',
-                    onTap: () => _openNotificationsSheet(context),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Bloco: Segurança e Ajuda
-                  _buildSectionHeader(context, 'Segurança & Suporte'),
-                  _buildSettingsTile(
-                    context,
-                    icon: Icons.lock_outline_rounded,
-                    title: 'Segurança & Palavra-passe',
-                    subtitle: 'Alterar ou definir palavra-passe de acesso',
-                    onTap: () => _openChangePasswordSheet(context),
-                  ),
-                  _buildSettingsTile(
-                    context,
-                    icon: Icons.support_agent_rounded,
-                    title: 'Ajuda, Suporte & Disputas',
-                    subtitle:
-                        'Abrir reclamação de pedido, consultar tickets e FAQ',
-                    onTap: () => _openSupportAndDisputesSheet(context),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Botão de Terminar Sessão
-                  Card(
-                    elevation: 0,
-                    color: colorScheme.errorContainer.withOpacity(0.18),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      side: BorderSide(
-                        color: colorScheme.error.withOpacity(0.3),
                       ),
                     ),
-                    child: ListTile(
-                      leading: Icon(
-                        Icons.logout_rounded,
-                        color: colorScheme.error,
-                      ),
-                      title: Text(
-                        'Terminar Sessão',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          color: colorScheme.error,
-                          fontWeight: FontWeight.bold,
+
+                    const SizedBox(height: 28),
+
+                    // Bloco: A Minha Conta
+                    _buildSectionHeader(context, 'A Minha Conta'),
+                    if (isAuthenticated)
+                      _buildSettingsTile(
+                        context,
+                        icon: Icons.badge_outlined,
+                        title: 'Dados Pessoais da Conta',
+                        subtitle:
+                            '$userName${userEmail.isNotEmpty ? ' • $userEmail' : ''}${userPhone.isNotEmpty ? ' • $userPhone' : ''}',
+                        onTap: () => _openEditProfileSheet(
+                          context,
+                          initialName: userName,
+                          initialEmail: userEmail,
+                          initialPhone: userPhone,
                         ),
                       ),
-                      subtitle:
-                          const Text('Desconectar a sua conta com segurança'),
-                      onTap: () => _showLogoutConfirmDialog(context),
+                    _buildSettingsTile(
+                      context,
+                      icon: Icons.location_on_outlined,
+                      title: 'Moradas de Entrega',
+                      subtitle: '${cart.moradaLabel} • ${cart.moradaTexto}',
+                      onTap: () => showCustomerAddressSelectionSheet(context),
                     ),
-                  ),
+                    _buildSettingsTile(
+                      context,
+                      icon: Icons.payment_outlined,
+                      title: 'Meios de Pagamento',
+                      subtitle: _paymentDisplayLabel(cart.preferredPaymentCode),
+                      onTap: () => _openPaymentMethodsSheet(context),
+                    ),
+                    _buildSettingsTile(
+                      context,
+                      icon: Icons.notifications_none_rounded,
+                      title: 'Notificações & Privacidade',
+                      subtitle: _marketing
+                          ? 'Alertas de pedidos e promoções ativos'
+                          : 'Apenas alertas essenciais de estado do pedido',
+                      onTap: () => _openNotificationsSheet(context),
+                    ),
 
-                  const SizedBox(height: 36),
-                ],
+                    const SizedBox(height: 24),
+
+                    // Bloco: Segurança e Ajuda
+                    _buildSectionHeader(context, 'Segurança & Suporte'),
+                    _buildSettingsTile(
+                      context,
+                      icon: Icons.lock_outline_rounded,
+                      title: 'Segurança & Palavra-passe',
+                      subtitle: 'Alterar ou definir palavra-passe de acesso',
+                      onTap: () {
+                        if (!isAuthenticated) {
+                          _promptLoginIfNeeded(context);
+                          return;
+                        }
+                        _openChangePasswordSheet(context);
+                      },
+                    ),
+                    _buildSettingsTile(
+                      context,
+                      icon: Icons.support_agent_rounded,
+                      title: 'Ajuda, Suporte & Disputas',
+                      subtitle:
+                          'Abrir reclamação de pedido, consultar tickets e FAQ',
+                      onTap: () => _openSupportAndDisputesSheet(context),
+                    ),
+
+                    if (isAuthenticated) ...[
+                      const SizedBox(height: 24),
+
+                      // Botão de Terminar Sessão (apenas quando autenticado)
+                      Card(
+                        elevation: 0,
+                        color: colorScheme.errorContainer.withOpacity(0.18),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(
+                            color: colorScheme.error.withOpacity(0.3),
+                          ),
+                        ),
+                        child: ListTile(
+                          leading: Icon(
+                            Icons.logout_rounded,
+                            color: colorScheme.error,
+                          ),
+                          title: Text(
+                            'Terminar Sessão',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              color: colorScheme.error,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          subtitle:
+                              const Text('Desconectar a sua conta com segurança'),
+                          onTap: () => _showLogoutConfirmDialog(context),
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 36),
+                  ],
+                ),
               );
             },
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
@@ -465,7 +662,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                             try {
                               final dio = await _buildAuthDio();
                               if (dio != null) {
-                                await dio.patch<Map<String, dynamic>>(
+                                final resp = await dio.patch<Map<String, dynamic>>(
                                   '/api/v1/auth/profile/',
                                   data: {
                                     'nome': novoNome,
@@ -473,6 +670,14 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                                     'email': emailCtrl.text.trim(),
                                   },
                                 );
+                                final updatedPerfil = resp.data?['perfil'];
+                                if (mounted && updatedPerfil is Map<String, dynamic>) {
+                                  this.context.read<AuthBloc>().add(
+                                        UpdateUserProfileEvent(
+                                          user: UserProfile.fromJson(updatedPerfil),
+                                        ),
+                                      );
+                                }
                               }
                               if (mounted) {
                                 setState(() {
@@ -1025,7 +1230,20 @@ class _CustomerSupportAndDisputesSheetState
   }
 
   Future<Dio?> _buildAuthDio() async {
-    final token = await SecureTokenStorage().getAccessToken();
+    var token = await SecureTokenStorage().getAccessToken();
+    if ((token == null || token.isEmpty) && mounted) {
+      try {
+        final authState = context.read<AuthBloc>().state;
+        if (authState is Authenticated && authState.tokens.accessToken.isNotEmpty) {
+          token = authState.tokens.accessToken;
+          await SecureTokenStorage().saveTokens(
+            accessToken: authState.tokens.accessToken,
+            refreshToken: authState.tokens.refreshToken,
+            userRole: authState.user.tipoUtilizador,
+          );
+        }
+      } catch (_) {}
+    }
     if (token == null || token.isEmpty) return null;
     return createSecureDioClient(tokenStorage: SecureTokenStorage());
   }

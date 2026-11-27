@@ -1399,8 +1399,10 @@ class CustomerProfileView(APIView):
                 "localizacao_segundo_plano": False,
             },
         )
+        if not Morada.objects.filter(utilizador=user).exists():
+            garantir_morada_cliente_padrao(user)
         moradas = MoradaSerializer(
-            Morada.objects.filter(utilizador=user),
+            Morada.objects.filter(utilizador=user).order_by("-id"),
             many=True,
         ).data
         return Response(

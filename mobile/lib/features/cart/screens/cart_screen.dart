@@ -392,16 +392,21 @@ class CartScreen extends StatelessWidget {
     // Guarda de Visitante (Guest Mode Checkout Gate):
     // Visitantes navegam livremente e montam a sacola, mas a finalização exige autenticação
     // para definir o endereço de entrega e emitir o código PIN de validação seguro
-    final token = await SecureTokenStorage().getAccessToken();
+    var token = await SecureTokenStorage().getAccessToken();
     bool isAuthenticated = token != null && token.isNotEmpty;
-    if (!isAuthenticated) {
-      try {
-        final authState = context.read<AuthBloc>().state;
-        if (authState is AuthAuthenticated) {
-          isAuthenticated = true;
+    try {
+      final authState = context.read<AuthBloc>().state;
+      if (authState is Authenticated) {
+        isAuthenticated = true;
+        if (token == null || token.isEmpty) {
+          await SecureTokenStorage().saveTokens(
+            accessToken: authState.tokens.accessToken,
+            refreshToken: authState.tokens.refreshToken,
+            userRole: authState.user.tipoUtilizador,
+          );
         }
-      } catch (_) {}
-    }
+      }
+    } catch (_) {}
 
     if (!isAuthenticated) {
       if (!context.mounted) return;

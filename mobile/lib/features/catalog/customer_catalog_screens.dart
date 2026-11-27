@@ -19,6 +19,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/network/app_environment_config.dart';
 import '../../core/widgets/ango_network_image.dart';
 import '../../core/widgets/ango_video_player_widget.dart';
+import '../auth/auth_bloc.dart';
 import '../auth/storage/secure_token_storage.dart';
 import '../cart/cart.dart';
 import '../checkout/checkout_screen.dart';
@@ -1048,7 +1049,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _syncDefaultAddressFromBackend() async {
     try {
-      final token = await SecureTokenStorage().getAccessToken();
+      var token = await SecureTokenStorage().getAccessToken();
+      if ((token == null || token.isEmpty) && mounted) {
+        try {
+          final authState = context.read<AuthBloc>().state;
+          if (authState is Authenticated && authState.tokens.accessToken.isNotEmpty) {
+            token = authState.tokens.accessToken;
+            await SecureTokenStorage().saveTokens(
+              accessToken: authState.tokens.accessToken,
+              refreshToken: authState.tokens.refreshToken,
+              userRole: authState.user.tipoUtilizador,
+            );
+          }
+        } catch (_) {}
+      }
       if (token == null || token.isEmpty) return;
 
       final dio = createSecureDioClient(tokenStorage: SecureTokenStorage());
@@ -1205,8 +1219,14 @@ class _HomeScreenState extends State<HomeScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return BlocBuilder<StoreDiscoveryBloc, StoreDiscoveryState>(
-      builder: (context, state) {
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, authState) {
+        if (authState is Authenticated) {
+          _syncDefaultAddressFromBackend();
+        }
+      },
+      child: BlocBuilder<StoreDiscoveryBloc, StoreDiscoveryState>(
+        builder: (context, state) {
         return Scaffold(
           appBar: AppBar(
             titleSpacing: 16,
@@ -1496,6 +1516,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
       },
+    ),
     );
   }
 }
@@ -4668,7 +4689,20 @@ class _CustomerAddressSelectionSheetState
   }
 
   Future<Dio?> _buildAuthDio() async {
-    final token = await SecureTokenStorage().getAccessToken();
+    var token = await SecureTokenStorage().getAccessToken();
+    if ((token == null || token.isEmpty) && mounted) {
+      try {
+        final authState = context.read<AuthBloc>().state;
+        if (authState is Authenticated && authState.tokens.accessToken.isNotEmpty) {
+          token = authState.tokens.accessToken;
+          await SecureTokenStorage().saveTokens(
+            accessToken: authState.tokens.accessToken,
+            refreshToken: authState.tokens.refreshToken,
+            userRole: authState.user.tipoUtilizador,
+          );
+        }
+      } catch (_) {}
+    }
     if (token == null || token.isEmpty) return null;
     return createSecureDioClient(tokenStorage: SecureTokenStorage());
   }

@@ -507,16 +507,8 @@ class CheckoutRepository {
 
   CheckoutRepository({Dio? dio})
       : _dio = dio ??
-            Dio(
-              BaseOptions(
-                baseUrl: AppEnvironmentConfig.baseHttpUrl,
-                connectTimeout: const Duration(seconds: 15),
-                receiveTimeout: const Duration(seconds: 15),
-                headers: const {
-                  'Content-Type': 'application/json',
-                  'Accept': 'application/json',
-                },
-              ),
+            createSecureDioClient(
+              tokenStorage: SecureTokenStorage(),
             );
 
   Future<Options> _buildAuthOptions() async {

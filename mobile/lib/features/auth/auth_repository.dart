@@ -302,6 +302,26 @@ class AuthRepository {
     }
   }
 
+  /// Endpoint: `GET /api/v1/auth/profile/`
+  /// Obtém o perfil completo atualizado do utilizador autenticado a partir do backend.
+  Future<UserProfile?> fetchCurrentUserProfile({String? accessToken}) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        _buildUrl('profile'),
+        options: accessToken != null && accessToken.isNotEmpty
+            ? Options(headers: {'Authorization': 'Bearer $accessToken'})
+            : null,
+      );
+      final data = response.data;
+      if (data is Map<String, dynamic> && data['perfil'] is Map<String, dynamic>) {
+        return UserProfile.fromJson(data['perfil'] as Map<String, dynamic>);
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Mapeador centralizado de exceções HTTP do Dio para exceções de domínio tipificadas.
   AuthException _handleDioException(DioException e) {
     final response = e.response;

@@ -106,6 +106,7 @@ class JwtAuthInterceptor extends Interceptor {
 
   // Mecanismo de bloqueio (Lock) para serializar renovações concorrentes
   Completer<String?>? _refreshCompleter;
+  bool _lastRefreshRejectedByServer = false;
 
   JwtAuthInterceptor({
     required ISecureTokenStorage tokenStorage,
@@ -120,6 +121,7 @@ class JwtAuthInterceptor extends Interceptor {
             headers: {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
+              'Accept-Encoding': 'gzip',
             },
           ),
         ) {
@@ -150,10 +152,13 @@ class JwtAuthInterceptor extends Interceptor {
       return handler.next(options);
     }
 
-    // 3. Recupera o token de acesso do cofre seguro
-    final accessToken = await _tokenStorage.getAccessToken();
-    if (accessToken != null && accessToken.isNotEmpty) {
-      options.headers['Authorization'] = 'Bearer $accessToken';
+    // 3. Recupera o token de acesso do cofre seguro (ou mantém se já definido nas options)
+    final existingAuth = options.headers['Authorization']?.toString() ?? '';
+    if (existingAuth.isEmpty) {
+      final accessToken = await _tokenStorage.getAccessToken();
+      if (accessToken != null && accessToken.isNotEmpty) {
+        options.headers['Authorization'] = 'Bearer $accessToken';
+      }
     }
 
     return handler.next(options);
@@ -178,12 +183,15 @@ class JwtAuthInterceptor extends Interceptor {
           final client = createSecureDioClient(tokenStorage: _tokenStorage);
           final response = await client.fetch(retryOptions);
           return handler.resolve(response);
-        } else {
+        } else if (_lastRefreshRejectedByServer) {
+          // Só limpa os tokens se o servidor tiver explicitamente rejeitado o refresh token (401/403)
           await _handleLogout();
           return handler.next(err);
         }
       } catch (e) {
-        await _handleLogout();
+        if (_lastRefreshRejectedByServer) {
+          await _handleLogout();
+        }
         return handler.next(err);
       }
     }
@@ -199,6 +207,7 @@ class JwtAuthInterceptor extends Interceptor {
     }
 
     _refreshCompleter = Completer<String?>();
+    _lastRefreshRejectedByServer = false;
 
     try {
       final currentRefreshToken = await _tokenStorage.getRefreshToken();
@@ -227,6 +236,13 @@ class JwtAuthInterceptor extends Interceptor {
         }
       }
 
+      _refreshCompleter!.complete(null);
+      return null;
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      if (code == 401 || code == 403) {
+        _lastRefreshRejectedByServer = true;
+      }
       _refreshCompleter!.complete(null);
       return null;
     } catch (_) {

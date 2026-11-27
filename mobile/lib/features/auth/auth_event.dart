@@ -3,6 +3,8 @@
 
 import 'package:equatable/equatable.dart';
 
+import 'models/auth_models.dart';
+
 abstract class AuthEvent extends Equatable {
   const AuthEvent();
 
@@ -136,5 +138,15 @@ class LoginWithPasswordRequested extends AuthEvent {
 
   @override
   List<Object?> get props => [email, password];
+}
+
+/// Disparado quando os dados do perfil do utilizador autenticado são atualizados (ex: no ecrã de Perfil).
+class UpdateUserProfileEvent extends AuthEvent {
+  final UserProfile user;
+
+  const UpdateUserProfileEvent({required this.user});
+
+  @override
+  List<Object?> get props => [user];
 }
 

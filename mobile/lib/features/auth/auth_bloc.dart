@@ -1,6 +1,7 @@
 /// Gestão de Estado da Autenticação utilizando o padrão BLoC (`flutter_bloc`).
 /// Coordena o fluxo de login passwordless por SMS (OTP), validação de maioridade e persistência segura de tokens JWT.
 
+import 'dart:convert';
 import 'dart:developer' as developer;
 import 'package:dio/dio.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -36,6 +37,58 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<VerifyEmailOtpSubmitted>(_onVerifyEmailOtpSubmitted);
     on<GoogleLoginSubmitted>(_onGoogleLoginSubmitted);
     on<LoginWithPasswordRequested>(_onLoginWithPasswordRequested);
+    on<UpdateUserProfileEvent>(_onUpdateUserProfileEvent);
+  }
+
+  /// Guarda de forma atómica os tokens JWT, o papel funcional e o JSON completo do perfil.
+  Future<void> _persistAuthenticatedSession({
+    required AuthTokens tokens,
+    required UserProfile user,
+  }) async {
+    await _tokenStorage.saveTokens(
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      userRole: user.tipoUtilizador,
+    );
+    try {
+      await _tokenStorage.saveUserProfileJson(jsonEncode(user.toJson()));
+    } catch (_) {}
+  }
+
+  /// Extrai claims do payload JWT caso o JSON do perfil ainda não esteja em cache.
+  UserProfile _decodeUserFromJwtOrFallback({
+    required String jwtToken,
+    String? storedRole,
+  }) {
+    try {
+      final parts = jwtToken.split('.');
+      if (parts.length == 3) {
+        final normalized = base64Url.normalize(parts[1]);
+        final payloadStr = utf8.decode(base64Url.decode(normalized));
+        final payload = jsonDecode(payloadStr);
+        if (payload is Map<String, dynamic>) {
+          final nomeClaim = (payload['nome'] ?? '').toString().trim();
+          return UserProfile(
+            id: (payload['user_id'] ?? payload['id'] ?? 'cached-session').toString(),
+            telemovel: (payload['telemovel'] ?? '').toString(),
+            nome: nomeClaim.isNotEmpty ? nomeClaim : 'Cliente',
+            email: (payload['email'] ?? '').toString(),
+            estado: (payload['estado'] ?? 'ATIVO').toString(),
+            tipoUtilizador: (payload['tipo_utilizador'] ?? storedRole ?? 'CLIENTE')
+                .toString()
+                .toUpperCase(),
+          );
+        }
+      }
+    } catch (_) {}
+    return UserProfile(
+      id: 'cached-session',
+      telemovel: '',
+      nome: 'Cliente',
+      email: '',
+      estado: 'ATIVO',
+      tipoUtilizador: (storedRole ?? 'CLIENTE').toUpperCase(),
+    );
   }
 
   void _onRetryAuthRequested(
@@ -45,7 +98,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(const AuthInitial());
   }
 
-  /// Verifica se já existem credenciais válidas persistidas localmente no arranque da aplicação.
+  /// Verifica se já existem credenciais válidas persistidas localmente no arranque da aplicação
+  /// e sincroniza os dados reais do perfil a partir do backend (`/api/v1/auth/profile/`).
   Future<void> _onCheckAuthStatusRequested(
     CheckAuthStatusRequested event,
     Emitter<AuthState> emit,
@@ -54,25 +108,52 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final hasToken = await _tokenStorage.hasValidToken();
       if (hasToken) {
         final accessToken = await _tokenStorage.getAccessToken();
-        final refreshToken = await _tokenStorage.getRefreshToken();
+        final refreshToken = await _tokenStorage.getRefreshToken() ?? '';
+        final storedRole = await _tokenStorage.getUserRole();
 
-        if (accessToken != null && refreshToken != null) {
-          // Cria tokens e perfil mínimo para manter a sessão ativa
+        if (accessToken != null && accessToken.isNotEmpty) {
           final tokens = AuthTokens(
             accessToken: accessToken,
             refreshToken: refreshToken,
           );
 
-          // Em produção, pode ser feita uma chamada a /api/v1/auth/me/ para obter o perfil atualizado
-          final cachedUser = UserProfile(
-            id: 'cached-session',
-            telemovel: '',
-            nome: 'Utilizador',
-            email: '',
-            estado: 'ATIVO',
+          // 1. Tenta restaurar o perfil completo guardado localmente (0ms)
+          UserProfile? cachedUser;
+          final cachedJson = await _tokenStorage.getUserProfileJson();
+          if (cachedJson != null && cachedJson.isNotEmpty) {
+            try {
+              final decoded = jsonDecode(cachedJson);
+              if (decoded is Map<String, dynamic>) {
+                cachedUser = UserProfile.fromJson(decoded);
+              }
+            } catch (_) {}
+          }
+
+          // 2. Se não houver JSON guardado, decodifica os claims do próprio token JWT (refresh/access)
+          cachedUser ??= _decodeUserFromJwtOrFallback(
+            jwtToken: refreshToken.isNotEmpty ? refreshToken : accessToken,
+            storedRole: storedRole,
           );
 
           emit(Authenticated(tokens: tokens, user: cachedUser));
+
+          // 3. Sincroniza o perfil atualizado diretamente com o backend (/api/v1/auth/profile/)
+          final freshProfile = await _authRepository.fetchCurrentUserProfile(
+            accessToken: accessToken,
+          );
+          if (freshProfile != null) {
+            final latestAccess = await _tokenStorage.getAccessToken() ?? accessToken;
+            final latestRefresh = await _tokenStorage.getRefreshToken() ?? refreshToken;
+            final updatedTokens = AuthTokens(
+              accessToken: latestAccess,
+              refreshToken: latestRefresh,
+            );
+            await _persistAuthenticatedSession(
+              tokens: updatedTokens,
+              user: freshProfile,
+            );
+            emit(Authenticated(tokens: updatedTokens, user: freshProfile));
+          }
           return;
         }
       }
@@ -80,6 +161,35 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     } catch (e) {
       developer.log('Erro ao checar status de autenticação: $e', name: 'AuthBloc', error: e);
       emit(const Unauthenticated());
+    }
+  }
+
+  /// Atualiza o UserProfile em memória e no armazenamento seguro após edição no Perfil.
+  Future<void> _onUpdateUserProfileEvent(
+    UpdateUserProfileEvent event,
+    Emitter<AuthState> emit,
+  ) async {
+    final current = state;
+    if (current is Authenticated) {
+      await _persistAuthenticatedSession(
+        tokens: current.tokens,
+        user: event.user,
+      );
+      emit(Authenticated(tokens: current.tokens, user: event.user));
+    } else {
+      final accessToken = await _tokenStorage.getAccessToken() ?? '';
+      final refreshToken = await _tokenStorage.getRefreshToken() ?? '';
+      if (accessToken.isNotEmpty) {
+        final tokens = AuthTokens(
+          accessToken: accessToken,
+          refreshToken: refreshToken,
+        );
+        await _persistAuthenticatedSession(
+          tokens: tokens,
+          user: event.user,
+        );
+        emit(Authenticated(tokens: tokens, user: event.user));
+      }
     }
   }
 
@@ -272,10 +382,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       if (result.isRegistrationRequired) {
         emit(OtpVerifiedSuccess(email: event.email));
       } else if (result.tokens != null && result.userProfile != null) {
-        await _tokenStorage.saveTokens(
-          accessToken: result.tokens!.accessToken,
-          refreshToken: result.tokens!.refreshToken,
-          userRole: result.userProfile!.tipoUtilizador,
+        await _persistAuthenticatedSession(
+          tokens: result.tokens!,
+          user: result.userProfile!,
         );
         emit(Authenticated(tokens: result.tokens!, user: result.userProfile!));
       } else {
@@ -345,10 +454,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     try {
       final result = await _authRepository.authenticateWithGoogle(event.token!);
       if (result.tokens != null && result.userProfile != null) {
-        await _tokenStorage.saveTokens(
-          accessToken: result.tokens!.accessToken,
-          refreshToken: result.tokens!.refreshToken,
-          userRole: result.userProfile!.tipoUtilizador,
+        await _persistAuthenticatedSession(
+          tokens: result.tokens!,
+          user: result.userProfile!,
         );
         emit(Authenticated(tokens: result.tokens!, user: result.userProfile!));
       } else {
@@ -379,11 +487,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           ),
         );
       } else if (result.tokens != null && result.userProfile != null) {
-        // Utilizador já registado: persiste os tokens JWT no armazenamento seguro (RN-006)
-        await _tokenStorage.saveTokens(
-          accessToken: result.tokens!.accessToken,
-          refreshToken: result.tokens!.refreshToken,
-          userRole: result.userProfile!.tipoUtilizador,
+        // Utilizador já registado: persiste os tokens JWT e perfil no armazenamento seguro (RN-006)
+        await _persistAuthenticatedSession(
+          tokens: result.tokens!,
+          user: result.userProfile!,
         );
 
         emit(
@@ -477,11 +584,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       );
 
       if (result.tokens != null && result.userProfile != null) {
-        // Persiste as credenciais JWT finais no dispositivo (RN-006)
-        await _tokenStorage.saveTokens(
-          accessToken: result.tokens!.accessToken,
-          refreshToken: result.tokens!.refreshToken,
-          userRole: result.userProfile!.tipoUtilizador,
+        // Persiste as credenciais JWT e perfil finais no dispositivo (RN-006)
+        await _persistAuthenticatedSession(
+          tokens: result.tokens!,
+          user: result.userProfile!,
         );
 
         emit(
@@ -553,10 +659,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       );
 
       if (result.tokens != null && result.userProfile != null) {
-        await _tokenStorage.saveTokens(
-          accessToken: result.tokens!.accessToken,
-          refreshToken: result.tokens!.refreshToken,
-          userRole: result.userProfile!.tipoUtilizador,
+        await _persistAuthenticatedSession(
+          tokens: result.tokens!,
+          user: result.userProfile!,
         );
 
         emit(

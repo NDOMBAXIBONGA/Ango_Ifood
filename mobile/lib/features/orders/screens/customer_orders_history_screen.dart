@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../core/network/app_environment_config.dart';
+import '../../auth/auth_bloc.dart';
 import '../../auth/screens/auth_screen.dart';
 import '../../auth/storage/secure_token_storage.dart';
 import '../../auth/theme/role_theme.dart';
@@ -81,7 +83,21 @@ class _CustomerOrdersHistoryScreenState
   }
 
   Future<void> _loadOrders({bool showLoading = true}) async {
-    final token = await _tokenStorage.getAccessToken();
+    var token = await _tokenStorage.getAccessToken();
+    if ((token == null || token.isEmpty) && mounted) {
+      try {
+        final authState = context.read<AuthBloc>().state;
+        if (authState is Authenticated && authState.tokens.accessToken.isNotEmpty) {
+          token = authState.tokens.accessToken;
+          await _tokenStorage.saveTokens(
+            accessToken: authState.tokens.accessToken,
+            refreshToken: authState.tokens.refreshToken,
+            userRole: authState.user.tipoUtilizador,
+          );
+        }
+      } catch (_) {}
+    }
+
     final hasToken = token != null && token.isNotEmpty;
     if (!hasToken) {
       if (mounted) {
@@ -429,58 +445,74 @@ class _CustomerOrdersHistoryScreenState
     final activeOrders = _orders.where((o) => o.isAtivo).toList();
     final pastOrders = _orders.where((o) => !o.isAtivo).toList();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Os Meus Pedidos'),
-        actions: [
-          IconButton(
-            tooltip: 'Atualizar Pedidos',
-            onPressed: _loadOrders,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: colorScheme.primary,
-          unselectedLabelColor: colorScheme.onSurfaceVariant,
-          indicatorColor: colorScheme.primary,
-          tabs: [
-            Tab(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text('Em Andamento'),
-                  if (activeOrders.isNotEmpty) ...[
-                    const SizedBox(width: 8),
-                    Badge.count(
-                      count: activeOrders.length,
-                      backgroundColor: colorScheme.primary,
-                    ),
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (state is Authenticated) {
+          setState(() {
+            _hasToken = true;
+          });
+          _loadOrders(showLoading: true);
+        } else if (state is Unauthenticated) {
+          setState(() {
+            _hasToken = false;
+            _orders = [];
+            _isLoading = false;
+          });
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Os Meus Pedidos'),
+          actions: [
+            IconButton(
+              tooltip: 'Atualizar Pedidos',
+              onPressed: _loadOrders,
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          ],
+          bottom: TabBar(
+            controller: _tabController,
+            labelColor: colorScheme.primary,
+            unselectedLabelColor: colorScheme.onSurfaceVariant,
+            indicatorColor: colorScheme.primary,
+            tabs: [
+              Tab(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text('Em Andamento'),
+                    if (activeOrders.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Badge.count(
+                        count: activeOrders.length,
+                        backgroundColor: colorScheme.primary,
+                      ),
+                    ],
                   ],
+                ),
+              ),
+              const Tab(text: 'Anteriores'),
+            ],
+          ),
+        ),
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildOrderList(
+                    context,
+                    orders: activeOrders,
+                    isActiveTab: true,
+                  ),
+                  _buildOrderList(
+                    context,
+                    orders: pastOrders,
+                    isActiveTab: false,
+                  ),
                 ],
               ),
-            ),
-            const Tab(text: 'Anteriores'),
-          ],
-        ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : TabBarView(
-              controller: _tabController,
-              children: [
-                _buildOrderList(
-                  context,
-                  orders: activeOrders,
-                  isActiveTab: true,
-                ),
-                _buildOrderList(
-                  context,
-                  orders: pastOrders,
-                  isActiveTab: false,
-                ),
-              ],
-            ),
     );
   }
 
@@ -489,7 +521,12 @@ class _CustomerOrdersHistoryScreenState
     required List<CustomerOrderSummaryModel> orders,
     required bool isActiveTab,
   }) {
-    if (!_hasToken) {
+    final authState = context.watch<AuthBloc>().state;
+    final isAuthenticated = _hasToken ||
+        (authState is Authenticated) ||
+        (SecureTokenStorage.cachedAccessToken?.isNotEmpty ?? false);
+
+    if (!isAuthenticated) {
       return RefreshIndicator(
         onRefresh: _loadOrders,
         child: SingleChildScrollView(

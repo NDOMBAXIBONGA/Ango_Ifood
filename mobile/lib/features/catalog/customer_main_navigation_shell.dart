@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/network/app_environment_config.dart';
+import '../auth/auth_bloc.dart';
 import '../auth/storage/secure_token_storage.dart';
 import '../cart/cart.dart';
 import '../orders/screens/customer_orders_history_screen.dart';
@@ -31,6 +32,7 @@ class _CustomerMainNavigationShellState
     extends State<CustomerMainNavigationShell> {
   late int _currentIndex;
   int _ordersRefreshCount = 0;
+  int _profileRefreshCount = 0;
   late final CatalogRepository _catalogRepository;
 
   @override
@@ -48,6 +50,8 @@ class _CustomerMainNavigationShellState
       _currentIndex = index;
       if (index == 2) {
         _ordersRefreshCount++;
+      } else if (index == 3) {
+        _profileRefreshCount++;
       }
     });
   }
@@ -57,51 +61,62 @@ class _CustomerMainNavigationShellState
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return AnimatedBuilder(
-      animation: CartService.instance,
-      builder: (context, _) {
-        final totalCartItems = CartService.instance.totalItemsCount;
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (state is Authenticated || state is Unauthenticated) {
+          setState(() {
+            _ordersRefreshCount++;
+            _profileRefreshCount++;
+          });
+        }
+      },
+      child: AnimatedBuilder(
+        animation: CartService.instance,
+        builder: (context, _) {
+          final totalCartItems = CartService.instance.totalItemsCount;
 
-        return RepositoryProvider<CatalogRepository>.value(
-          value: _catalogRepository,
-          child: MultiBlocProvider(
-            providers: [
-              BlocProvider<StoreDiscoveryBloc>(
-                create: (ctx) => StoreDiscoveryBloc(
-                  repository: _catalogRepository,
-                  initialAddress: const CustomerGeoAddress(
-                    label: 'Minha Morada',
-                    fullAddress: 'Luanda, Angola',
-                    latitude: -8.839988,
-                    longitude: 13.289437,
-                  ),
-                )..add(
-                    const LoadStoresForLocationEvent(
-                      address: CustomerGeoAddress(
-                        label: 'Minha Morada',
-                        fullAddress: 'Luanda, Angola',
-                        latitude: -8.839988,
-                        longitude: 13.289437,
+          return RepositoryProvider<CatalogRepository>.value(
+            value: _catalogRepository,
+            child: MultiBlocProvider(
+              providers: [
+                BlocProvider<StoreDiscoveryBloc>(
+                  create: (ctx) => StoreDiscoveryBloc(
+                    repository: _catalogRepository,
+                    initialAddress: const CustomerGeoAddress(
+                      label: 'Minha Morada',
+                      fullAddress: 'Luanda, Angola',
+                      latitude: -8.839988,
+                      longitude: 13.289437,
+                    ),
+                  )..add(
+                      const LoadStoresForLocationEvent(
+                        address: CustomerGeoAddress(
+                          label: 'Minha Morada',
+                          fullAddress: 'Luanda, Angola',
+                          latitude: -8.839988,
+                          longitude: 13.289437,
+                        ),
                       ),
                     ),
-                  ),
-              ),
-            ],
-            child: Scaffold(
-              body: IndexedStack(
-                index: _currentIndex,
-                children: [
-                  const HomeScreen(),
-                  CartScreen(
-                    onExploreTap: () => _onTabSelected(0),
-                  ),
-                  CustomerOrdersHistoryScreen(
-                    onExploreTap: () => _onTabSelected(0),
-                    refreshTrigger: _ordersRefreshCount,
-                  ),
-                  const CustomerProfileScreen(),
-                ],
-              ),
+                ),
+              ],
+              child: Scaffold(
+                body: IndexedStack(
+                  index: _currentIndex,
+                  children: [
+                    const HomeScreen(),
+                    CartScreen(
+                      onExploreTap: () => _onTabSelected(0),
+                    ),
+                    CustomerOrdersHistoryScreen(
+                      onExploreTap: () => _onTabSelected(0),
+                      refreshTrigger: _ordersRefreshCount,
+                    ),
+                    CustomerProfileScreen(
+                      refreshTrigger: _profileRefreshCount,
+                    ),
+                  ],
+                ),
               bottomNavigationBar: NavigationBar(
                 selectedIndex: _currentIndex,
                 onDestinationSelected: _onTabSelected,
@@ -141,11 +156,12 @@ class _CustomerMainNavigationShellState
                     label: 'Perfil',
                   ),
                 ],
+                ],
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }
