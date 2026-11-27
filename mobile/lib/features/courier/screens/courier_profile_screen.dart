@@ -15,24 +15,24 @@ import '../courier_flow_screens.dart';
 class CourierProfileScreen extends StatelessWidget {
   const CourierProfileScreen({super.key});
 
-  String _formatVehicleType(CourierVehicleType type) {
+  String _formatVehicleType(VehicleType type) {
     switch (type) {
-      case CourierVehicleType.mota:
+      case VehicleType.mota:
         return 'Mota / Motociclo';
-      case CourierVehicleType.carro:
+      case VehicleType.carro:
         return 'Automóvel Ligeiro';
-      case CourierVehicleType.bicicleta:
+      case VehicleType.bicicleta:
         return 'Bicicleta';
     }
   }
 
-  String _vehicleCode(CourierVehicleType type) {
+  String _vehicleCode(VehicleType type) {
     switch (type) {
-      case CourierVehicleType.mota:
+      case VehicleType.mota:
         return 'MOTA';
-      case CourierVehicleType.carro:
+      case VehicleType.carro:
         return 'CARRO';
-      case CourierVehicleType.bicicleta:
+      case VehicleType.bicicleta:
         return 'BICICLETA';
     }
   }
@@ -66,7 +66,7 @@ class CourierProfileScreen extends StatelessWidget {
             tooltip: 'Atualizar Perfil',
             icon: const Icon(Icons.refresh_rounded, color: Color(0xFF00E676)),
             onPressed: () {
-              context.read<CourierBloc>().add(const LoadCourierDashboardEvent('current'));
+              context.read<CourierBloc>().add(const LoadCourierProfileEvent());
             },
           ),
         ],
@@ -87,7 +87,9 @@ class CourierProfileScreen extends StatelessWidget {
 
           return BlocBuilder<CourierBloc, CourierState>(
             builder: (context, courierState) {
-              final profile = courierState.profile;
+              final CourierProfileModel? profile = courierState is CourierActiveLoaded
+                  ? courierState.profile
+                  : (courierState is CourierRegistrationPending ? courierState.profile : null);
               final driverName = (profile != null && profile.nome.isNotEmpty)
                   ? profile.nome
                   : fallbackName;
@@ -98,7 +100,7 @@ class CourierProfileScreen extends StatelessWidget {
                   ? profile.telemovel
                   : fallbackPhone;
               final score = profile?.scoreReputacao ?? 5.0;
-              final isVerified = profile?.isApprovedByAdmin ?? true;
+              final isVerified = profile == null || profile.onboardingStatus == OnboardingStatus.aprovado;
               final vehicleLabel = profile != null
                   ? '${_formatVehicleType(profile.vehicleType)} (${profile.marcaModeloVeiculo})'
                   : 'Mota / Motociclo (Haojue 125)';
@@ -125,9 +127,9 @@ class CourierProfileScreen extends StatelessWidget {
                               radius: 46,
                               backgroundColor: const Color(0xFF00E676).withOpacity(0.18),
                               child: Icon(
-                                profile?.vehicleType == CourierVehicleType.carro
+                                profile?.vehicleType == VehicleType.carro
                                     ? Icons.directions_car_filled_rounded
-                                    : profile?.vehicleType == CourierVehicleType.bicicleta
+                                    : profile?.vehicleType == VehicleType.bicicleta
                                         ? Icons.pedal_bike_rounded
                                         : Icons.two_wheeler_rounded,
                                 size: 48,
@@ -461,7 +463,7 @@ class CourierProfileScreen extends StatelessWidget {
   }
 
   void _showEditVehicleModal(BuildContext context, CourierProfileModel? profile) {
-    String selectedType = _vehicleCode(profile?.vehicleType ?? CourierVehicleType.mota);
+    String selectedType = _vehicleCode(profile?.vehicleType ?? VehicleType.mota);
     final modelCtrl = TextEditingController(
       text: profile?.marcaModeloVeiculo ?? 'Mota Haojue 125',
     );

@@ -22,7 +22,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/network/app_environment_config.dart';
-import '../auth/network/jwt_interceptor.dart';
 import '../auth/storage/secure_token_storage.dart';
 
 // ============================================================================
@@ -236,7 +235,6 @@ class CourierWalletRepository implements ICourierWalletRepository {
       : _dio = dio ??
             createSecureDioClient(
               tokenStorage: SecureTokenStorage(),
-              baseUrl: AppEnvironmentConfig.baseHttpUrl,
             );
 
   @override
