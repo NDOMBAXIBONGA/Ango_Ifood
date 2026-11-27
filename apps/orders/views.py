@@ -264,6 +264,17 @@ class CheckoutViewSet(viewsets.GenericViewSet):
                 pedido.full_clean()
                 pedido.save()
 
+                try:
+                    from apps.logistics.models import Entrega
+                    detalhes_ent = cotacao.get("detalhes_entrega") or {}
+                    dist_m = int(detalhes_ent.get("distancia_metros") or 2600)
+                    Entrega.objects.get_or_create(
+                        pedido=pedido,
+                        defaults={"distancia_metros": max(500, dist_m)},
+                    )
+                except Exception as ent_err:
+                    logger.warning("Aviso ao criar Entrega inicial para pedido %s: %s", pedido.id, ent_err)
+
                 estado_inicial_registado = pedido.estado  # 'CRIADO' ('1. Criado (Carrinho Validado)')
 
                 # Passo B: Cria as respetivas linhas de pedido (`LinhaPedido`) e opções (`LinhaPedidoOpcao`)
@@ -647,10 +658,13 @@ class PartnerOrderViewSet(viewsets.ViewSet):
         if is_historico:
             estados_kds = [
                 Pedido.EstadoPedido.PRONTO,
-                Pedido.EstadoPedido.ATRIBUIDO,
-                Pedido.EstadoPedido.A_CAMINHO,
+                Pedido.EstadoPedido.RECOLHIDO,
+                Pedido.EstadoPedido.EM_TRANSITO,
                 Pedido.EstadoPedido.ENTREGUE,
+                Pedido.EstadoPedido.CONCLUIDO,
                 Pedido.EstadoPedido.CANCELADO,
+                Pedido.EstadoPedido.REJEITADO,
+                Pedido.EstadoPedido.FALHA_ENTREGA,
             ]
         else:
             estados_kds = [
@@ -760,6 +774,12 @@ class PartnerOrderViewSet(viewsets.ViewSet):
         except Exception:
             pedido.estado = Pedido.EstadoPedido.PRONTO
             pedido.save(update_fields=["estado"])
+
+        try:
+            from apps.logistics.models import Entrega
+            Entrega.objects.get_or_create(pedido=pedido, defaults={"distancia_metros": 2600})
+        except Exception:
+            pass
 
         return Response({
             "mensagem": f"Pedido #{str(pedido.id)[:8]} marcado como pronto para recolha pelo estafeta!",

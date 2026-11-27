@@ -291,11 +291,15 @@ class PedidoConfirmadoOutputSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_pin_entrega(self, obj: Pedido) -> str:
-        """RN-094: Devolve o PIN de 4 dígitos de confirmação de entrega na porta do cliente."""
+        """RN-094 / RN-095: Devolve o PIN real de 4 dígitos da Entrega associada ao pedido."""
         try:
-            entrega = getattr(obj, "entrega", None)
-            if entrega and getattr(entrega, "pin_confirmacao", None):
-                return str(entrega.pin_confirmacao)
+            entrega = getattr(obj, "entrega_logistica", None)
+            if entrega and getattr(entrega, "pin_entrega", None):
+                return str(entrega.pin_entrega)
+            from apps.logistics.models import Entrega
+            entrega_db, _ = Entrega.objects.get_or_create(pedido=obj)
+            if entrega_db and entrega_db.pin_entrega:
+                return str(entrega_db.pin_entrega)
         except Exception:
             pass
         return f"{(int(obj.id.hex[:8], 16) % 9000) + 1000:04d}"

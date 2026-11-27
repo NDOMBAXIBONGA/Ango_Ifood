@@ -1392,6 +1392,48 @@ class _CourierHomepageScreenState extends State<CourierHomepageScreen> with Sing
           padding: const EdgeInsets.symmetric(vertical: 12),
           children: [
             // 1. Resumo dos Ganhos e Métricas de Hoje (RN-059)
+            if (widget.profile.corridaAtivaId != null && widget.profile.corridaAtivaId!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(left: 20, right: 20, bottom: 14),
+                child: InkWell(
+                  onTap: widget.onTripAccepted,
+                  borderRadius: BorderRadius.circular(18),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00C853).withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: const Color(0xFF00E676), width: 1.5),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.delivery_dining_rounded, color: Color(0xFF00E676), size: 28),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Corrida Ativa em Curso!',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              Text(
+                                'Toque aqui para abrir o mapa e acompanhar a entrega.',
+                                style: TextStyle(color: Colors.white70, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF00E676), size: 16),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Container(

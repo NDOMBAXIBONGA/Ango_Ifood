@@ -142,6 +142,10 @@ def calcular_rota_e_frete(
                     "preco_aoa": preco_aoa,
                     "moeda": "AOA",
                     "geometria": coordenadas_geojson,
+                    "geometria_rota": {
+                        "type": "LineString",
+                        "coordinates": coordenadas_geojson,
+                    },
                     "fonte": "osrm",
                 }
             else:
@@ -187,5 +191,9 @@ def calcular_rota_e_frete(
         "preco_aoa": preco_aoa,
         "moeda": "AOA",
         "geometria": geometria_fallback,
+        "geometria_rota": {
+            "type": "LineString",
+            "coordinates": geometria_fallback,
+        },
         "fonte": "haversine_fallback",
     }

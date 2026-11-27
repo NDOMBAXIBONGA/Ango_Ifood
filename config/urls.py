@@ -45,7 +45,7 @@ def health_check(request):
         return JsonResponse(
             {
                 "status": "healthy",
-                "version": "v1.0.16-courier-accept-pop-fix",
+                "version": "v1.0.17-courier-zero-fault-suite",
                 "service": "delivery-backend-api",
                 "timestamp": timezone.now().isoformat(),
             },

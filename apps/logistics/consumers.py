@@ -451,6 +451,9 @@ class TrackingEntregaConsumer(AsyncJsonWebsocketConsumer):
 
         heading = float(content.get("heading") or 0.0)
         velocidade = float(content.get("velocidade") or 0.0)
+        ts_iso = content.get("timestamp") or timezone.now().isoformat()
+
+        estafeta_id_str = await self._persistir_gps_estafeta(self.pedido_id, lat, lon)
 
         # Transmite imediatamente para todos os clientes conectados na sala da entrega
         await self.channel_layer.group_send(
@@ -461,9 +464,43 @@ class TrackingEntregaConsumer(AsyncJsonWebsocketConsumer):
                 "lon": lon,
                 "heading": heading,
                 "velocidade": velocidade,
-                "timestamp": content.get("timestamp") or timezone.now().isoformat(),
+                "timestamp": ts_iso,
             },
         )
+
+        # Também transmite para o grupo canónico de OrderTrackingConsumer (App Cliente)
+        await self.channel_layer.group_send(
+            f"group_order_tracking_{self.pedido_id}",
+            {
+                "type": "delivery_location_updated",
+                "event": "delivery.location_updated",
+                "pedido_id": self.pedido_id,
+                "estafeta_id": estafeta_id_str or "",
+                "latitude": lat,
+                "longitude": lon,
+                "heading": heading,
+                "speed": velocidade,
+                "precisao_metros": 5.0,
+                "timestamp": ts_iso,
+            },
+        )
+
+    @database_sync_to_async
+    def _persistir_gps_estafeta(self, pedido_id: str, lat: float, lon: float) -> Optional[str]:
+        """Persiste a última posição GPS do estafeta no PostGIS (SRID 4326)."""
+        try:
+            uid = uuid.UUID(str(pedido_id))
+            entrega = Entrega.objects.filter(pedido_id=uid).select_related("estafeta").first()
+            if not entrega:
+                entrega = Entrega.objects.filter(pk=uid).select_related("estafeta").first()
+            estafeta = entrega.estafeta if entrega else Estafeta.objects.filter(is_online=True).first()
+            if estafeta:
+                estafeta.ultima_geolocalizacao = Point(lon, lat, srid=4326)
+                estafeta.save(update_fields=["ultima_geolocalizacao"])
+                return str(estafeta.id)
+        except Exception:
+            pass
+        return None
 
     async def broadcast_posicao_estafeta(self, event):
         """

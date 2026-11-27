@@ -552,22 +552,51 @@ class CourierWalletBloc extends Bloc<CourierWalletEvent, CourierWalletState> {
 // 5. CAMADA DE APRESENTAÇÃO (UI): CourierWalletScreen
 // ============================================================================
 
-class CourierWalletScreen extends StatelessWidget {
+class CourierWalletScreen extends StatefulWidget {
   final ICourierWalletRepository? repository;
   final String courierId;
+  final int refreshTrigger;
 
   const CourierWalletScreen({
     super.key,
     this.repository,
     this.courierId = 'est-uuid-42',
+    this.refreshTrigger = 0,
   });
 
   @override
+  State<CourierWalletScreen> createState() => _CourierWalletScreenState();
+}
+
+class _CourierWalletScreenState extends State<CourierWalletScreen> {
+  late final CourierWalletBloc _bloc;
+
+  @override
+  void initState() {
+    super.initState();
+    _bloc = CourierWalletBloc(
+      repository: widget.repository ?? CourierWalletRepository(),
+    )..add(LoadCourierWalletEvent(widget.courierId));
+  }
+
+  @override
+  void didUpdateWidget(covariant CourierWalletScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.refreshTrigger != oldWidget.refreshTrigger) {
+      _bloc.add(const RefreshCourierWalletEvent());
+    }
+  }
+
+  @override
+  void dispose() {
+    _bloc.close();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return BlocProvider<CourierWalletBloc>(
-      create: (context) => CourierWalletBloc(
-        repository: repository ?? CourierWalletRepository(),
-      )..add(LoadCourierWalletEvent(courierId)),
+    return BlocProvider<CourierWalletBloc>.value(
+      value: _bloc,
       child: const _CourierWalletView(),
     );
   }

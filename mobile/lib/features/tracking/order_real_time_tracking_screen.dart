@@ -493,15 +493,7 @@ class _OrderRealTimeTrackingScreenState extends State<OrderRealTimeTrackingScree
     _demoSimulationTimer = Timer.periodic(const Duration(seconds: 4), (_) async {
       if (!mounted) return;
       try {
-        final token = await SecureTokenStorage().getAccessToken();
-        final dio = Dio(BaseOptions(
-          baseUrl: AppEnvironmentConfig.baseHttpUrl,
-          connectTimeout: const Duration(seconds: 8),
-          receiveTimeout: const Duration(seconds: 8),
-          headers: {
-            if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-          },
-        ));
+        final dio = createSecureDioClient(tokenStorage: SecureTokenStorage());
         final resp = await dio.get<Map<String, dynamic>>('/api/v1/logistics/orders/${widget.pedidoId}/tracking/');
         if (resp.data != null && mounted) {
           final est = resp.data!['estafeta'] as Map<String, dynamic>?;

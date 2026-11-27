@@ -320,16 +320,8 @@ class PartnerTerminalBloc extends Bloc<PartnerTerminalEvent, PartnerTerminalStat
     emit(state.copyWith(isProcessingAction: true, isAudioAlertActive: false));
 
     try {
-      final token = await SecureTokenStorage().getAccessToken();
-      final dio = Dio(BaseOptions(
-        baseUrl: AppEnvironmentConfig.baseHttpUrl,
-        connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(seconds: 15),
-        headers: {
-          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-        },
-      ));
-      await dio.post(
+      final dio = createSecureDioClient(tokenStorage: SecureTokenStorage());
+      await dio.post<dynamic>(
         '/api/v1/partner/store/orders/${event.pedidoId}/accept/',
         data: {'tempo_preparacao_minutos': event.tempoPreparacaoMinutos},
       );
@@ -367,16 +359,8 @@ class PartnerTerminalBloc extends Bloc<PartnerTerminalEvent, PartnerTerminalStat
   Future<void> _onMarkOrderReady(MarkOrderReadyEvent event, Emitter<PartnerTerminalState> emit) async {
     emit(state.copyWith(isProcessingAction: true));
     try {
-      final token = await SecureTokenStorage().getAccessToken();
-      final dio = Dio(BaseOptions(
-        baseUrl: AppEnvironmentConfig.baseHttpUrl,
-        connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(seconds: 15),
-        headers: {
-          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-        },
-      ));
-      await dio.post('/api/v1/partner/store/orders/${event.pedidoId}/ready/');
+      final dio = createSecureDioClient(tokenStorage: SecureTokenStorage());
+      await dio.post<dynamic>('/api/v1/partner/store/orders/${event.pedidoId}/ready/');
     } catch (_) {}
 
     final atualizados = state.pedidosAtivos.map((p) {
@@ -412,16 +396,8 @@ class PartnerTerminalBloc extends Bloc<PartnerTerminalEvent, PartnerTerminalStat
     emit(state.copyWith(isProcessingAction: true, isAudioAlertActive: false));
 
     try {
-      final token = await SecureTokenStorage().getAccessToken();
-      final dio = Dio(BaseOptions(
-        baseUrl: AppEnvironmentConfig.baseHttpUrl,
-        connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(seconds: 15),
-        headers: {
-          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-        },
-      ));
-      await dio.post(
+      final dio = createSecureDioClient(tokenStorage: SecureTokenStorage());
+      await dio.post<dynamic>(
         '/api/v1/partner/store/orders/${event.pedidoId}/reject/',
         data: {'motivo': event.motivo.descricao},
       );
@@ -476,17 +452,7 @@ class _PartnerOrderTerminalScreenState extends State<PartnerOrderTerminalScreen>
   void initState() {
     super.initState();
     _terminalBloc = PartnerTerminalBloc();
-    _kdsDioClient = Dio(
-      BaseOptions(
-        baseUrl: AppEnvironmentConfig.baseHttpUrl,
-        connectTimeout: const Duration(seconds: 25),
-        receiveTimeout: const Duration(seconds: 25),
-        headers: {
-          'Accept': 'application/json',
-          'Accept-Encoding': 'gzip, deflate, br',
-        },
-      ),
-    );
+    _kdsDioClient = createSecureDioClient(tokenStorage: SecureTokenStorage());
     _iniciarSincronizacaoPedidos();
   }
 

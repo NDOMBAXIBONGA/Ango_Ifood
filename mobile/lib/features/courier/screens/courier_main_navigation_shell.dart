@@ -57,12 +57,15 @@ class _CourierMainNavigationShellState
   }
 
   int _activeTripRefreshCount = 0;
+  int _walletRefreshCount = 0;
 
   void _onTabSelected(int index) {
     setState(() {
       _currentIndex = index;
       if (index == 1) {
         _activeTripRefreshCount++;
+      } else if (index == 2) {
+        _walletRefreshCount++;
       }
     });
   }
@@ -94,10 +97,17 @@ class _CourierMainNavigationShellState
                 ActiveDeliveryFlowScreen(
                   refreshTrigger: _activeTripRefreshCount,
                   onGoToRadar: () => _onTabSelected(0),
+                  onDeliveryFinished: () {
+                    setState(() {
+                      _walletRefreshCount++;
+                    });
+                  },
                 ),
 
                 // Aba 2: Carteira Digital & Repasses
-                const CourierWalletScreen(),
+                CourierWalletScreen(
+                  refreshTrigger: _walletRefreshCount,
+                ),
 
                 // Aba 3: Perfil, Viatura e Logout
                 const CourierProfileScreen(),

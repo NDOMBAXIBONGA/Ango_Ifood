@@ -24,11 +24,13 @@ import '../services/courier_gps_service.dart';
 /// 5. Validação presencial do PIN de 4 dígitos do cliente ou Ausência (`POST /delivery/verify-pin/` - RN-095 / RN-097).
 class ActiveDeliveryFlowScreen extends StatefulWidget {
   final VoidCallback? onGoToRadar;
+  final VoidCallback? onDeliveryFinished;
   final int refreshTrigger;
 
   const ActiveDeliveryFlowScreen({
     super.key,
     this.onGoToRadar,
+    this.onDeliveryFinished,
     this.refreshTrigger = 0,
   });
 
@@ -214,11 +216,18 @@ class _ActiveDeliveryFlowScreenState extends State<ActiveDeliveryFlowScreen> {
       );
       if (resp.statusCode == 200 && resp.data is Map<String, dynamic>) {
         final d = resp.data as Map<String, dynamic>;
-        final geo = d['geometria_rota'] ?? d['rota_geojson'];
-        if (geo is Map<String, dynamic> && geo['coordinates'] is List) {
-          final coords = geo['coordinates'] as List<dynamic>;
+        List<dynamic>? rawCoords;
+        if (d['geometria'] is List) {
+          rawCoords = d['geometria'] as List<dynamic>;
+        } else {
+          final geo = d['geometria_rota'] ?? d['rota_geojson'];
+          if (geo is Map<String, dynamic> && geo['coordinates'] is List) {
+            rawCoords = geo['coordinates'] as List<dynamic>;
+          }
+        }
+        if (rawCoords != null) {
           final pts = <LatLng>[];
-          for (final c in coords) {
+          for (final c in rawCoords) {
             if (c is List && c.length >= 2) {
               final lng = (c[0] as num).toDouble();
               final lat = (c[1] as num).toDouble();
@@ -312,6 +321,7 @@ class _ActiveDeliveryFlowScreenState extends State<ActiveDeliveryFlowScreen> {
           if (mounted) {
             context.read<CourierBloc>().add(const LoadCourierProfileEvent());
             setState(() => _hasActiveOrder = false);
+            widget.onDeliveryFinished?.call();
             widget.onGoToRadar?.call();
           }
           break;
@@ -346,6 +356,7 @@ class _ActiveDeliveryFlowScreenState extends State<ActiveDeliveryFlowScreen> {
         await CourierGpsService().stopTracking();
         if (mounted) {
           context.read<CourierBloc>().add(const LoadCourierProfileEvent());
+          widget.onDeliveryFinished?.call();
           setState(() {
             _currentStep = DeliveryStep.concluido;
           });
