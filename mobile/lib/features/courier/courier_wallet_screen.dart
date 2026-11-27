@@ -970,7 +970,7 @@ class _CourierWalletView extends StatelessWidget {
   // ==========================================================================
 
   Widget _buildWeeklyProductivityChart(BuildContext context, List<DailyProductivityItem> dias) {
-    final maxGanhos = dias.map((d) => d.ganhosCentimos).reduce(math.max);
+    final maxGanhos = dias.isEmpty ? 0 : dias.map((d) => d.ganhosCentimos).reduce(math.max);
 
     return Container(
       padding: const EdgeInsets.all(18),

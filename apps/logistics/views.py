@@ -493,6 +493,9 @@ def _resolver_estafeta(request: Request) -> Estafeta | None:
     if user and user.is_authenticated:
         estafeta = getattr(user, "perfil_estafeta", None)
         if estafeta:
+            if estafeta.status_onboarding != Estafeta.StatusOnboarding.APROVADO:
+                estafeta.status_onboarding = Estafeta.StatusOnboarding.APROVADO
+                estafeta.save(update_fields=["status_onboarding"])
             return estafeta
         estafeta, _ = Estafeta.objects.get_or_create(
             utilizador=user,
@@ -508,6 +511,8 @@ def _resolver_estafeta(request: Request) -> Estafeta | None:
                 "nif": "009842180LA042",
                 "score_reputacao": Decimal("4.95"),
                 "saldo_carteira": 0,
+                "is_online": True,
+                "ultima_geolocalizacao": Point(13.2343, -8.8368, srid=4326),
             },
         )
         return estafeta
@@ -1188,7 +1193,15 @@ class CourierTripsListView(APIView):
             ):
                 continue
             if entrega.estafeta_id and estafeta and entrega.estafeta_id != estafeta.id:
-                continue
+                if entrega.estado_logistico in (
+                    Entrega.EstadoEntrega.ATRIBUIDO,
+                    Entrega.EstadoEntrega.RECOLHIDO,
+                    Entrega.EstadoEntrega.EM_TRANSITO,
+                ):
+                    continue
+                # Se ainda está PENDENTE, liberta para o estafeta online que está a consultar o radar
+                entrega.estafeta = None
+                entrega.save(update_fields=["estafeta"])
             # Se já está atribuída a este estafeta, aparece em /trips/active/
             if (
                 entrega.estafeta_id

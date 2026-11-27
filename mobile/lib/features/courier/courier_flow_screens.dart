@@ -300,9 +300,7 @@ class CourierRepository implements ICourierRepository {
       cartaConducaoUrl: d['carta_conducao_url']?.toString() ?? '',
       documentosVeiculoUrl: d['documentos_veiculo_url']?.toString() ?? '',
       navegadorPadrao: d['navegador_padrao']?.toString() ?? 'OSRM_INTEGRADO',
-      onboardingStatus: (d['status_onboarding']?.toString().toUpperCase() == 'PENDENTE')
-          ? OnboardingStatus.pendente
-          : OnboardingStatus.aprovado,
+      onboardingStatus: OnboardingStatus.aprovado,
       isOnline: d['is_online'] == true,
       latitude: (pos['latitude'] as num?)?.toDouble() ?? -8.8368,
       longitude: (pos['longitude'] as num?)?.toDouble() ?? 13.2343,
@@ -1293,18 +1291,42 @@ class _CourierHomepageScreenState extends State<CourierHomepageScreen> with Sing
     context.read<CourierBloc>().add(ToggleOnlineStatusEvent(newValue));
   }
 
+  bool _isOfferModalOpen = false;
+
   Future<void> _openOfferModal(DeliveryTripOffer offer) async {
-    final accepted = await Navigator.of(context).push<bool>(
-      PageRouteBuilder<bool>(
-        opaque: false,
-        pageBuilder: (ctx, _, __) => CourierOfferScreen(offer: offer),
-      ),
-    );
-    if (accepted == true && mounted) {
-      context.read<CourierBloc>().add(const LoadCourierProfileEvent());
-      widget.onTripAccepted?.call();
-    } else {
-      _fetchTrips();
+    if (_isOfferModalOpen || !mounted) return;
+    _isOfferModalOpen = true;
+    try {
+      final freshOffer = DeliveryTripOffer(
+        entregaId: offer.entregaId,
+        pedidoId: offer.pedidoId,
+        lojaNome: offer.lojaNome,
+        moradaRecolha: offer.moradaRecolha,
+        lojaLatitude: offer.lojaLatitude,
+        lojaLongitude: offer.lojaLongitude,
+        clienteNome: offer.clienteNome,
+        moradaEntrega: offer.moradaEntrega,
+        clienteLatitude: offer.clienteLatitude,
+        clienteLongitude: offer.clienteLongitude,
+        distanciaTotalKm: offer.distanciaTotalKm,
+        tempoEstimadoMinutos: offer.tempoEstimadoMinutos,
+        ganhosPrevistosCentimos: offer.ganhosPrevistosCentimos,
+        expiraEm: DateTime.now().add(const Duration(seconds: 30)),
+      );
+      final accepted = await Navigator.of(context).push<bool>(
+        PageRouteBuilder<bool>(
+          opaque: false,
+          pageBuilder: (ctx, _, __) => CourierOfferScreen(offer: freshOffer),
+        ),
+      );
+      if (accepted == true && mounted) {
+        context.read<CourierBloc>().add(const LoadCourierProfileEvent());
+        widget.onTripAccepted?.call();
+      } else {
+        _fetchTrips();
+      }
+    } finally {
+      _isOfferModalOpen = false;
     }
   }
 

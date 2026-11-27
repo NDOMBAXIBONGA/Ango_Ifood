@@ -97,6 +97,10 @@ class _CourierPinVerificationSheetState extends State<CourierPinVerificationShee
   @override
   void initState() {
     super.initState();
+    _segundosRestantesTolerancia = widget.initialToleranceSeconds.clamp(0, 420);
+    _chegadaRegistada = true;
+    _podeReportarAusencia = _segundosRestantesTolerancia <= 0;
+    _iniciarCronometroTolerancia();
     _shakeAnimController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 400),

@@ -245,6 +245,9 @@ class _CourierOfferScreenState extends State<CourierOfferScreen> {
 
   void _iniciarCountdownTimer() {
     _tickerTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || _bloc.state.isSubmitting || _bloc.state.isAccepted || _bloc.state.isRejectedOrExpired) {
+        return;
+      }
       if (_segundosRestantes <= 1) {
         _tickerTimer?.cancel();
         setState(() => _segundosRestantes = 0);
@@ -277,15 +280,21 @@ class _CourierOfferScreenState extends State<CourierOfferScreen> {
         listener: (context, state) {
           if (state.isAccepted || state.isRejectedOrExpired) {
             _tickerTimer?.cancel();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.feedbackMessage ?? ''), behavior: SnackBarBehavior.floating),
-            );
-            Navigator.of(context).maybePop(state.isAccepted);
+            ScaffoldMessenger.of(context)
+              ..hideCurrentSnackBar()
+              ..showSnackBar(
+                SnackBar(
+                  content: Text(state.feedbackMessage ?? ''),
+                  backgroundColor: state.isAccepted ? const Color(0xFF00C853) : null,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            Navigator.of(context).pop(state.isAccepted);
           }
         },
         builder: (context, state) {
           return PopScope(
-            canPop: false,
+            canPop: true,
             child: Scaffold(
               backgroundColor: Colors.black.withOpacity(0.65),
               body: Center(
