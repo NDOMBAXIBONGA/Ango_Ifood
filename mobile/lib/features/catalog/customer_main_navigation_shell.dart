@@ -156,13 +156,13 @@ class _CustomerMainNavigationShellState
                     label: 'Perfil',
                   ),
                 ],
-                ],
               ),
             ),
-          );
-        },
-      ),
-    );
-  }
+          ),
+        );
+      },
+    ),
+  );
+}
 }
 
