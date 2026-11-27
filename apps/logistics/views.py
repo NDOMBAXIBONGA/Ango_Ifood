@@ -1171,7 +1171,8 @@ class CourierTripsListView(APIView):
                     Pedido.EstadoPedido.PRONTO,
                     Pedido.EstadoPedido.EM_PREPARACAO,
                     Pedido.EstadoPedido.ACEITE,
-                    Pedido.EstadoPedido.PAGO,
+                    Pedido.EstadoPedido.AGUARDA_PARCEIRO,
+                    Pedido.EstadoPedido.PAGAMENTO,
                 ]
             )
             .select_related("loja", "cliente")
@@ -1282,22 +1283,6 @@ class CourierTripActionView(APIView):
                 entrega.estado_entrega = Entrega.EstadoEntrega.ATRIBUIDO
                 entrega.save(update_fields=["estafeta", "estado_logistico", "estado_entrega"])
 
-                if entrega.pedido.estado in (
-                    Pedido.EstadoPedido.PRONTO,
-                    Pedido.EstadoPedido.EM_PREPARACAO,
-                    Pedido.EstadoPedido.ACEITE,
-                    Pedido.EstadoPedido.PAGO,
-                ):
-                    try:
-                        OrderStateMachineManager.transitar_estado(
-                            pedido_id=str(entrega.pedido_id),
-                            novo_estado=Pedido.EstadoPedido.ATRIBUIDO,
-                            ator=f"estafeta:{estafeta.id}",
-                        )
-                    except Exception:
-                        entrega.pedido.estado = Pedido.EstadoPedido.ATRIBUIDO
-                        entrega.pedido.save(update_fields=["estado"])
-
             entrega.refresh_from_db()
             return Response(
                 {
@@ -1352,13 +1337,19 @@ class CourierTripActionView(APIView):
                 entrega.save()
 
                 try:
+                    if entrega.pedido.estado == Pedido.EstadoPedido.PRONTO:
+                        OrderStateMachineManager.transitar_estado(
+                            pedido_id=str(entrega.pedido_id),
+                            novo_estado=Pedido.EstadoPedido.RECOLHIDO,
+                            ator=f"estafeta:{estafeta.id}",
+                        )
                     OrderStateMachineManager.transitar_estado(
                         pedido_id=str(entrega.pedido_id),
-                        novo_estado=Pedido.EstadoPedido.A_CAMINHO,
+                        novo_estado=Pedido.EstadoPedido.EM_TRANSITO,
                         ator=f"estafeta:{estafeta.id}",
                     )
                 except Exception:
-                    entrega.pedido.estado = Pedido.EstadoPedido.A_CAMINHO
+                    entrega.pedido.estado = Pedido.EstadoPedido.EM_TRANSITO
                     entrega.pedido.save(update_fields=["estado"])
 
             entrega.refresh_from_db()
