@@ -444,9 +444,18 @@ class _OrderRealTimeTrackingScreenState extends State<OrderRealTimeTrackingScree
   LatLng? _currentInterpolatedLatLng;
   double _currentInterpolatedRotation = 0.0;
 
+  late String _livePinEntrega;
+  late String _liveEstafetaNome;
+  late String _liveEstafetaTelemovel;
+  late String _liveEstafetaVeiculo;
+
   @override
   void initState() {
     super.initState();
+    _livePinEntrega = widget.pinEntrega;
+    _liveEstafetaNome = widget.estafetaNome;
+    _liveEstafetaTelemovel = widget.estafetaTelemovel;
+    _liveEstafetaVeiculo = widget.estafetaVeiculo;
 
     // Posição inicial estimada do estafeta (22% da rota entre a loja e o cliente)
     final initialCourierPos = _interpolateLatLng(
@@ -496,7 +505,26 @@ class _OrderRealTimeTrackingScreenState extends State<OrderRealTimeTrackingScree
         final dio = createSecureDioClient(tokenStorage: SecureTokenStorage());
         final resp = await dio.get<Map<String, dynamic>>('/api/v1/logistics/orders/${widget.pedidoId}/tracking/');
         if (resp.data != null && mounted) {
+          final serverPin = (resp.data!['pin_entrega'] ?? '').toString().trim();
           final est = resp.data!['estafeta'] as Map<String, dynamic>?;
+          if (serverPin.length == 4 || est != null) {
+            setState(() {
+              if (serverPin.length == 4) {
+                _livePinEntrega = serverPin;
+              }
+              if (est != null) {
+                final nomeEst = (est['nome'] ?? '').toString().trim();
+                final telEst = (est['telemovel'] ?? '').toString().trim();
+                final modeloEst = (est['marca_modelo_veiculo'] ?? '').toString().trim();
+                final matEst = (est['matricula_veiculo'] ?? '').toString().trim();
+                if (nomeEst.isNotEmpty) _liveEstafetaNome = nomeEst;
+                if (telEst.isNotEmpty) _liveEstafetaTelemovel = telEst;
+                if (modeloEst.isNotEmpty) {
+                  _liveEstafetaVeiculo = matEst.isNotEmpty ? '$modeloEst ($matEst)' : modeloEst;
+                }
+              }
+            });
+          }
           if (est != null && est['latitude'] != null && est['longitude'] != null) {
             _onNewLocationReceived(
               TrackingLocationModel(
@@ -790,12 +818,12 @@ class _OrderRealTimeTrackingScreenState extends State<OrderRealTimeTrackingScree
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      widget.estafetaNome,
+                      _liveEstafetaNome,
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      widget.estafetaVeiculo,
+                      _liveEstafetaVeiculo,
                       style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                     ),
                   ],
@@ -805,11 +833,11 @@ class _OrderRealTimeTrackingScreenState extends State<OrderRealTimeTrackingScree
                 tooltip: 'Contactar Estafeta',
                 icon: const Icon(Icons.phone_outlined),
                 onPressed: () {
-                  Clipboard.setData(ClipboardData(text: widget.estafetaTelemovel));
+                  Clipboard.setData(ClipboardData(text: _liveEstafetaTelemovel));
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        'Contacto do estafeta (${widget.estafetaTelemovel}) copiado! A iniciar chamada...',
+                        'Contacto do estafeta ($_liveEstafetaTelemovel) copiado! A iniciar chamada...',
                       ),
                       behavior: SnackBarBehavior.floating,
                     ),
@@ -825,10 +853,10 @@ class _OrderRealTimeTrackingScreenState extends State<OrderRealTimeTrackingScree
           InkWell(
             borderRadius: BorderRadius.circular(16),
             onTap: () {
-              Clipboard.setData(ClipboardData(text: widget.pinEntrega));
+              Clipboard.setData(ClipboardData(text: _livePinEntrega));
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('PIN ${widget.pinEntrega} copiado para a área de transferência!'),
+                  content: Text('PIN $_livePinEntrega copiado para a área de transferência!'),
                   behavior: SnackBarBehavior.floating,
                 ),
               );
@@ -871,7 +899,7 @@ class _OrderRealTimeTrackingScreenState extends State<OrderRealTimeTrackingScree
                       border: Border.all(color: Colors.amber.shade400, width: 1.5),
                     ),
                     child: Text(
-                      widget.pinEntrega,
+                      _livePinEntrega,
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w900,

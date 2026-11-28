@@ -136,7 +136,8 @@ class _CourierPinVerificationSheetState extends State<CourierPinVerificationShee
   // ==========================================================================
 
   Future<void> _validarPinEntrega() async {
-    final pin = _pinCompleto;
+    if (_isLoading || _isSuccess) return;
+    final pin = _pinCompleto.trim();
     if (pin.length != 4) return;
 
     setState(() {

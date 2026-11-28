@@ -346,7 +346,7 @@ class _ActiveDeliveryFlowScreenState extends State<ActiveDeliveryFlowScreen> {
   void _openPinVerification() {
     CourierPinVerificationSheet.show(
       context,
-      pedidoId: _pedidoId,
+      pedidoId: _pedidoId.isNotEmpty ? _pedidoId : _entregaId,
       nomeCliente: _clienteNome,
       moradaClienteTexto: _clienteMorada,
       tempoToleranciaSegundos: _segundosRestantesTolerancia,

@@ -486,7 +486,7 @@ class CustomerOrderViewSet(viewsets.ReadOnlyModelViewSet):
         return (
             Pedido.objects.filter(cliente=user)
             .exclude(id__istartswith="B9B202A3")
-            .select_related("loja", "cliente")
+            .select_related("loja", "cliente", "entrega_logistica")
             .prefetch_related("linhas__item", "linhas__opcoes_selecionadas", "eventos")
             .order_by("-data_criacao")
         )
