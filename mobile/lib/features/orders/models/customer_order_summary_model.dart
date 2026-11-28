@@ -65,18 +65,44 @@ class CustomerOrderLineItem extends Equatable {
       ];
 }
 
-/// Modelo de resumo de pedido para apresentação no histórico do cliente.
+/// Modelo de resumo e detalhes completos de pedido para apresentação na área de pedidos do cliente.
 class CustomerOrderSummaryModel extends Equatable {
   final String id;
   final String lojaId;
   final String lojaNome;
+  final String lojaMorada;
+  final String lojaContacto;
+  final String lojaScore;
   final String lojaImagem;
+  final double lojaLat;
+  final double lojaLng;
   final String estado;
   final String estadoDisplay;
+  final int subtotalCentimos;
+  final int taxaEntregaCentimos;
+  final int taxaServicoCentimos;
+  final int gorjetaCentimos;
+  final int descontosCentimos;
   final int totalCobradoCentimos;
   final String pinEntrega;
   final String moradaEntrega;
+  final String moradaReferencia;
+  final String moradaAndarPorta;
+  final String moradaInstrucoes;
+  final double clienteLat;
+  final double clienteLng;
   final String metodoPagamentoDisplay;
+  final bool estafetaAtribuido;
+  final String estafetaNome;
+  final String estafetaTelemovel;
+  final String estafetaEmail;
+  final String estafetaTipoVeiculo;
+  final String estafetaMarcaModelo;
+  final String estafetaMatricula;
+  final String estafetaScore;
+  final String estafetaEtapaDisplay;
+  final double distanciaKm;
+  final int etaMinutos;
   final List<String> itensNomes;
   final List<CustomerOrderLineItem> linhas;
   final DateTime dataCriacao;
@@ -85,13 +111,39 @@ class CustomerOrderSummaryModel extends Equatable {
     required this.id,
     this.lojaId = '',
     required this.lojaNome,
+    this.lojaMorada = 'Luanda, Angola',
+    this.lojaContacto = '+244 923 000 000',
+    this.lojaScore = '5.00',
     required this.lojaImagem,
+    this.lojaLat = -8.8368,
+    this.lojaLng = 13.2343,
     required this.estado,
     required this.estadoDisplay,
+    this.subtotalCentimos = 0,
+    this.taxaEntregaCentimos = 0,
+    this.taxaServicoCentimos = 0,
+    this.gorjetaCentimos = 0,
+    this.descontosCentimos = 0,
     required this.totalCobradoCentimos,
     this.pinEntrega = '4829',
     this.moradaEntrega = 'Luanda, Angola',
+    this.moradaReferencia = '',
+    this.moradaAndarPorta = '',
+    this.moradaInstrucoes = '',
+    this.clienteLat = -8.8147,
+    this.clienteLng = 13.2343,
     this.metodoPagamentoDisplay = 'Carteira Digital',
+    this.estafetaAtribuido = false,
+    this.estafetaNome = '',
+    this.estafetaTelemovel = '',
+    this.estafetaEmail = '',
+    this.estafetaTipoVeiculo = 'Mota',
+    this.estafetaMarcaModelo = '',
+    this.estafetaMatricula = '',
+    this.estafetaScore = '4.95',
+    this.estafetaEtapaDisplay = '',
+    this.distanciaKm = 2.5,
+    this.etaMinutos = 12,
     required this.itensNomes,
     this.linhas = const [],
     required this.dataCriacao,
@@ -142,32 +194,73 @@ class CustomerOrderSummaryModel extends Equatable {
         .toList();
 
     final rawLoja = json['loja'];
-    final extractedLojaId = rawLoja is Map<String, dynamic>
-        ? (rawLoja['id'] ?? '').toString()
-        : (rawLoja ?? json['loja_id'] ?? '').toString();
+    final lojaDet = (json['loja_detalhes'] as Map<String, dynamic>?) ?? {};
+    final moradaDet = (json['morada_detalhes'] as Map<String, dynamic>?) ?? {};
+    final estafetaDet =
+        (json['estafeta_detalhes'] as Map<String, dynamic>?) ?? {};
+
+    final extractedLojaId = (lojaDet['id'] ?? '').toString().isNotEmpty
+        ? lojaDet['id'].toString()
+        : (rawLoja is Map<String, dynamic>
+            ? (rawLoja['id'] ?? '').toString()
+            : (rawLoja ?? json['loja_id'] ?? '').toString());
 
     return CustomerOrderSummaryModel(
       id: (json['id'] ?? '').toString(),
       lojaId: extractedLojaId,
       lojaNome: (json['loja_nome'] ??
+              lojaDet['nome'] ??
               (rawLoja is Map<String, dynamic> ? rawLoja['nome'] : null) ??
               'Restaurante Parceiro')
           .toString(),
+      lojaMorada: (lojaDet['morada'] ?? 'Luanda, Angola').toString(),
+      lojaContacto: (lojaDet['contacto'] ?? '+244 923 000 000').toString(),
+      lojaScore: (lojaDet['score_reputacao'] ?? '5.00').toString(),
       lojaImagem: (json['loja_imagem'] ??
               (rawLoja is Map<String, dynamic> ? rawLoja['imagem'] : null) ??
               '')
           .toString(),
+      lojaLat: (lojaDet['latitude'] as num?)?.toDouble() ?? -8.8368,
+      lojaLng: (lojaDet['longitude'] as num?)?.toDouble() ?? 13.2343,
       estado: (json['estado'] ?? 'CRIADO').toString(),
       estadoDisplay:
           (json['estado_display'] ?? json['estado'] ?? 'Processamento')
               .toString(),
+      subtotalCentimos: (json['subtotal'] as num?)?.toInt() ?? 0,
+      taxaEntregaCentimos: (json['taxa_entrega'] as num?)?.toInt() ?? 0,
+      taxaServicoCentimos: (json['taxa_servico'] as num?)?.toInt() ?? 0,
+      gorjetaCentimos: (json['gorjeta_estafeta'] as num?)?.toInt() ?? 0,
+      descontosCentimos: (json['descontos'] as num?)?.toInt() ?? 0,
       totalCobradoCentimos: (json['total_cobrado'] as num?)?.toInt() ?? 0,
       pinEntrega: (json['pin_entrega'] ?? '4829').toString(),
-      moradaEntrega: (json['morada_entrega'] ?? 'Luanda, Angola').toString(),
+      moradaEntrega: (json['morada_entrega'] ??
+              moradaDet['texto_endereco'] ??
+              'Luanda, Angola')
+          .toString(),
+      moradaReferencia: (moradaDet['referencia'] ?? '').toString(),
+      moradaAndarPorta: (moradaDet['andar_porta'] ?? '').toString(),
+      moradaInstrucoes: (moradaDet['instrucoes_estafeta'] ?? '').toString(),
+      clienteLat: (moradaDet['latitude'] as num?)?.toDouble() ?? -8.8147,
+      clienteLng: (moradaDet['longitude'] as num?)?.toDouble() ?? 13.2343,
       metodoPagamentoDisplay: (json['metodo_pagamento_display'] ??
               json['metodo_pagamento'] ??
               'Carteira Digital')
           .toString(),
+      estafetaAtribuido: estafetaDet['atribuido'] == true,
+      estafetaNome: (estafetaDet['nome'] ?? '').toString(),
+      estafetaTelemovel: (estafetaDet['telemovel'] ?? '').toString(),
+      estafetaEmail: (estafetaDet['email'] ?? '').toString(),
+      estafetaTipoVeiculo:
+          (estafetaDet['tipo_veiculo_display'] ?? estafetaDet['tipo_veiculo'] ?? 'Mota')
+              .toString(),
+      estafetaMarcaModelo:
+          (estafetaDet['marca_modelo_veiculo'] ?? 'Haojue 125').toString(),
+      estafetaMatricula:
+          (estafetaDet['matricula_veiculo'] ?? 'LD-44-99-AF').toString(),
+      estafetaScore: (estafetaDet['score_reputacao'] ?? '4.95').toString(),
+      estafetaEtapaDisplay: (estafetaDet['etapa_display'] ?? '').toString(),
+      distanciaKm: (estafetaDet['distancia_km'] as num?)?.toDouble() ?? 2.5,
+      etaMinutos: (estafetaDet['eta_minutos'] as num?)?.toInt() ?? 12,
       itensNomes: itens,
       linhas: parsedLinhas,
       dataCriacao: json['data_criacao'] != null
@@ -181,13 +274,26 @@ class CustomerOrderSummaryModel extends Equatable {
         id,
         lojaId,
         lojaNome,
+        lojaMorada,
+        lojaContacto,
         lojaImagem,
         estado,
         estadoDisplay,
+        subtotalCentimos,
+        taxaEntregaCentimos,
+        taxaServicoCentimos,
+        gorjetaCentimos,
+        descontosCentimos,
         totalCobradoCentimos,
         pinEntrega,
         moradaEntrega,
+        moradaReferencia,
         metodoPagamentoDisplay,
+        estafetaAtribuido,
+        estafetaNome,
+        estafetaTelemovel,
+        estafetaMatricula,
+        estafetaEtapaDisplay,
         itensNomes,
         linhas,
         dataCriacao,

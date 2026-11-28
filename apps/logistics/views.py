@@ -684,68 +684,102 @@ def _serializar_corrida_ativa(entrega: Entrega, estafeta: Estafeta) -> dict[str,
     # Itens do pedido para conferência na recolha (RN-093)
     itens_lista = []
     if pedido and hasattr(pedido, "linhas"):
-        for linha in pedido.linhas.select_related("item").all():
+        for linha in pedido.linhas.select_related("item").prefetch_related("opcoes_selecionadas__opcao").all():
+            preco_unit = getattr(linha, "preco_unitario_no_momento", None) or getattr(linha, "preco_unitario_historico", 0) or 0
+            opcoes_nomes = []
+            try:
+                opcoes_nomes = [
+                    op.opcao.nome for op in linha.opcoes_selecionadas.all() if getattr(op, "opcao", None)
+                ]
+            except Exception:
+                pass
             itens_lista.append({
+                "id": str(linha.id),
                 "nome": linha.item.nome if linha.item else "Artigo do Pedido",
                 "quantidade": linha.quantidade,
-                "preco_unitario_centimos": linha.preco_unitario_historico,
+                "preco_unitario_centimos": preco_unit,
+                "subtotal_centimos": preco_unit * int(linha.quantidade or 1),
+                "opcoes_personalizadas": opcoes_nomes,
                 "notas": getattr(linha, "notas", "") or "",
             })
     if not itens_lista:
         itens_lista.append({
+            "id": "item-padrao",
             "nome": "Refeição Completa (Saco Lacrado)",
             "quantidade": 1,
             "preco_unitario_centimos": getattr(pedido, "subtotal", 250000) if pedido else 250000,
+            "subtotal_centimos": getattr(pedido, "subtotal", 250000) if pedido else 250000,
+            "opcoes_personalizadas": [],
             "notas": "",
         })
 
+    subtotal_pedido = (getattr(pedido, "subtotal", 0) or 0) if pedido else 0
     taxa_entrega = (getattr(pedido, "taxa_entrega", 0) or 60000) if pedido else 60000
+    taxa_servico = (getattr(pedido, "taxa_servico", 0) or 0) if pedido else 0
+    descontos_pedido = (getattr(pedido, "descontos", 0) or 0) if pedido else 0
     gorjeta = (getattr(pedido, "gorjeta_estafeta", 0) or 0) if pedido else 0
     bonus_espera = entrega.bonus_espera_centimos or (20000 if minutos_espera_loja > 10 else 0)
     ganho_total = taxa_entrega + gorjeta + bonus_espera
+    total_cobrado_pedido = (getattr(pedido, "total_cobrado", None) or getattr(pedido, "total", None) or (subtotal_pedido + taxa_entrega + taxa_servico + gorjeta - descontos_pedido)) if pedido else ganho_total
 
     dist_km = round((entrega.distancia_metros or 2500) / 1000.0, 2)
     if dist_km <= 0:
         dist_km = 2.5
 
+    cliente_tel = (getattr(cliente, "telemovel", None) or "+244 923 111 222") if cliente else "+244 923 111 222"
+    cliente_email = (getattr(cliente, "email", None) or "") if cliente else ""
+    cliente_nome = (getattr(cliente, "nome", None) or cliente_email or "Cliente Delivery Pro") if cliente else "Cliente Delivery Pro"
+    data_criacao_iso = pedido.data_criacao.isoformat() if pedido and getattr(pedido, "data_criacao", None) else agora.isoformat()
+    metodo_pag = getattr(pedido, "metodo_pagamento", "MULTICAIXA_EXPRESS") if pedido else "MULTICAIXA_EXPRESS"
+    metodo_pag_display = pedido.get_metodo_pagamento_display() if pedido and hasattr(pedido, "get_metodo_pagamento_display") else metodo_pag
+
     return {
         "has_active_trip": True,
         "entrega_id": str(entrega.id),
         "pedido_id": str(pedido.id) if pedido else str(entrega.id),
-        "numero_exibicao": str(pedido.id).replace("-", "")[:6].upper() if pedido else "LUA001",
+        "numero_exibicao": str(pedido.id).replace("-", "")[:8].upper() if pedido else "LUA001",
         "estado_logistico": entrega.estado_logistico,
         "estado_pedido": getattr(pedido, "estado", "ATRIBUIDO"),
         "etapa_atual": etapa_atual,
         "pin_entrega": entrega.pin_entrega,
+        "data_criacao": data_criacao_iso,
         "loja": {
             "id": str(loja.id) if loja else "",
             "nome": loja.nome if loja else "Restaurante Parceiro",
-            "morada": loja.morada_texto if loja else "Luanda, Angola",
-            "telemovel": getattr(loja, "contacto", None) or "+244923000000",
+            "morada": loja.morada_texto if loja and getattr(loja, "morada_texto", None) else "Centro de Luanda, Angola",
+            "telemovel": (getattr(loja, "contacto", None) or "+244 923 000 000") if loja else "+244 923 000 000",
+            "nif": (getattr(loja, "nif", None) or "NIF-540112233") if loja else "NIF-540112233",
+            "tipo_cozinha": (getattr(loja, "tipo_cozinha", None) or "Restaurante & Gastronomia") if loja else "Restaurante & Gastronomia",
+            "score_reputacao": str(getattr(loja, "score_reputacao", "5.00")) if loja else "5.00",
             "latitude": lat_loja,
             "longitude": lng_loja,
         },
         "cliente": {
             "id": str(cliente.id) if cliente else "",
-            "nome": getattr(cliente, "nome", "Cliente Delivery Pro") if cliente else "Cliente Delivery Pro",
-            "telemovel": getattr(cliente, "telemovel", "+244923111222") if cliente else "+244923111222",
+            "nome": cliente_nome,
+            "telemovel": cliente_tel,
+            "email": cliente_email,
             "morada": morada_entrega_texto,
-            "referencia": referencia_cliente,
-            "andar_porta": andar_porta_cliente,
-            "instrucoes_estafeta": instrucoes_cliente,
+            "referencia": referencia_cliente or "Próximo à via principal",
+            "andar_porta": andar_porta_cliente or "R/C",
+            "instrucoes_estafeta": instrucoes_cliente or "Contactar ao chegar à portaria.",
             "latitude": lat_cliente,
             "longitude": lng_cliente,
         },
         "itens": itens_lista,
         "quantidade_artigos": sum(i["quantidade"] for i in itens_lista),
         "financeiro": {
+            "subtotal_pedido_centimos": subtotal_pedido,
             "taxa_entrega_centimos": taxa_entrega,
+            "taxa_servico_centimos": taxa_servico,
+            "descontos_centimos": descontos_pedido,
             "gorjeta_centimos": gorjeta,
             "bonus_espera_centimos": bonus_espera,
             "ganho_total_centimos": ganho_total,
             "ganho_total_kz": ganho_total // 100,
-            "total_pedido_centimos": getattr(pedido, "total", ganho_total) if pedido else ganho_total,
-            "metodo_pagamento": getattr(pedido, "metodo_pagamento", "MULTICAIXA_EXPRESS") if pedido else "MULTICAIXA_EXPRESS",
+            "total_pedido_centimos": total_cobrado_pedido,
+            "metodo_pagamento": metodo_pag,
+            "metodo_pagamento_display": str(metodo_pag_display),
         },
         "tempos": {
             "chegada_loja_em": entrega.chegada_loja_em.isoformat() if entrega.chegada_loja_em else None,
@@ -1213,7 +1247,8 @@ class CourierWalletView(APIView):
 class CourierActiveTripView(APIView):
     """
     Endpoint: GET /api/v1/logistics/trips/active/
-    Retorna a corrida atualmente atribuída ou em curso pelo estafeta autenticado.
+    Retorna todas as corridas atualmente atribuídas ou em curso pelo estafeta autenticado (suporte Multi-Corridas),
+    permitindo selecionar qualquer uma via `?entrega_id=` ou `?pedido_id=`.
     """
 
     permission_classes = [permissions.AllowAny]
@@ -1221,9 +1256,9 @@ class CourierActiveTripView(APIView):
     def get(self, request: Request) -> Response:
         estafeta = _resolver_estafeta(request)
         if not estafeta:
-            return Response({"has_active_trip": False}, status=status.HTTP_200_OK)
+            return Response({"has_active_trip": False, "total_active_trips": 0, "active_trips": []}, status=status.HTTP_200_OK)
 
-        entrega_ativa = (
+        entregas_ativas = list(
             Entrega.objects.select_related("pedido", "pedido__loja", "pedido__cliente")
             .filter(
                 estafeta=estafeta,
@@ -1242,13 +1277,28 @@ class CourierActiveTripView(APIView):
                 ]
             )
             .order_by("-pedido__data_criacao")
-            .first()
         )
 
-        if not entrega_ativa:
-            return Response({"has_active_trip": False}, status=status.HTTP_200_OK)
+        if not entregas_ativas:
+            return Response({"has_active_trip": False, "total_active_trips": 0, "active_trips": []}, status=status.HTTP_200_OK)
 
-        return Response(_serializar_corrida_ativa(entrega_ativa, estafeta), status=status.HTTP_200_OK)
+        selected_id = (
+            request.query_params.get("entrega_id")
+            or request.query_params.get("pedido_id")
+            or ""
+        ).strip()
+        entrega_principal = entregas_ativas[0]
+        if selected_id:
+            for e in entregas_ativas:
+                if str(e.id) == selected_id or str(e.pedido_id) == selected_id:
+                    entrega_principal = e
+                    break
+
+        todas_serializadas = [_serializar_corrida_ativa(e, estafeta) for e in entregas_ativas]
+        payload_principal = _serializar_corrida_ativa(entrega_principal, estafeta)
+        payload_principal["total_active_trips"] = len(todas_serializadas)
+        payload_principal["active_trips"] = todas_serializadas
+        return Response(payload_principal, status=status.HTTP_200_OK)
 
 
 class CourierTripsListView(APIView):
@@ -1330,18 +1380,39 @@ class CourierTripsListView(APIView):
             if dist_km <= 0:
                 dist_km = 2.6
 
-            num_itens = p.linhas.count() if hasattr(p, "linhas") else 1
+            itens_resumo = []
+            num_itens = 0
+            if hasattr(p, "linhas"):
+                for l_item in p.linhas.select_related("item").all():
+                    q_it = int(l_item.quantidade or 1)
+                    num_itens += q_it
+                    n_it = l_item.item.nome if l_item.item else "Artigo"
+                    itens_resumo.append(f"{q_it}x {n_it}")
+            if num_itens == 0:
+                num_itens = 1
+                itens_resumo = ["1x Pedido Completo"]
+
             remuneracao = (p.taxa_entrega or 60000) + (p.gorjeta_estafeta or 0)
+            cli_tel = (getattr(cliente, "telemovel", None) or "+244 923 111 222") if cliente else "+244 923 111 222"
+            cli_email = (getattr(cliente, "email", None) or "") if cliente else ""
+            cli_nome = (getattr(cliente, "nome", None) or cli_email or "Cliente") if cliente else "Cliente"
             trips.append({
                 "entrega_id": str(entrega.id),
                 "pedido_id": str(p.id),
-                "numero_exibicao": str(p.id).replace("-", "")[:6].upper(),
+                "numero_exibicao": str(p.id).replace("-", "")[:8].upper(),
                 "loja_nome": loja.nome if loja else "Restaurante Parceiro",
-                "loja_morada": loja.morada_texto if loja else "Luanda, Angola",
+                "loja_morada": loja.morada_texto if loja and getattr(loja, "morada_texto", None) else "Centro de Luanda, Angola",
+                "loja_telemovel": (getattr(loja, "contacto", None) or "+244 923 000 000") if loja else "+244 923 000 000",
+                "loja_tipo_cozinha": (getattr(loja, "tipo_cozinha", None) or "Restaurante & Gastronomia") if loja else "Restaurante & Gastronomia",
                 "loja_lat": lat_loja,
                 "loja_lng": lng_loja,
-                "cliente_nome": getattr(cliente, "nome", "Cliente") if cliente else "Cliente",
+                "cliente_nome": cli_nome,
+                "cliente_telemovel": cli_tel,
+                "cliente_email": cli_email,
                 "cliente_morada": morada_entrega_texto,
+                "cliente_referencia": (morada_cliente_obj.referencia if morada_cliente_obj and morada_cliente_obj.referencia else "Próximo à via principal"),
+                "cliente_andar_porta": (morada_cliente_obj.andar_porta if morada_cliente_obj and morada_cliente_obj.andar_porta else "R/C"),
+                "cliente_instrucoes": (morada_cliente_obj.instrucoes_estafeta if morada_cliente_obj and morada_cliente_obj.instrucoes_estafeta else "Ligar ao chegar à portaria."),
                 "cliente_lat": lat_cliente,
                 "cliente_lng": lng_cliente,
                 "distancia_estimada_km": dist_km,
@@ -1349,7 +1420,10 @@ class CourierTripsListView(APIView):
                 "remuneracao_centimos": remuneracao,
                 "remuneracao_kz": remuneracao // 100,
                 "gorjeta_centimos": p.gorjeta_estafeta or 0,
+                "total_pedido_centimos": p.total_cobrado or remuneracao,
+                "metodo_pagamento": p.metodo_pagamento,
                 "quantidade_artigos": max(1, num_itens),
+                "itens_resumo": itens_resumo,
                 "estado_pedido": p.estado,
             })
 
@@ -1382,33 +1456,49 @@ class CourierTripActionView(APIView):
 
         if action_lower == "accept":
             with transaction.atomic():
-                # Liberta eventuais corridas antigas que tenham ficado presas neste estafeta
-                Entrega.objects.filter(
+                # Suporte Multi-Corridas: mantém as corridas ativas já aceites pelo estafeta
+                # e adiciona esta nova corrida à carteira de entregas em curso do estafeta.
+                entrega.estafeta = estafeta
+                if entrega.estado_logistico == Entrega.EstadoEntrega.PENDENTE:
+                    entrega.estado_logistico = Entrega.EstadoEntrega.ATRIBUIDO
+                    entrega.estado_entrega = Entrega.EstadoEntrega.ATRIBUIDO
+                entrega.save(update_fields=["estafeta", "estado_logistico", "estado_entrega"])
+
+            entrega.refresh_from_db()
+            entregas_ativas_qs = (
+                Entrega.objects.select_related("pedido", "pedido__loja", "pedido__cliente")
+                .filter(
                     estafeta=estafeta,
                     estado_logistico__in=[
                         Entrega.EstadoEntrega.ATRIBUIDO,
                         Entrega.EstadoEntrega.RECOLHIDO,
                         Entrega.EstadoEntrega.EM_TRANSITO,
                     ],
-                ).exclude(pk=entrega.pk).update(
-                    estafeta=None,
-                    estado_logistico=Entrega.EstadoEntrega.PENDENTE,
-                    estado_entrega=Entrega.EstadoEntrega.PENDENTE,
                 )
-                entrega.estafeta = estafeta
-                entrega.estado_logistico = Entrega.EstadoEntrega.ATRIBUIDO
-                entrega.estado_entrega = Entrega.EstadoEntrega.ATRIBUIDO
-                entrega.save(update_fields=["estafeta", "estado_logistico", "estado_entrega"])
-
-            entrega.refresh_from_db()
+                .exclude(
+                    pedido__estado__in=[
+                        Pedido.EstadoPedido.ENTREGUE,
+                        Pedido.EstadoPedido.CONCLUIDO,
+                        Pedido.EstadoPedido.CANCELADO,
+                        Pedido.EstadoPedido.FALHA_ENTREGA,
+                    ]
+                )
+                .order_by("-pedido__data_criacao")
+            )
+            todas_ativas = [_serializar_corrida_ativa(e, estafeta) for e in entregas_ativas_qs]
+            corrida_serializada = _serializar_corrida_ativa(entrega, estafeta)
+            corrida_serializada["total_active_trips"] = len(todas_ativas)
+            corrida_serializada["active_trips"] = todas_ativas
             return Response(
                 {
                     "sucesso": True,
-                    "mensagem": "Corrida aceite com sucesso! Dirija-se ao restaurante para recolha.",
+                    "mensagem": f"Corrida aceite com sucesso! ({len(todas_ativas)} corrida(s) ativa(s) em curso).",
                     "entrega_id": str(entrega.id),
                     "pedido_id": str(entrega.pedido_id),
                     "pin_entrega": entrega.pin_entrega,
-                    "corrida": _serializar_corrida_ativa(entrega, estafeta),
+                    "total_active_trips": len(todas_ativas),
+                    "active_trips": todas_ativas,
+                    "corrida": corrida_serializada,
                 },
                 status=status.HTTP_200_OK,
             )
@@ -1512,19 +1602,25 @@ class CourierTripActionView(APIView):
 class OrderTrackingTelemetryView(APIView):
     """
     Endpoint: GET /api/v1/logistics/orders/{id}/tracking/
-    Retorna as coordenadas GPS em tempo real do pedido, estafeta e loja.
+    Retorna as coordenadas GPS em tempo real do pedido, todos os detalhes do estafeta que aceitou a corrida,
+    loja, cliente e resumo do pedido.
     """
 
     permission_classes = [permissions.AllowAny]
 
     def get(self, request: Request, pk: str) -> Response:
         try:
-            pedido = Pedido.objects.select_related("loja", "cliente").get(pk=pk)
+            pedido = (
+                Pedido.objects.select_related("loja", "cliente")
+                .prefetch_related("linhas__item")
+                .get(pk=pk)
+            )
         except Exception:
             return Response({"erro": "Pedido não encontrado."}, status=status.HTTP_404_NOT_FOUND)
 
         entrega, _ = Entrega.objects.select_related("estafeta", "estafeta__utilizador").get_or_create(pedido=pedido)
         estafeta = entrega.estafeta
+        is_atribuido = estafeta is not None
 
         lat_loja = float(pedido.loja.geolocalizacao.y) if pedido.loja and pedido.loja.geolocalizacao else -8.8368
         lng_loja = float(pedido.loja.geolocalizacao.x) if pedido.loja and pedido.loja.geolocalizacao else 13.2343
@@ -1543,39 +1639,103 @@ class OrderTrackingTelemetryView(APIView):
             Pedido.EstadoPedido.EM_TRANSITO,
         }
         dist_km = round((entrega.distancia_metros or 2500) / 1000.0, 2)
+        if dist_km <= 0:
+            dist_km = 2.5
+
+        if entrega.estado_logistico == Entrega.EstadoEntrega.ENTREGUE:
+            etapa_logistica = "Entregue ao Cliente"
+        elif entrega.chegada_cliente_em is not None:
+            etapa_logistica = "Estafeta à Sua Porta (Aguarda PIN)"
+        elif entrega.recolhido_em is not None or entrega.estado_logistico in (
+            Entrega.EstadoEntrega.RECOLHIDO,
+            Entrega.EstadoEntrega.EM_TRANSITO,
+        ):
+            etapa_logistica = "Pedido Recolhido • Em Trânsito para o Cliente"
+        elif entrega.chegada_loja_em is not None:
+            etapa_logistica = "Estafeta no Restaurante a Recolher Pedido"
+        elif is_atribuido:
+            etapa_logistica = "Corrida Aceite • Estafeta a Caminho do Restaurante"
+        else:
+            etapa_logistica = "A atribuir estafeta mais próximo na zona..."
+
+        u_est = estafeta.utilizador if estafeta and getattr(estafeta, "utilizador", None) else None
+        nome_est = (getattr(u_est, "nome", None) or getattr(u_est, "email", None) or "Estafeta Ango-iFood") if u_est else "A aguardar aceitação do estafeta"
+        tel_est = (getattr(u_est, "telemovel", None) or "+244 923 111 222") if u_est else "+244 923 111 222"
+        email_est = (getattr(u_est, "email", None) or "") if u_est else ""
+        total_entregas_est = (
+            estafeta.entregas.filter(estado_logistico=Entrega.EstadoEntrega.ENTREGUE).count()
+            if estafeta
+            else 0
+        )
+
+        itens_resumo = []
+        qtd_itens = 0
+        for linha in pedido.linhas.all():
+            q = int(linha.quantidade or 1)
+            qtd_itens += q
+            n = linha.item.nome if linha.item else "Artigo"
+            itens_resumo.append(f"{q}x {n}")
 
         return Response(
             {
                 "pedido_id": str(pedido.id),
+                "numero_exibicao": str(pedido.id).replace("-", "")[:8].upper(),
                 "entrega_id": str(entrega.id),
                 "estado": pedido.estado,
+                "estado_display": pedido.get_estado_display(),
                 "estado_logistico": entrega.estado_logistico,
+                "etapa_logistica_display": etapa_logistica,
                 "loja": {
-                    "nome": pedido.loja.nome if pedido.loja else "Loja",
-                    "morada": pedido.loja.morada_texto if pedido.loja else "Luanda, Angola",
+                    "id": str(pedido.loja.id) if pedido.loja else "",
+                    "nome": pedido.loja.nome if pedido.loja else "Restaurante Parceiro",
+                    "morada": pedido.loja.morada_texto if pedido.loja and getattr(pedido.loja, "morada_texto", None) else "Luanda, Angola",
+                    "telemovel": (getattr(pedido.loja, "contacto", None) or "+244 923 000 000") if pedido.loja else "+244 923 000 000",
                     "latitude": lat_loja,
                     "longitude": lng_loja,
                 },
                 "cliente": {
-                    "nome": getattr(cliente, "nome", "Cliente") if cliente else "Cliente",
+                    "nome": (getattr(cliente, "nome", None) or "Cliente") if cliente else "Cliente",
+                    "telemovel": (getattr(cliente, "telemovel", None) or "+244 923 000 000") if cliente else "+244 923 000 000",
                     "morada": morada_cli.texto_endereco if morada_cli else "Luanda, Angola",
+                    "referencia": morada_cli.referencia if morada_cli else "",
+                    "andar_porta": morada_cli.andar_porta if morada_cli else "",
+                    "instrucoes_estafeta": morada_cli.instrucoes_estafeta if morada_cli else "",
                     "latitude": lat_cli,
                     "longitude": lng_cli,
                 },
                 "estafeta": {
+                    "atribuido": is_atribuido,
                     "id": str(estafeta.id) if estafeta else None,
-                    "nome": estafeta.utilizador.nome if estafeta and estafeta.utilizador else "Estafeta Ango-iFood",
-                    "telemovel": getattr(estafeta.utilizador, "telemovel", "+244923111222") if estafeta and estafeta.utilizador else "+244923111222",
+                    "nome": nome_est,
+                    "telemovel": tel_est,
+                    "email": email_est,
                     "tipo_veiculo": estafeta.tipo_veiculo if estafeta else "MOTA",
-                    "marca_modelo_veiculo": estafeta.marca_modelo_veiculo if estafeta else "Haojue 125",
-                    "matricula_veiculo": estafeta.matricula_veiculo if estafeta else "LD-44-99-AF",
+                    "tipo_veiculo_display": estafeta.get_tipo_veiculo_display() if estafeta else "Mota",
+                    "marca_modelo_veiculo": (estafeta.marca_modelo_veiculo or "Haojue 125") if estafeta else "Haojue 125",
+                    "matricula_veiculo": (estafeta.matricula_veiculo or "LD-44-99-AF") if estafeta else "LD-44-99-AF",
+                    "carta_conducao": (estafeta.carta_conducao or "LD-90234-A") if estafeta else "",
+                    "score_reputacao": str(estafeta.score_reputacao) if estafeta else "5.00",
+                    "total_entregas_concluidas": total_entregas_est,
                     "latitude": lat_estafeta,
                     "longitude": lng_estafeta,
-                    "is_online": estafeta.is_online if estafeta else False,
+                    "is_online": estafeta.is_online if estafeta else True,
+                    "etapa_logistica_display": etapa_logistica,
+                    "chegada_loja_em": entrega.chegada_loja_em.isoformat() if entrega.chegada_loja_em else None,
+                    "recolhido_em": entrega.recolhido_em.isoformat() if entrega.recolhido_em else None,
+                    "chegada_cliente_em": entrega.chegada_cliente_em.isoformat() if entrega.chegada_cliente_em else None,
+                },
+                "pedido_resumo": {
+                    "subtotal_centimos": pedido.subtotal,
+                    "taxa_entrega_centimos": pedido.taxa_entrega,
+                    "total_cobrado_centimos": pedido.total_cobrado,
+                    "metodo_pagamento": pedido.metodo_pagamento,
+                    "metodo_pagamento_display": pedido.get_metodo_pagamento_display(),
+                    "quantidade_itens": max(1, qtd_itens),
+                    "itens_resumo": itens_resumo,
                 },
                 "pin_entrega": entrega.pin_entrega,
                 "distancia_km": dist_km,
-                "eta_minutos": max(5, int(dist_km * 4)) if pedido.estado in estados_em_rota else 0,
+                "eta_minutos": max(5, int(dist_km * 4)) if (pedido.estado in estados_em_rota or is_atribuido) else 12,
             },
             status=status.HTTP_200_OK,
         )

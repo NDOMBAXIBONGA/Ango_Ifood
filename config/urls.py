@@ -45,7 +45,7 @@ def health_check(request):
         return JsonResponse(
             {
                 "status": "healthy",
-                "version": "v1.0.19-delivery-pin-sync-fix",
+                "version": "v1.0.20-multi-trip-rich-tracking",
                 "service": "delivery-backend-api",
                 "timestamp": timezone.now().isoformat(),
             },

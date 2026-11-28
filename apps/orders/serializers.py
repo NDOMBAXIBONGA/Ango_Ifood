@@ -249,7 +249,7 @@ class EventoPedidoOutputSerializer(serializers.ModelSerializer):
 class PedidoConfirmadoOutputSerializer(serializers.ModelSerializer):
     """
     Serializer completo de resposta do `Pedido` criado e transitado para `'2. PAGAMENTO'`
-    no endpoint `POST /api/v1/orders/checkout/confirm/`.
+    no endpoint `POST /api/v1/orders/checkout/confirm/` e na listagem do cliente (`GET /api/v1/orders/`).
     """
 
     estado_display = serializers.CharField(source="get_estado_display", read_only=True)
@@ -258,6 +258,9 @@ class PedidoConfirmadoOutputSerializer(serializers.ModelSerializer):
         read_only=True,
     )
     loja_nome = serializers.CharField(source="loja.nome", read_only=True)
+    loja_detalhes = serializers.SerializerMethodField(read_only=True)
+    morada_detalhes = serializers.SerializerMethodField(read_only=True)
+    estafeta_detalhes = serializers.SerializerMethodField(read_only=True)
     pin_entrega = serializers.SerializerMethodField(read_only=True)
     morada_entrega = serializers.SerializerMethodField(read_only=True)
     linhas = LinhaPedidoOutputSerializer(many=True, read_only=True)
@@ -270,6 +273,7 @@ class PedidoConfirmadoOutputSerializer(serializers.ModelSerializer):
             "cliente",
             "loja",
             "loja_nome",
+            "loja_detalhes",
             "estado",
             "estado_display",
             "subtotal",
@@ -283,6 +287,8 @@ class PedidoConfirmadoOutputSerializer(serializers.ModelSerializer):
             "metodo_pagamento_display",
             "pin_entrega",
             "morada_entrega",
+            "morada_detalhes",
+            "estafeta_detalhes",
             "linhas",
             "eventos",
             "data_criacao",
@@ -313,10 +319,113 @@ class PedidoConfirmadoOutputSerializer(serializers.ModelSerializer):
         except Exception:
             pass
         try:
-            morada = obj.cliente.moradas.first()
+            morada = obj.cliente.moradas.order_by("-id").first()
             if morada:
                 return morada.texto_endereco
         except Exception:
             pass
         return "Luanda, Angola"
+
+    def get_loja_detalhes(self, obj: Pedido) -> dict[str, Any]:
+        loja = getattr(obj, "loja", None)
+        if not loja:
+            return {
+                "id": "",
+                "nome": "Restaurante Parceiro",
+                "morada": "Luanda, Angola",
+                "contacto": "+244 923 000 000",
+                "nif": "",
+                "score_reputacao": "5.00",
+                "latitude": -8.8368,
+                "longitude": 13.2343,
+            }
+        lat = float(loja.geolocalizacao.y) if getattr(loja, "geolocalizacao", None) else -8.8368
+        lng = float(loja.geolocalizacao.x) if getattr(loja, "geolocalizacao", None) else 13.2343
+        return {
+            "id": str(loja.id),
+            "nome": loja.nome or "Restaurante Parceiro",
+            "morada": getattr(loja, "morada_texto", None) or "Luanda, Angola",
+            "contacto": getattr(loja, "contacto", None) or "+244 923 000 000",
+            "nif": getattr(loja, "nif", None) or "",
+            "score_reputacao": str(getattr(loja, "score_reputacao", "5.00")),
+            "latitude": lat,
+            "longitude": lng,
+        }
+
+    def get_morada_detalhes(self, obj: Pedido) -> dict[str, Any]:
+        texto = self.get_morada_entrega(obj)
+        ref = ""
+        andar = ""
+        instrucoes = ""
+        lat = -8.8147
+        lng = 13.2343
+        try:
+            morada = obj.cliente.moradas.order_by("-id").first()
+            if morada:
+                ref = morada.referencia or ""
+                andar = morada.andar_porta or ""
+                instrucoes = morada.instrucoes_estafeta or ""
+                if getattr(morada, "geolocalizacao", None):
+                    lat = float(morada.geolocalizacao.y)
+                    lng = float(morada.geolocalizacao.x)
+        except Exception:
+            pass
+        return {
+            "texto_endereco": texto,
+            "referencia": ref,
+            "andar_porta": andar,
+            "instrucoes_estafeta": instrucoes,
+            "latitude": lat,
+            "longitude": lng,
+        }
+
+    def get_estafeta_detalhes(self, obj: Pedido) -> dict[str, Any]:
+        try:
+            from apps.logistics.models import Entrega
+            entrega = getattr(obj, "entrega_logistica", None)
+            if not entrega:
+                entrega, _ = Entrega.objects.select_related("estafeta", "estafeta__utilizador").get_or_create(pedido=obj)
+            estafeta = getattr(entrega, "estafeta", None)
+            dist_km = round((getattr(entrega, "distancia_metros", 2500) or 2500) / 1000.0, 2)
+            if not estafeta:
+                return {
+                    "atribuido": False,
+                    "estado_logistico": getattr(entrega, "estado_logistico", "PENDENTE"),
+                    "etapa_display": "A aguardar aceitação de estafeta na zona",
+                    "distancia_km": dist_km,
+                    "eta_minutos": max(8, int(dist_km * 4)),
+                }
+            u = getattr(estafeta, "utilizador", None)
+            if entrega.estado_logistico == Entrega.EstadoEntrega.ENTREGUE:
+                etapa_str = "Pedido Entregue"
+            elif entrega.chegada_cliente_em:
+                etapa_str = "Estafeta à Sua Porta (Aguarda PIN)"
+            elif entrega.recolhido_em or entrega.estado_logistico in (
+                Entrega.EstadoEntrega.RECOLHIDO,
+                Entrega.EstadoEntrega.EM_TRANSITO,
+            ):
+                etapa_str = "Pedido Recolhido • Em Rota para o Seu Endereço"
+            elif entrega.chegada_loja_em:
+                etapa_str = "Estafeta no Restaurante a Recolher o Pedido"
+            else:
+                etapa_str = "Corrida Aceite • Estafeta a Caminho do Restaurante"
+
+            return {
+                "atribuido": True,
+                "id": str(estafeta.id),
+                "nome": (getattr(u, "nome", None) or getattr(u, "email", None) or "Estafeta Ango-iFood") if u else "Estafeta Ango-iFood",
+                "telemovel": (getattr(u, "telemovel", None) or "+244 923 111 222") if u else "+244 923 111 222",
+                "email": (getattr(u, "email", None) or "") if u else "",
+                "tipo_veiculo": estafeta.tipo_veiculo,
+                "tipo_veiculo_display": estafeta.get_tipo_veiculo_display(),
+                "marca_modelo_veiculo": estafeta.marca_modelo_veiculo or "Haojue 125",
+                "matricula_veiculo": estafeta.matricula_veiculo or "LD-44-99-AF",
+                "score_reputacao": str(estafeta.score_reputacao or "4.95"),
+                "estado_logistico": entrega.estado_logistico,
+                "etapa_display": etapa_str,
+                "distancia_km": dist_km,
+                "eta_minutos": max(5, int(dist_km * 4)),
+            }
+        except Exception:
+            return {"atribuido": False}
 

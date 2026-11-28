@@ -56,31 +56,43 @@ class _ActiveDeliveryFlowScreenState extends State<ActiveDeliveryFlowScreen> {
 
   DeliveryStep _currentStep = DeliveryStep.aCaminhoLoja;
 
-  // Dados reais da corrida ativa vindos do backend
+  // Lista de todas as corridas ativas simultâneas do estafeta (Multi-Corridas)
+  List<Map<String, dynamic>> _activeTripsList = const [];
+
+  // Dados reais da corrida ativa selecionada vindos do backend
   String _entregaId = '';
   String _pedidoId = '';
   String _numeroExibicao = '';
   String _pinEsperadoInfo = '';
+  String _dataCriacaoPedido = '';
 
   String _lojaNome = '';
   String _lojaMorada = '';
   String _lojaTelemovel = '';
+  String _lojaNif = '';
+  String _lojaTipoCozinha = '';
+  String _lojaScoreReputacao = '5.00';
   double _lojaLat = -8.8368;
   double _lojaLng = 13.2343;
 
   String _clienteNome = '';
   String _clienteTelemovel = '';
+  String _clienteEmail = '';
   String _clienteMorada = '';
   String _clienteReferencia = '';
+  String _clienteAndarPorta = 'R/C';
   String _clienteInstrucoes = '';
   double _clienteLat = -8.8147;
   double _clienteLng = 13.2343;
 
+  int _subtotalPedidoCentimos = 0;
   int _taxaEntregaCentimos = 60000;
   int _gorjetaCentimos = 0;
   int _bonusEsperaCentimos = 0;
   int _ganhoTotalCentimos = 60000;
+  int _totalPedidoCentimos = 0;
   String _metodoPagamento = 'MULTICAIXA_EXPRESS';
+  String _metodoPagamentoDisplay = 'Multicaixa Express';
 
   double _distanciaKm = 2.5;
   int _etaMinutos = 12;
@@ -120,12 +132,21 @@ class _ActiveDeliveryFlowScreenState extends State<ActiveDeliveryFlowScreen> {
     }
   }
 
-  Future<void> _loadActiveTrip({bool showSpinner = true}) async {
+  Future<void> _loadActiveTrip({
+    bool showSpinner = true,
+    String? selectEntregaId,
+  }) async {
     if (showSpinner && mounted) {
       setState(() => _isLoading = true);
     }
     try {
-      final resp = await _dio.get<dynamic>('/api/v1/logistics/trips/active/');
+      final targetId = selectEntregaId ?? (_entregaId.isNotEmpty ? _entregaId : null);
+      final resp = await _dio.get<dynamic>(
+        '/api/v1/logistics/trips/active/',
+        queryParameters: targetId != null && targetId.isNotEmpty
+            ? {'entrega_id': targetId}
+            : null,
+      );
       if (resp.statusCode == 200 && resp.data is Map<String, dynamic>) {
         final d = resp.data as Map<String, dynamic>;
         if (d['has_active_trip'] == true) {
@@ -137,6 +158,7 @@ class _ActiveDeliveryFlowScreenState extends State<ActiveDeliveryFlowScreen> {
       if (mounted) {
         setState(() {
           _hasActiveOrder = false;
+          _activeTripsList = const [];
           _isLoading = false;
         });
       }
@@ -153,6 +175,7 @@ class _ActiveDeliveryFlowScreenState extends State<ActiveDeliveryFlowScreen> {
     final fin = (d['financeiro'] as Map<String, dynamic>?) ?? {};
     final tempos = (d['tempos'] as Map<String, dynamic>?) ?? {};
     final rawItens = (d['itens'] as List<dynamic>?) ?? const [];
+    final rawActiveTrips = (d['active_trips'] as List<dynamic>?) ?? const [];
 
     final step = _parseStep(d['etapa_atual']?.toString() ?? 'aCaminhoLoja');
     final pId = d['pedido_id']?.toString() ?? '';
@@ -167,37 +190,60 @@ class _ActiveDeliveryFlowScreenState extends State<ActiveDeliveryFlowScreen> {
     setState(() {
       _hasActiveOrder = true;
       _isLoading = false;
+      if (rawActiveTrips.isNotEmpty) {
+        _activeTripsList =
+            rawActiveTrips.whereType<Map<String, dynamic>>().toList();
+      }
       _entregaId = d['entrega_id']?.toString() ?? '';
       _pedidoId = pId;
       _numeroExibicao = d['numero_exibicao']?.toString() ?? 'LUA';
       _pinEsperadoInfo = d['pin_entrega']?.toString() ?? '';
+      _dataCriacaoPedido = d['data_criacao']?.toString() ?? '';
       _currentStep = step;
 
       _lojaNome = loja['nome']?.toString() ?? 'Restaurante Parceiro';
       _lojaMorada = loja['morada']?.toString() ?? 'Luanda, Angola';
-      _lojaTelemovel = loja['telemovel']?.toString() ?? '+244923000000';
+      _lojaTelemovel = loja['telemovel']?.toString() ?? '+244 923 000 000';
+      _lojaNif = loja['nif']?.toString() ?? '';
+      _lojaTipoCozinha =
+          loja['tipo_cozinha']?.toString() ?? 'Restaurante & Gastronomia';
+      _lojaScoreReputacao = loja['score_reputacao']?.toString() ?? '5.00';
       _lojaLat = (loja['latitude'] as num?)?.toDouble() ?? -8.8368;
       _lojaLng = (loja['longitude'] as num?)?.toDouble() ?? 13.2343;
 
       _clienteNome = cliente['nome']?.toString() ?? 'Cliente Delivery Pro';
-      _clienteTelemovel = cliente['telemovel']?.toString() ?? '+244923111222';
+      _clienteTelemovel = cliente['telemovel']?.toString() ?? '+244 923 111 222';
+      _clienteEmail = cliente['email']?.toString() ?? '';
       _clienteMorada = cliente['morada']?.toString() ?? 'Luanda, Angola';
       _clienteReferencia = cliente['referencia']?.toString() ?? '';
+      _clienteAndarPorta = cliente['andar_porta']?.toString() ?? 'R/C';
       _clienteInstrucoes = cliente['instrucoes_estafeta']?.toString() ?? '';
       _clienteLat = (cliente['latitude'] as num?)?.toDouble() ?? -8.8147;
       _clienteLng = (cliente['longitude'] as num?)?.toDouble() ?? 13.2343;
 
-      _taxaEntregaCentimos = (fin['taxa_entrega_centimos'] as num?)?.toInt() ?? 60000;
+      _subtotalPedidoCentimos =
+          (fin['subtotal_pedido_centimos'] as num?)?.toInt() ?? 0;
+      _taxaEntregaCentimos =
+          (fin['taxa_entrega_centimos'] as num?)?.toInt() ?? 60000;
       _gorjetaCentimos = (fin['gorjeta_centimos'] as num?)?.toInt() ?? 0;
-      _bonusEsperaCentimos = (fin['bonus_espera_centimos'] as num?)?.toInt() ?? 0;
-      _ganhoTotalCentimos = (fin['ganho_total_centimos'] as num?)?.toInt() ?? 60000;
-      _metodoPagamento = fin['metodo_pagamento']?.toString() ?? 'MULTICAIXA_EXPRESS';
+      _bonusEsperaCentimos =
+          (fin['bonus_espera_centimos'] as num?)?.toInt() ?? 0;
+      _ganhoTotalCentimos =
+          (fin['ganho_total_centimos'] as num?)?.toInt() ?? 60000;
+      _totalPedidoCentimos =
+          (fin['total_pedido_centimos'] as num?)?.toInt() ?? _ganhoTotalCentimos;
+      _metodoPagamento =
+          fin['metodo_pagamento']?.toString() ?? 'MULTICAIXA_EXPRESS';
+      _metodoPagamentoDisplay =
+          fin['metodo_pagamento_display']?.toString() ?? _metodoPagamento;
 
       _distanciaKm = (tempos['distancia_km'] as num?)?.toDouble() ?? 2.5;
       _etaMinutos = (tempos['eta_minutos'] as num?)?.toInt() ?? 12;
-      _minutosEsperaLoja = (tempos['minutos_espera_loja'] as num?)?.toInt() ?? 0;
+      _minutosEsperaLoja =
+          (tempos['minutos_espera_loja'] as num?)?.toInt() ?? 0;
       _segundosRestantesTolerancia =
-          (tempos['segundos_restantes_tolerancia_cliente'] as num?)?.toInt() ?? 420;
+          (tempos['segundos_restantes_tolerancia_cliente'] as num?)?.toInt() ??
+              420;
 
       _itensPedido = rawItens.whereType<Map<String, dynamic>>().toList();
     });
@@ -358,8 +404,9 @@ class _ActiveDeliveryFlowScreenState extends State<ActiveDeliveryFlowScreen> {
           context.read<CourierBloc>().add(const LoadCourierProfileEvent());
           widget.onDeliveryFinished?.call();
           setState(() {
-            _currentStep = DeliveryStep.concluido;
+            _entregaId = '';
           });
+          await _loadActiveTrip(showSpinner: false);
         }
       },
     );
@@ -656,6 +703,96 @@ class _ActiveDeliveryFlowScreenState extends State<ActiveDeliveryFlowScreen> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // 0. Barra Multi-Corridas: permite alternar entre corridas ativas e aceitar novas corridas no Radar
+          Container(
+            margin: const EdgeInsets.only(bottom: 14),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A2421),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFF00E676).withOpacity(0.45)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.layers_rounded,
+                          color: Color(0xFF00E676),
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Corridas Ativas (${_activeTripsList.isNotEmpty ? _activeTripsList.length : 1})',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                    TextButton.icon(
+                      onPressed: widget.onGoToRadar,
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        foregroundColor: const Color(0xFF00E676),
+                      ),
+                      icon: const Icon(Icons.add_circle_outline_rounded, size: 16),
+                      label: const Text(
+                        'Aceitar + Corridas',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_activeTripsList.length > 1) ...[
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 38,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _activeTripsList.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      itemBuilder: (context, idx) {
+                        final t = _activeTripsList[idx];
+                        final tId = t['entrega_id']?.toString() ?? '';
+                        final numEx = t['numero_exibicao']?.toString() ?? 'PED';
+                        final cliMap = (t['cliente'] as Map<String, dynamic>?) ?? {};
+                        final cliN = cliMap['nome']?.toString() ?? 'Cliente';
+                        final isSelected = tId == _entregaId;
+                        return ChoiceChip(
+                          selected: isSelected,
+                          selectedColor: const Color(0xFF00E676),
+                          backgroundColor: const Color(0xFF121417),
+                          labelStyle: TextStyle(
+                            color: isSelected ? Colors.black : Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                          label: Text('#$numEx • $cliN'),
+                          onSelected: (_) {
+                            if (tId.isNotEmpty && tId != _entregaId) {
+                              _checkedItemIndices.clear();
+                              _loadActiveTrip(
+                                showSpinner: true,
+                                selectEntregaId: tId,
+                              );
+                            }
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
           // 1. Mapa Interativo OpenStreetMap + Rota Viária OSRM
           ClipRRect(
             borderRadius: BorderRadius.circular(20),
@@ -806,63 +943,111 @@ class _ActiveDeliveryFlowScreenState extends State<ActiveDeliveryFlowScreen> {
                 const Divider(color: Colors.white10),
                 const SizedBox(height: 8),
 
-                // Origem: Restaurante
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildLocationRow(
-                        icon: Icons.store_mall_directory_rounded,
-                        iconColor: Colors.amber,
-                        label: 'Recolha no Restaurante:',
-                        address: '$_lojaNome • $_lojaMorada',
+                // Origem: Restaurante (Informação Detalhada da Loja)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.amber.withOpacity(0.25)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildLocationRow(
+                              icon: Icons.store_mall_directory_rounded,
+                              iconColor: Colors.amber,
+                              label: '1. PONTO DE RECOLHA (LOJA PARCEIRA) • $_lojaTipoCozinha',
+                              address: _lojaNome,
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Ligar ao Restaurante',
+                            onPressed: () => _callPhoneNumber(_lojaTelemovel, _lojaNome),
+                            icon: const Icon(Icons.phone_in_talk_rounded, color: Colors.amber),
+                          ),
+                        ],
                       ),
-                    ),
-                    IconButton(
-                      tooltip: 'Ligar ao Restaurante',
-                      onPressed: () => _callPhoneNumber(_lojaTelemovel, _lojaNome),
-                      icon: const Icon(Icons.phone_in_talk_rounded, color: Colors.amber),
-                    ),
-                  ],
+                      const SizedBox(height: 6),
+                      Text(
+                        '📍 Morada da Loja: $_lojaMorada',
+                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '📞 Contacto Loja: $_lojaTelemovel • ⭐ $_lojaScoreReputacao${_lojaNif.isNotEmpty ? " • $_lojaNif" : ""}',
+                        style: const TextStyle(color: Colors.amber, fontSize: 11.5, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
                 ),
 
                 const SizedBox(height: 12),
 
-                // Destino: Cliente
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildLocationRow(
-                        icon: Icons.location_on_rounded,
-                        iconColor: Colors.redAccent,
-                        label: 'Entrega a $_clienteNome:',
-                        address: _clienteReferencia.isNotEmpty
-                            ? '$_clienteMorada ($_clienteReferencia)'
-                            : _clienteMorada,
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Ligar ao Cliente',
-                      onPressed: () => _callPhoneNumber(_clienteTelemovel, _clienteNome),
-                      icon: const Icon(Icons.phone_forwarded_rounded, color: Color(0xFF00E676)),
-                    ),
-                  ],
-                ),
-
-                if (_clienteInstrucoes.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      '📝 Instruções: $_clienteInstrucoes',
-                      style: const TextStyle(color: Colors.white70, fontSize: 12),
-                    ),
+                // Destino: Cliente (Informação Detalhada do Cliente e Morada)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00E676).withOpacity(0.07),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFF00E676).withOpacity(0.25)),
                   ),
-                ],
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildLocationRow(
+                              icon: Icons.location_on_rounded,
+                              iconColor: Colors.redAccent,
+                              label: '2. PONTO DE ENTREGA (CLIENTE)',
+                              address: _clienteNome,
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Ligar ao Cliente',
+                            onPressed: () => _callPhoneNumber(_clienteTelemovel, _clienteNome),
+                            icon: const Icon(Icons.phone_forwarded_rounded, color: Color(0xFF00E676)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '🏠 Endereço de Entrega: $_clienteMorada',
+                        style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '🧭 Referência: ${_clienteReferencia.isNotEmpty ? _clienteReferencia : "Centro"} • Porta/Andar: ${_clienteAndarPorta.isNotEmpty ? _clienteAndarPorta : "R/C"}',
+                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '📞 Telemóvel Cliente: $_clienteTelemovel${_clienteEmail.isNotEmpty ? " • ✉️ $_clienteEmail" : ""}',
+                        style: const TextStyle(color: Color(0xFF00E676), fontSize: 11.5, fontWeight: FontWeight.w600),
+                      ),
+                      if (_clienteInstrucoes.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.06),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '📝 Instruções para o Estafeta: $_clienteInstrucoes',
+                            style: const TextStyle(color: Colors.white, fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -902,6 +1087,10 @@ class _ActiveDeliveryFlowScreenState extends State<ActiveDeliveryFlowScreen> {
                   final item = _itensPedido[idx];
                   final qtd = item['quantidade'] ?? 1;
                   final nome = item['nome'] ?? 'Artigo';
+                  final precoUnit = (item['preco_unitario_centimos'] as num?)?.toInt() ?? 0;
+                  final notasItem = (item['notas'] ?? '').toString().trim();
+                  final opcoesRaw = (item['opcoes_personalizadas'] as List<dynamic>?) ?? const [];
+                  final opcoesTexto = opcoesRaw.map((e) => e.toString()).join(', ');
                   final checked = _checkedItemIndices.contains(idx);
                   return CheckboxListTile(
                     contentPadding: EdgeInsets.zero,
@@ -924,27 +1113,56 @@ class _ActiveDeliveryFlowScreenState extends State<ActiveDeliveryFlowScreen> {
                         color: checked ? Colors.white54 : Colors.white,
                         decoration: checked ? TextDecoration.lineThrough : null,
                         fontSize: 13,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
+                    subtitle: (opcoesTexto.isNotEmpty || notasItem.isNotEmpty || precoUnit > 0)
+                        ? Text(
+                            [
+                              if (precoUnit > 0)
+                                CourierCurrencyFormatter.formatKwanza(precoUnit * (qtd is num ? qtd.toInt() : 1)),
+                              if (opcoesTexto.isNotEmpty) 'Opções: $opcoesTexto',
+                              if (notasItem.isNotEmpty) 'Nota: $notasItem',
+                            ].join(' • '),
+                            style: const TextStyle(color: Colors.white60, fontSize: 11),
+                          )
+                        : null,
                   );
                 }),
                 const Divider(color: Colors.white12),
+                // Resumo Financeiro Completo do Pedido e Ganho do Estafeta
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Pagamento: $_metodoPagamento',
+                      'Meio de Pagamento: $_metodoPagamentoDisplay',
+                      style: const TextStyle(color: Colors.white70, fontSize: 11.5, fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      'Valor do Pedido: ${CourierCurrencyFormatter.formatKwanza(_totalPedidoCentimos)}',
+                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Frete Base: ${CourierCurrencyFormatter.formatKwanza(_taxaEntregaCentimos)}'
+                      '${_bonusEsperaCentimos > 0 ? " + Bónus Espera: ${CourierCurrencyFormatter.formatKwanza(_bonusEsperaCentimos)}" : ""}',
                       style: const TextStyle(color: Colors.white60, fontSize: 11),
                     ),
-                    if (_gorjetaCentimos > 0)
-                      Text(
-                        'Inclui Gorjeta 100%: ${CourierCurrencyFormatter.formatKwanza(_gorjetaCentimos)}',
-                        style: const TextStyle(
-                          color: Color(0xFF00E676),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 11,
-                        ),
+                    Text(
+                      _gorjetaCentimos > 0
+                          ? 'Gorjeta 100%: +${CourierCurrencyFormatter.formatKwanza(_gorjetaCentimos)}'
+                          : 'Seu Ganho: $ganhoFormatado',
+                      style: const TextStyle(
+                        color: Color(0xFF00E676),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11.5,
                       ),
+                    ),
                   ],
                 ),
               ],

@@ -25,33 +25,57 @@ import '../auth/storage/secure_token_storage.dart';
 class DeliveryTripOffer extends Equatable {
   final String entregaId;
   final String pedidoId;
+  final String numeroExibicao;
   final String lojaNome;
   final String moradaRecolha;
+  final String lojaTelemovel;
+  final String lojaTipoCozinha;
   final double lojaLatitude;
   final double lojaLongitude;
   final String clienteNome;
+  final String clienteTelemovel;
   final String moradaEntrega;
+  final String clienteReferencia;
+  final String clienteAndarPorta;
+  final String clienteInstrucoes;
   final double clienteLatitude;
   final double clienteLongitude;
   final double distanciaTotalKm;
   final int tempoEstimadoMinutos;
   final int ganhosPrevistosCentimos;
+  final int gorjetaCentimos;
+  final int totalPedidoCentimos;
+  final String metodoPagamento;
+  final int quantidadeArtigos;
+  final List<String> itensResumo;
   final DateTime expiraEm;
 
   const DeliveryTripOffer({
     required this.entregaId,
     required this.pedidoId,
+    this.numeroExibicao = '',
     required this.lojaNome,
     required this.moradaRecolha,
+    this.lojaTelemovel = '+244 923 000 000',
+    this.lojaTipoCozinha = 'Restaurante & Gastronomia',
     required this.lojaLatitude,
     required this.lojaLongitude,
     required this.clienteNome,
+    this.clienteTelemovel = '+244 923 111 222',
     required this.moradaEntrega,
+    this.clienteReferencia = '',
+    this.clienteAndarPorta = 'R/C',
+    this.clienteInstrucoes = '',
     required this.clienteLatitude,
     required this.clienteLongitude,
     required this.distanciaTotalKm,
     required this.tempoEstimadoMinutos,
     required this.ganhosPrevistosCentimos,
+    this.gorjetaCentimos = 0,
+    this.totalPedidoCentimos = 0,
+    this.metodoPagamento = 'MULTICAIXA_EXPRESS',
+    this.quantidadeArtigos = 1,
+    this.itensResumo = const [],
     required this.expiraEm,
   });
 
@@ -59,17 +83,29 @@ class DeliveryTripOffer extends Equatable {
   List<Object?> get props => [
         entregaId,
         pedidoId,
+        numeroExibicao,
         lojaNome,
         moradaRecolha,
+        lojaTelemovel,
+        lojaTipoCozinha,
         lojaLatitude,
         lojaLongitude,
         clienteNome,
+        clienteTelemovel,
         moradaEntrega,
+        clienteReferencia,
+        clienteAndarPorta,
+        clienteInstrucoes,
         clienteLatitude,
         clienteLongitude,
         distanciaTotalKm,
         tempoEstimadoMinutos,
         ganhosPrevistosCentimos,
+        gorjetaCentimos,
+        totalPedidoCentimos,
+        metodoPagamento,
+        quantidadeArtigos,
+        itensResumo,
         expiraEm,
       ];
 }
@@ -352,16 +388,11 @@ class _CourierOfferScreenState extends State<CourierOfferScreen> {
                       ),
                       const Divider(height: 28),
 
-                      // Mapa Simplificado de Rota com Ponto de Recolha e Ponto de Entrega
+                      // Mapa Simplificado de Rota com Ponto de Recolha, Ponto de Entrega e Detalhes Ricos
                       _MapaRotaSimplificado(
-                        lojaNome: widget.offer.lojaNome,
-                        moradaRecolha: widget.offer.moradaRecolha,
-                        clienteNome: widget.offer.clienteNome,
-                        moradaEntrega: widget.offer.moradaEntrega,
-                        distanciaKm: widget.offer.distanciaTotalKm,
-                        tempoEstimadoMinutos: widget.offer.tempoEstimadoMinutos,
+                        offer: widget.offer,
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
 
                       // Botões de Ação: "Rejeitar" e "Aceitar Corrida"
                       Row(
@@ -413,26 +444,21 @@ class _CourierOfferScreenState extends State<CourierOfferScreen> {
 // ============================================================================
 
 class _MapaRotaSimplificado extends StatelessWidget {
-  final String lojaNome;
-  final String moradaRecolha;
-  final String clienteNome;
-  final String moradaEntrega;
-  final double distanciaKm;
-  final int tempoEstimadoMinutos;
+  final DeliveryTripOffer offer;
 
   const _MapaRotaSimplificado({
-    required this.lojaNome,
-    required this.moradaRecolha,
-    required this.clienteNome,
-    required this.moradaEntrega,
-    required this.distanciaKm,
-    required this.tempoEstimadoMinutos,
+    required this.offer,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final shortOrder = offer.numeroExibicao.isNotEmpty
+        ? offer.numeroExibicao
+        : (offer.pedidoId.length >= 6
+            ? offer.pedidoId.substring(0, 6).toUpperCase()
+            : offer.pedidoId);
 
     return Container(
       decoration: BoxDecoration(
@@ -442,7 +468,40 @@ class _MapaRotaSimplificado extends StatelessWidget {
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Cabeçalho do Pedido
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green.shade300),
+                ),
+                child: Text(
+                  'Pedido #$shortOrder • ${offer.quantidadeArtigos} artigo(s)',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                    color: Colors.green.shade900,
+                  ),
+                ),
+              ),
+              Text(
+                offer.metodoPagamento,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: colorScheme.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
           // Ponto A: Loja (Recolha)
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -450,7 +509,7 @@ class _MapaRotaSimplificado extends StatelessWidget {
               Column(
                 children: [
                   const Icon(Icons.store, color: Colors.orange, size: 24),
-                  Container(width: 2, height: 32, color: colorScheme.outlineVariant),
+                  Container(width: 2, height: 42, color: colorScheme.outlineVariant),
                 ],
               ),
               const SizedBox(width: 12),
@@ -458,14 +517,34 @@ class _MapaRotaSimplificado extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('RECOLHA', style: theme.textTheme.labelSmall?.copyWith(color: Colors.orange.shade800, fontWeight: FontWeight.bold)),
-                    Text(lojaNome, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                    Text(moradaRecolha, style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text(
+                      'RECOLHA • ${offer.lojaTipoCozinha.toUpperCase()}',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: Colors.orange.shade800,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      offer.lojaNome,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                    Text(
+                      offer.moradaRecolha,
+                      style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (offer.lojaTelemovel.isNotEmpty)
+                      Text(
+                        'Tel. Loja: ${offer.lojaTelemovel}',
+                        style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontWeight: FontWeight.w600),
+                      ),
                   ],
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 6),
 
           // Ponto B: Cliente (Entrega)
           Row(
@@ -477,15 +556,58 @@ class _MapaRotaSimplificado extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('ENTREGA AO CLIENTE', style: theme.textTheme.labelSmall?.copyWith(color: Colors.green.shade800, fontWeight: FontWeight.bold)),
-                    Text(clienteNome, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                    Text(moradaEntrega, style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text(
+                      'ENTREGA AO CLIENTE',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: Colors.green.shade800,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      offer.clienteNome,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                    Text(
+                      offer.moradaEntrega,
+                      style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (offer.clienteReferencia.isNotEmpty || offer.clienteAndarPorta.isNotEmpty)
+                      Text(
+                        'Ref.: ${offer.clienteReferencia.isNotEmpty ? offer.clienteReferencia : "Centro"}${offer.clienteAndarPorta.isNotEmpty ? " • Porta/Andar: ${offer.clienteAndarPorta}" : ""}',
+                        style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontWeight: FontWeight.w600),
+                      ),
+                    if (offer.clienteTelemovel.isNotEmpty)
+                      Text(
+                        'Tel. Cliente: ${offer.clienteTelemovel}',
+                        style: TextStyle(fontSize: 11, color: Colors.green.shade800, fontWeight: FontWeight.w700),
+                      ),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
+
+          if (offer.itensResumo.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: colorScheme.surface.withOpacity(0.85),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                'Artigos: ${offer.itensResumo.join(" • ")}',
+                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 12),
 
           // Badge de Distância Total e ETA
           Container(
@@ -501,14 +623,14 @@ class _MapaRotaSimplificado extends StatelessWidget {
                   children: [
                     const Icon(Icons.route, size: 18),
                     const SizedBox(width: 6),
-                    Text('$distanciaKm km no total', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Text('${offer.distanciaTotalKm} km no total', style: const TextStyle(fontWeight: FontWeight.bold)),
                   ],
                 ),
                 Row(
                   children: [
                     const Icon(Icons.access_time, size: 18),
                     const SizedBox(width: 6),
-                    Text('~ $tempoEstimadoMinutos min', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Text('~ ${offer.tempoEstimadoMinutos} min', style: const TextStyle(fontWeight: FontWeight.bold)),
                   ],
                 ),
               ],

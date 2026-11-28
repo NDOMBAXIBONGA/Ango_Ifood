@@ -448,6 +448,19 @@ class _OrderRealTimeTrackingScreenState extends State<OrderRealTimeTrackingScree
   late String _liveEstafetaNome;
   late String _liveEstafetaTelemovel;
   late String _liveEstafetaVeiculo;
+  String _liveEstafetaEmail = '';
+  String _liveEstafetaMatricula = 'LD-44-99-AF';
+  String _liveEstafetaTipoVeiculo = 'Mota';
+  String _liveEstafetaMarcaModelo = 'Haojue 125';
+  String _liveEstafetaScore = '4.95';
+  int _liveEstafetaTotalEntregas = 0;
+  bool _liveEstafetaAtribuido = false;
+  String _liveEtapaLogistica = 'Pedido em acompanhamento GPS em tempo real';
+  String _liveLojaMorada = '';
+  String _liveLojaTelemovel = '+244 923 000 000';
+  String _liveItensResumo = '';
+  String _liveMetodoPagamento = '';
+  bool _isHttpTelemetryOnline = true;
 
   @override
   void initState() {
@@ -456,6 +469,7 @@ class _OrderRealTimeTrackingScreenState extends State<OrderRealTimeTrackingScree
     _liveEstafetaNome = widget.estafetaNome;
     _liveEstafetaTelemovel = widget.estafetaTelemovel;
     _liveEstafetaVeiculo = widget.estafetaVeiculo;
+    _liveLojaMorada = widget.moradaLojaTexto;
 
     // Posição inicial estimada do estafeta (22% da rota entre a loja e o cliente)
     final initialCourierPos = _interpolateLatLng(
@@ -498,50 +512,90 @@ class _OrderRealTimeTrackingScreenState extends State<OrderRealTimeTrackingScree
         jwtToken: widget.jwtToken,
       ));
 
-    // Sincronização periódica da telemetria GPS real do estafeta a partir do servidor
-    _demoSimulationTimer = Timer.periodic(const Duration(seconds: 4), (_) async {
-      if (!mounted) return;
-      try {
-        final dio = createSecureDioClient(tokenStorage: SecureTokenStorage());
-        final resp = await dio.get<Map<String, dynamic>>('/api/v1/logistics/orders/${widget.pedidoId}/tracking/');
-        if (resp.data != null && mounted) {
-          final serverPin = (resp.data!['pin_entrega'] ?? '').toString().trim();
-          final est = resp.data!['estafeta'] as Map<String, dynamic>?;
-          if (serverPin.length == 4 || est != null) {
-            setState(() {
-              if (serverPin.length == 4) {
-                _livePinEntrega = serverPin;
-              }
-              if (est != null) {
-                final nomeEst = (est['nome'] ?? '').toString().trim();
-                final telEst = (est['telemovel'] ?? '').toString().trim();
-                final modeloEst = (est['marca_modelo_veiculo'] ?? '').toString().trim();
-                final matEst = (est['matricula_veiculo'] ?? '').toString().trim();
-                if (nomeEst.isNotEmpty) _liveEstafetaNome = nomeEst;
-                if (telEst.isNotEmpty) _liveEstafetaTelemovel = telEst;
-                if (modeloEst.isNotEmpty) {
-                  _liveEstafetaVeiculo = matEst.isNotEmpty ? '$modeloEst ($matEst)' : modeloEst;
-                }
-              }
-            });
-          }
-          if (est != null && est['latitude'] != null && est['longitude'] != null) {
-            _onNewLocationReceived(
-              TrackingLocationModel(
-                pedidoId: widget.pedidoId,
-                estafetaId: est['id']?.toString() ?? 'estafeta_real',
-                latitude: (est['latitude'] as num).toDouble(),
-                longitude: (est['longitude'] as num).toDouble(),
-                heading: 45.0,
-                speed: 28.0,
-                precisaoMetros: 5.0,
-                timestamp: DateTime.now(),
-              ),
-            );
-          }
-        }
-      } catch (_) {}
+    // Sincronização imediata (0ms) e periódica (4s) da telemetria GPS e dados completos do estafeta
+    unawaited(_syncLiveTrackingFromBackend());
+    _demoSimulationTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      _syncLiveTrackingFromBackend();
     });
+  }
+
+  Future<void> _syncLiveTrackingFromBackend() async {
+    if (!mounted) return;
+    try {
+      final dio = createSecureDioClient(tokenStorage: SecureTokenStorage());
+      final resp = await dio.get<Map<String, dynamic>>(
+        '/api/v1/logistics/orders/${widget.pedidoId}/tracking/',
+      );
+      if (resp.data != null && mounted) {
+        final d = resp.data!;
+        final serverPin = (d['pin_entrega'] ?? '').toString().trim();
+        final etapaStr = (d['etapa_logistica_display'] ?? '').toString().trim();
+        final est = d['estafeta'] as Map<String, dynamic>?;
+        final lojaMap = d['loja'] as Map<String, dynamic>?;
+        final pedResumo = d['pedido_resumo'] as Map<String, dynamic>?;
+
+        setState(() {
+          _isHttpTelemetryOnline = true;
+          if (serverPin.length == 4) {
+            _livePinEntrega = serverPin;
+          }
+          if (etapaStr.isNotEmpty) {
+            _liveEtapaLogistica = etapaStr;
+          }
+          if (lojaMap != null) {
+            final mLoja = (lojaMap['morada'] ?? '').toString().trim();
+            final tLoja = (lojaMap['telemovel'] ?? '').toString().trim();
+            if (mLoja.isNotEmpty) _liveLojaMorada = mLoja;
+            if (tLoja.isNotEmpty) _liveLojaTelemovel = tLoja;
+          }
+          if (pedResumo != null) {
+            final rawItens = (pedResumo['itens_resumo'] as List<dynamic>?) ?? const [];
+            if (rawItens.isNotEmpty) {
+              _liveItensResumo = rawItens.map((e) => e.toString()).join(' • ');
+            }
+            _liveMetodoPagamento =
+                (pedResumo['metodo_pagamento_display'] ?? pedResumo['metodo_pagamento'] ?? '')
+                    .toString();
+          }
+          if (est != null) {
+            _liveEstafetaAtribuido = est['atribuido'] == true;
+            final nomeEst = (est['nome'] ?? '').toString().trim();
+            final telEst = (est['telemovel'] ?? '').toString().trim();
+            final emailEst = (est['email'] ?? '').toString().trim();
+            final tipoV = (est['tipo_veiculo_display'] ?? est['tipo_veiculo'] ?? 'Mota').toString().trim();
+            final modeloEst = (est['marca_modelo_veiculo'] ?? 'Haojue 125').toString().trim();
+            final matEst = (est['matricula_veiculo'] ?? 'LD-44-99-AF').toString().trim();
+            final scoreEst = (est['score_reputacao'] ?? '4.95').toString().trim();
+            final totalEnt = (est['total_entregas_concluidas'] as num?)?.toInt() ?? 0;
+
+            if (nomeEst.isNotEmpty) _liveEstafetaNome = nomeEst;
+            if (telEst.isNotEmpty) _liveEstafetaTelemovel = telEst;
+            if (emailEst.isNotEmpty) _liveEstafetaEmail = emailEst;
+            if (tipoV.isNotEmpty) _liveEstafetaTipoVeiculo = tipoV;
+            if (modeloEst.isNotEmpty) _liveEstafetaMarcaModelo = modeloEst;
+            if (matEst.isNotEmpty) _liveEstafetaMatricula = matEst;
+            if (scoreEst.isNotEmpty) _liveEstafetaScore = scoreEst;
+            _liveEstafetaTotalEntregas = totalEnt;
+            _liveEstafetaVeiculo = '$_liveEstafetaTipoVeiculo • $_liveEstafetaMarcaModelo ($_liveEstafetaMatricula)';
+          }
+        });
+
+        if (est != null && est['latitude'] != null && est['longitude'] != null) {
+          final locModel = TrackingLocationModel(
+            pedidoId: widget.pedidoId,
+            estafetaId: est['id']?.toString() ?? 'estafeta_real',
+            latitude: (est['latitude'] as num).toDouble(),
+            longitude: (est['longitude'] as num).toDouble(),
+            heading: 45.0,
+            speed: 28.0,
+            precisaoMetros: 5.0,
+            timestamp: DateTime.now(),
+          );
+          _trackingBloc.add(InternalLocationUpdatedEvent(locModel));
+          _onNewLocationReceived(locModel);
+        }
+      }
+    } catch (_) {}
   }
 
   LatLng _interpolateLatLng(LatLng start, LatLng end, double fraction) {
@@ -607,19 +661,20 @@ class _OrderRealTimeTrackingScreenState extends State<OrderRealTimeTrackingScree
           actions: [
             BlocBuilder<TrackingBloc, TrackingState>(
               builder: (context, state) {
-                final isConnected = state is TrackingLocationUpdated
-                    ? state.isConnected
-                    : state is TrackingConnected;
+                final isConnected = _isHttpTelemetryOnline ||
+                    (state is TrackingLocationUpdated
+                        ? state.isConnected
+                        : state is TrackingConnected);
 
                 return Padding(
                   padding: const EdgeInsets.only(right: 16.0),
                   child: Chip(
                     avatar: CircleAvatar(
                       radius: 5,
-                      backgroundColor: isConnected ? Colors.green : Colors.red,
+                      backgroundColor: isConnected ? Colors.green : Colors.orange,
                     ),
                     label: Text(
-                      isConnected ? 'GPS Ao Vivo' : 'Reconectando...',
+                      isConnected ? 'GPS Ao Vivo' : 'Sincronizando GPS...',
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                     ),
                     backgroundColor: Colors.white.withOpacity(0.95),
@@ -754,27 +809,40 @@ class _OrderRealTimeTrackingScreenState extends State<OrderRealTimeTrackingScree
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Pedido a Caminho',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.3,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _liveEstafetaAtribuido
+                          ? 'Estafeta em Rota Ativa'
+                          : 'Pedido Confirmado',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.3,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Chegada estimada em $etaMinutos min • ${distanciaKm.toStringAsFixed(1)} km',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade700,
-                      fontWeight: FontWeight.w500,
+                    const SizedBox(height: 3),
+                    Text(
+                      _liveEtapaLogistica,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 2),
+                    Text(
+                      'Chegada estimada em $etaMinutos min • ${distanciaKm.toStringAsFixed(1)} km',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade700,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -800,51 +868,117 @@ class _OrderRealTimeTrackingScreenState extends State<OrderRealTimeTrackingScree
             ],
           ),
 
-          const SizedBox(height: 16),
-          const Divider(height: 1),
           const SizedBox(height: 14),
+          const Divider(height: 1),
+          const SizedBox(height: 12),
 
-          // Informações do Estafeta
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 26,
-                backgroundColor: theme.colorScheme.primary.withOpacity(0.12),
-                child: Icon(Icons.two_wheeler_rounded, color: theme.colorScheme.primary, size: 28),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          // Ficha Completa do Estafeta que Aceitou a Corrida
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Text(
-                      _liveEstafetaNome,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    CircleAvatar(
+                      radius: 24,
+                      backgroundColor: theme.colorScheme.primary.withOpacity(0.12),
+                      child: Icon(Icons.two_wheeler_rounded, color: theme.colorScheme.primary, size: 26),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _liveEstafetaVeiculo,
-                      style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  _liveEstafetaNome,
+                                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.shade100,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  '★ $_liveEstafetaScore',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.amber.shade900,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'Viatura: $_liveEstafetaTipoVeiculo • $_liveEstafetaMarcaModelo',
+                            style: TextStyle(fontSize: 12.5, color: Colors.grey.shade800, fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Matrícula: $_liveEstafetaMatricula'
+                            '${_liveEstafetaTotalEntregas > 0 ? " • $_liveEstafetaTotalEntregas entregas" : ""}',
+                            style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600, fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Telemóvel: $_liveEstafetaTelemovel'
+                            '${_liveEstafetaEmail.isNotEmpty ? " • $_liveEstafetaEmail" : ""}',
+                            style: TextStyle(fontSize: 11.5, color: Colors.grey.shade700),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton.filledTonal(
+                      tooltip: 'Contactar Estafeta',
+                      icon: const Icon(Icons.phone_outlined),
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: _liveEstafetaTelemovel));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Contacto do estafeta ($_liveEstafetaTelemovel) copiado!',
+                            ),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
-              ),
-              IconButton.filledTonal(
-                tooltip: 'Contactar Estafeta',
-                icon: const Icon(Icons.phone_outlined),
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: _liveEstafetaTelemovel));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Contacto do estafeta ($_liveEstafetaTelemovel) copiado! A iniciar chamada...',
-                      ),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                },
-              ),
-            ],
+                const SizedBox(height: 8),
+                const Divider(height: 1),
+                const SizedBox(height: 8),
+                Text(
+                  '🏪 Origem: ${widget.nomeLoja} ($_liveLojaMorada • Tel: $_liveLojaTelemovel)',
+                  style: TextStyle(fontSize: 11.5, color: Colors.grey.shade700, fontWeight: FontWeight.w600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '📍 Destino: ${widget.moradaClienteTexto}'
+                  '${_liveItensResumo.isNotEmpty ? " • $_liveItensResumo" : ""}'
+                  '${_liveMetodoPagamento.isNotEmpty ? " ($_liveMetodoPagamento)" : ""}',
+                  style: TextStyle(fontSize: 11.5, color: Colors.grey.shade700),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
 
           const SizedBox(height: 14),

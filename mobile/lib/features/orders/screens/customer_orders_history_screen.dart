@@ -228,14 +228,29 @@ class _CustomerOrdersHistoryScreenState
           pedidoId: order.id,
           jwtToken: token,
           nomeLoja: order.lojaNome,
-          moradaLojaTexto: 'Restaurante ${order.lojaNome}',
-          coordenadasLoja: const LatLng(-8.839988, 13.289437),
+          moradaLojaTexto: order.lojaMorada.isNotEmpty
+              ? order.lojaMorada
+              : 'Restaurante ${order.lojaNome}',
+          coordenadasLoja: LatLng(order.lojaLat, order.lojaLng),
           moradaClienteTexto: order.moradaEntrega,
           coordenadasCliente: LatLng(
-            CartService.instance.latitude,
-            CartService.instance.longitude,
+            order.clienteLat != -8.8147
+                ? order.clienteLat
+                : CartService.instance.latitude,
+            order.clienteLng != 13.2343
+                ? order.clienteLng
+                : CartService.instance.longitude,
           ),
           pinEntrega: order.pinEntrega.isNotEmpty ? order.pinEntrega : '7429',
+          estafetaNome: order.estafetaNome.isNotEmpty
+              ? order.estafetaNome
+              : 'Estafeta Ango-iFood',
+          estafetaTelemovel: order.estafetaTelemovel.isNotEmpty
+              ? order.estafetaTelemovel
+              : '+244 923 111 222',
+          estafetaVeiculo: order.estafetaMarcaModelo.isNotEmpty
+              ? '${order.estafetaTipoVeiculo} • ${order.estafetaMarcaModelo} (${order.estafetaMatricula})'
+              : 'Mota Haojue 125 (LD-44-99-AF)',
         ),
       ),
     );
@@ -778,6 +793,14 @@ class _CustomerOrdersHistoryScreenState
                           fontWeight: FontWeight.w500,
                         ),
                       ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '🏪 ${order.lojaMorada} • 📞 ${order.lojaContacto} • ★ ${order.lojaScore}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -893,29 +916,201 @@ class _CustomerOrdersHistoryScreenState
               ),
             ],
             const SizedBox(height: 12),
+            // Bloco do Estafeta Responsável pela Corrida (quando atribuído ou em andamento)
+            if (order.estafetaAtribuido || order.isAtivo) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: order.estafetaAtribuido
+                      ? const Color(0xFFF0FDF4)
+                      : const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: order.estafetaAtribuido
+                        ? const Color(0xFFBBF7D0)
+                        : const Color(0xFFE2E8F0),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: order.estafetaAtribuido
+                          ? const Color(0xFF16A34A).withOpacity(0.14)
+                          : const Color(0xFFE2E8F0),
+                      child: Icon(
+                        Icons.two_wheeler_rounded,
+                        color: order.estafetaAtribuido
+                            ? const Color(0xFF16A34A)
+                            : const Color(0xFF64748B),
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            order.estafetaAtribuido
+                                ? 'Estafeta: ${order.estafetaNome} (★ ${order.estafetaScore})'
+                                : 'Estafeta: A aguardar aceitação na zona',
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          if (order.estafetaAtribuido) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              '${order.estafetaTipoVeiculo} • ${order.estafetaMarcaModelo} • Matrícula: ${order.estafetaMatricula}',
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF15803D),
+                              ),
+                            ),
+                            if (order.estafetaTelemovel.isNotEmpty)
+                              Text(
+                                'Contacto Estafeta: ${order.estafetaTelemovel}',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF475569),
+                                ),
+                              ),
+                          ],
+                          if (order.estafetaEtapaDisplay.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              '📍 ${order.estafetaEtapaDisplay} • ~${order.etaMinutos} min (${order.distanciaKm} km)',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF334155),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            // Bloco Detalhado de Artigos, Morada de Entrega e Decomposição Financeira
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.fastfood_outlined, size: 16, color: Color(0xFF64748B)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
+                  Row(
+                    children: [
+                      const Icon(Icons.receipt_long_rounded, size: 15, color: Color(0xFFDC2626)),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Artigos do Pedido (${order.linhas.isNotEmpty ? order.linhas.length : 1})',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  if (order.linhas.isNotEmpty)
+                    ...order.linhas.map((l) {
+                      final subtotalLinha = l.precoUnitarioCentimos * l.quantidade;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '${l.quantidade}x ${l.nome}'
+                                '${l.opcoesNomes.isNotEmpty ? " (${l.opcoesNomes.join(", ")})" : ""}'
+                                '${l.notas.isNotEmpty ? " • Nota: ${l.notas}" : ""}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF334155),
+                                ),
+                              ),
+                            ),
+                            if (subtotalLinha > 0)
+                              Text(
+                                CurrencyFormatter.formatKwanza(subtotalLinha),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF0F172A),
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    })
+                  else
+                    Text(
                       order.itensNomes.isNotEmpty
                           ? order.itensNomes.join(' • ')
                           : 'Pedido #$shortId',
                       style: const TextStyle(
-                        fontSize: 12.5,
+                        fontSize: 12,
                         fontWeight: FontWeight.w500,
                         color: Color(0xFF334155),
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                     ),
+                  const Divider(height: 14, color: Color(0xFFE2E8F0)),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.location_on_outlined, size: 15, color: Color(0xFF64748B)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Entrega em: ${order.moradaEntrega}'
+                          '${order.moradaReferencia.isNotEmpty ? " (${order.moradaReferencia})" : ""}'
+                          '${order.moradaAndarPorta.isNotEmpty ? " • ${order.moradaAndarPorta}" : ""}',
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            color: Color(0xFF475569),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Pagamento: ${order.metodoPagamentoDisplay}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                      if (order.taxaEntregaCentimos > 0)
+                        Text(
+                          'Taxa Entrega: ${CurrencyFormatter.formatKwanza(order.taxaEntregaCentimos)}'
+                          '${order.gorjetaCentimos > 0 ? " + Gorjeta: ${CurrencyFormatter.formatKwanza(order.gorjetaCentimos)}" : ""}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),
